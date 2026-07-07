@@ -1,0 +1,114 @@
+/* ═══════════════════════════════════════════════════════════
+   Auth Layout — Split-screen: Form (left) + Hero Image (right)
+   ═══════════════════════════════════════════════════════════ */
+
+.authContainer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 100vh;
+  background: var(--manikan-cream);
+}
+
+/* ─── Left Panel: Form Area ──────────────────────────────── */
+
+.formPanel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2xl);
+  background: var(--manikan-white);
+}
+
+.formInner {
+  width: 100%;
+  max-width: 440px;
+}
+
+/* ─── Right Panel: Hero Image ────────────────────────────── */
+
+.heroPanel {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: var(--space-3xl);
+  background-image: url('/auth-hero.png');
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+
+.heroOverlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(15, 32, 42, 0.85) 0%,
+    rgba(15, 32, 42, 0.4) 40%,
+    rgba(15, 32, 42, 0.2) 100%
+  );
+  z-index: 1;
+}
+
+.heroContent {
+  position: relative;
+  z-index: 2;
+  max-width: 380px;
+}
+
+.heroHeading {
+  font-family: var(--font-heading);
+  font-size: 1.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--manikan-cream);
+  margin-bottom: var(--space-md);
+  letter-spacing: -0.01em;
+}
+
+.heroAccent {
+  color: var(--manikan-gold);
+  font-style: italic;
+}
+
+.heroSubtext {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 300;
+  line-height: 1.6;
+  color: rgba(248, 247, 244, 0.75);
+}
+
+/* ─── Responsive: Stack on smaller screens ───────────────── */
+
+@media (max-width: 900px) {
+  .authContainer {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .heroPanel {
+    min-height: 220px;
+    order: -1;
+    padding: var(--space-xl);
+  }
+
+  .heroHeading {
+    font-size: 1.35rem;
+  }
+
+  .formPanel {
+    padding: var(--space-xl) var(--space-lg);
+  }
+}
+
+@media (max-width: 480px) {
+  .formPanel {
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  .heroPanel {
+    min-height: 180px;
+    padding: var(--space-lg);
+  }
+}

@@ -1,13 +1,56 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap');
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  /* ── Manikan Brand Colors ──────────────────────────── */
+  --manikan-teal: #1B3A4B;
+  --manikan-teal-hover: #254d63;
+  --manikan-teal-light: #2a5a72;
+  --manikan-gold: #C4963C;
+  --manikan-gold-light: #d4aa5a;
+  --manikan-cream: #F8F7F4;
+  --manikan-cream-dark: #EFEDE8;
+  --manikan-white: #FFFFFF;
+  --manikan-text: #1A1A2E;
+  --manikan-text-secondary: #4A5568;
+  --manikan-muted: #6B7280;
+  --manikan-border: #E2E8F0;
+  --manikan-border-focus: #1B3A4B;
+  --manikan-input-bg: #F7FAFC;
+  --manikan-error: #E53E3E;
+  --manikan-success: #38A169;
+
+  /* ── Typography ────────────────────────────────────── */
+  --font-heading: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* ── Spacing ───────────────────────────────────────── */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+
+  /* ── Radii ─────────────────────────────────────────── */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* ── Shadows ───────────────────────────────────────── */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.1);
+
+  /* ── Transitions ───────────────────────────────────── */
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: 150ms var(--ease-smooth);
+  --transition-base: 250ms var(--ease-smooth);
+  --transition-slow: 400ms var(--ease-smooth);
+
+  --background: var(--manikan-white);
+  --foreground: var(--manikan-text);
 }
 
 html,
@@ -19,6 +62,9 @@ body {
 body {
   color: var(--foreground);
   background: var(--background);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -32,19 +78,19 @@ a {
   text-decoration: none;
 }
 
-.imgDark {
-  display: none;
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
-
-  .imgLight {
-    display: none;
-  }
-  .imgDark {
-    display: unset;
-  }
+/* ── Utility: sr-only ──────────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
