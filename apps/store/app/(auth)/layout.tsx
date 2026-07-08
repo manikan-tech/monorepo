@@ -25,7 +25,8 @@ export default function AuthLayout({
         </div>
 
         {/* ─── Right: Hero Image Panel ───────────────────── */}
-        <div className="hidden md:flex relative w-1/2 bg-[url('/auth-hero.png')] bg-cover bg-center items-end p-12">
+        <div className="hidden md:flex relative w-1/2 overflow-hidden items-end p-12">
+          <div className="absolute inset-0 bg-[url('/auth-hero.png')] bg-cover bg-center animate-slow-zoom" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0f202a]/90 via-[#0f202a]/40 to-transparent z-10" />
           <div className="relative z-20 max-w-[340px]">
             <h2 className="font-display text-[1.75rem] font-medium leading-snug text-white mb-3 tracking-tight">

@@ -152,3 +152,11 @@ input[type="range"]:hover::-webkit-slider-thumb {
   transform: scale(1.2);
   box-shadow: 0 0 0 5px rgba(38, 80, 89, 0.15), 0 2px 12px rgba(38, 80, 89, 0.3);
 }
+
+@keyframes logoShine {
+  0%, 100% { filter: drop-shadow(0 0 1px rgba(200, 150, 102, 0.1)); }
+  50% { filter: drop-shadow(0 0 12px rgba(200, 150, 102, 0.7)); }
+}
+.animate-logo-shine {
+  animation: logoShine 4s ease-in-out infinite;
+}
