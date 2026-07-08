@@ -1,20 +1,278 @@
-// Manikan Store — Prisma Schema
-// https://pris.ly/d/prisma-schema
-
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [vector]
 }
 
+// ─── Enums ──────────────────────────────────────────────────────
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+// ─── B2B: Retailer (existing) ───────────────────────────────────
+
 model Retailer {
-  id             String   @id @default(cuid())
-  name           String
-  email          String   @unique
-  hashedPassword String
-  apiKey         String   @unique @default(cuid())
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id        String   @id @default(cuid())
+  authId    String   @unique
+  email     String   @unique
+  storeName String
+  apiKey    String   @unique @default(cuid())
+  plan      String   @default("free")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+  sessions MeasurementSession[]
+}
+
+// ─── Category ───────────────────────────────────────────────────
+
+model Category {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  slug        String  @unique
+  description String?
+  imageUrl    String?
+  parentId    String?
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Product (extended) ─────────────────────────────────────────
+
+model Product {
+  id          String                       @id @default(cuid())
+  retailerId  String
+  categoryId  String?
+  productCode String
+  name        String
+  slug        String                       @unique
+  description String?
+  category    String
+  gender      String
+  brand       String
+  fabric      String
+  priceEgp    Float
+  discountPct Float                        @default(0)
+  imageUrl    String
+  images      String[]
+  stock       Int                          @default(0)
+  isActive    Boolean                      @default(true)
+  embedding   Unsupported("vector(1536)")?
+  createdAt   DateTime                     @default(now())
+  updatedAt   DateTime                     @updatedAt
+
+  retailer       Retailer             @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  categoryRef    Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  variants       ProductVariant[]
+  sessions       MeasurementSession[]
+  cartItems      CartItem[]
+  wishlistItems  Wishlist[]
+  reviews        Review[]
+  orderItems     OrderItem[]
+
+  @@unique([retailerId, productCode])
+}
+
+// ─── Product Variant (extended) ─────────────────────────────────
+
+model ProductVariant {
+  id             String  @id @default(cuid())
+  productId      String
+  sku            String  @unique
+  sizeLabel      String
+  priceOverride  Float?
+  stock          Int     @default(0)
+  chestCm        Float?
+  waistCm        Float?
+  hipCm          Float?
+  lengthCm       Float?
+  inseamCm       Float?
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+}
+
+// ─── Customer ───────────────────────────────────────────────────
+
+model Customer {
+  id        String   @id @default(cuid())
+  authId    String   @unique
+  email     String   @unique
+  firstName String
+  lastName  String
+  phone     String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  addresses  Address[]
+  cartItems  CartItem[]
+  wishlist   Wishlist[]
+  orders     Order[]
+  reviews    Review[]
+  sessions   MeasurementSession[]
+}
+
+// ─── Address ────────────────────────────────────────────────────
+
+model Address {
+  id         String  @id @default(cuid())
+  customerId String
+  label      String  @default("Home")
+  street     String
+  city       String
+  state      String
+  zipCode    String?
+  country    String  @default("Egypt")
+  isDefault  Boolean @default(false)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orders   Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Cart ───────────────────────────────────────────────────────
+
+model CartItem {
+  id         String @id @default(cuid())
+  customerId String
+  productId  String
+  variantId  String
+  quantity   Int    @default(1)
+
+  customer Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant  ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([customerId, productId, variantId])
+}
+
+// ─── Wishlist ───────────────────────────────────────────────────
+
+model Wishlist {
+  id         String @id @default(cuid())
+  customerId String
+  productId  String
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([customerId, productId])
+}
+
+// ─── Order ──────────────────────────────────────────────────────
+
+model Order {
+  id             String        @id @default(cuid())
+  customerId     String
+  addressId      String?
+  status         OrderStatus   @default(PENDING)
+  subtotalEgp    Float
+  shippingEgp    Float         @default(0)
+  discountEgp    Float         @default(0)
+  totalEgp       Float
+  paymentMethod  String?
+  paymentStatus  PaymentStatus @default(PENDING)
+  trackingNumber String?
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  customer Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  address  Address?    @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  items    OrderItem[]
+}
+
+// ─── Order Item ─────────────────────────────────────────────────
+
+model OrderItem {
+  id           String @id @default(cuid())
+  orderId      String
+  productId    String
+  variantId    String
+  quantity     Int
+  unitPriceEgp Float
+  sizeLabel    String
+
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+}
+
+// ─── Review ─────────────────────────────────────────────────────
+
+model Review {
+  id         String  @id @default(cuid())
+  customerId String
+  productId  String
+  rating     Int
+  title      String?
+  comment    String?
+  isVerified Boolean @default(false)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([customerId, productId])
+}
+
+// ─── Measurement Session (extended) ─────────────────────────────
+
+model MeasurementSession {
+  id                 String   @id @default(cuid())
+  retailerId         String
+  customerId         String?
+  productId          String
+  heightCm           Float
+  weightKg           Float
+  chestCm            Float
+  waistCm            Float
+  measurementVersion String   @default("v1")
+  bodyShapeParams    Json?
+  recommendedSize    String?
+  confidenceScore    Float?
+  explanation        String?
+  tryonResultUrl     String?
+  isPurchased        Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  retailer Retailer  @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  product  Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
