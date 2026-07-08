@@ -82,6 +82,7 @@ const config: Config = {
         'shimmer-fast': 'shimmer 3s linear infinite',
         'shimmer-slow': 'shimmer 4s linear infinite',
         'float': 'float 4s ease-in-out infinite',
+        'slow-zoom': 'slowZoom 20s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -103,6 +104,10 @@ const config: Config = {
         float: {
           '0%, 100%': { transform: 'translateY(0px)' },
           '50%': { transform: 'translateY(-8px)' },
+        },
+        slowZoom: {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.08)' },
         }
       }
     }
