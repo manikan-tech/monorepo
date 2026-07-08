@@ -1,96 +1,154 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Cairo:wght@300;400;500;600;700;800&display=swap');
 
-:root {
-  /* ── Manikan Brand Colors ──────────────────────────── */
-  --manikan-teal: #1B3A4B;
-  --manikan-teal-hover: #254d63;
-  --manikan-teal-light: #2a5a72;
-  --manikan-gold: #C4963C;
-  --manikan-gold-light: #d4aa5a;
-  --manikan-cream: #F8F7F4;
-  --manikan-cream-dark: #EFEDE8;
-  --manikan-white: #FFFFFF;
-  --manikan-text: #1A1A2E;
-  --manikan-text-secondary: #4A5568;
-  --manikan-muted: #6B7280;
-  --manikan-border: #E2E8F0;
-  --manikan-border-focus: #1B3A4B;
-  --manikan-input-bg: #F7FAFC;
-  --manikan-error: #E53E3E;
-  --manikan-success: #38A169;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-  /* ── Typography ────────────────────────────────────── */
-  --font-heading: 'Playfair Display', Georgia, 'Times New Roman', serif;
-  --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-
-  /* ── Spacing ───────────────────────────────────────── */
-  --space-xs: 0.25rem;
-  --space-sm: 0.5rem;
-  --space-md: 1rem;
-  --space-lg: 1.5rem;
-  --space-xl: 2rem;
-  --space-2xl: 3rem;
-  --space-3xl: 4rem;
-
-  /* ── Radii ─────────────────────────────────────────── */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-
-  /* ── Shadows ───────────────────────────────────────── */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.1);
-
-  /* ── Transitions ───────────────────────────────────── */
-  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-fast: 150ms var(--ease-smooth);
-  --transition-base: 250ms var(--ease-smooth);
-  --transition-slow: 400ms var(--ease-smooth);
-
-  --background: var(--manikan-white);
-  --foreground: var(--manikan-text);
+@layer base {
+  body {
+    @apply font-body text-forest-950 bg-manikan-bg antialiased;
+  }
 }
 
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
+/* ── Glassmorphism ── */
+.glass {
+  background: rgba(243, 247, 247, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-body);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+.glass-dark {
+  background: rgba(45, 84, 94, 0.14);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+/* ── Interactive Cards & Buttons ── */
+.card-hover {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 48px rgba(18, 52, 59, 0.14); /* lift shadow */
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+.btn-glow:hover {
+  box-shadow: 0 0 32px rgba(45, 84, 94, 0.38);
 }
 
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-heading);
+/* ── Gradients & Text Shimmers ── */
+.shimmer-text {
+  background: linear-gradient(90deg, #2d545e 0%, #e1b382 40%, #2d545e 80%, #e1b382 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 4s linear infinite;
 }
 
-/* ── Utility: sr-only ──────────────────────────────── */
-.sr-only {
+.gold-shimmer {
+  background: linear-gradient(90deg, #c89666 0%, #e1b382 40%, #c89666 70%, #f0c898 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 3s linear infinite;
+}
+
+/* ── Decorative Elements ── */
+/* Section background pattern */
+.section-pattern {
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(45,84,94,0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(225,179,130,0.05) 0%, transparent 50%);
+}
+
+/* Elegant line with gold gradient (for section headers) */
+.ornament {
+  position: relative;
+}
+.ornament::before, .ornament::after {
+  content: '';
   position: absolute;
-  width: 1px;
+  top: 50%;
+  width: 60px;
   height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+  background: linear-gradient(to right, transparent, #c89666);
+}
+.ornament::before { right: calc(100% + 12px); }
+.ornament::after { left: calc(100% + 12px); background: linear-gradient(to left, transparent, #c89666); }
+
+/* Night Blue to Sand Tan Gradient Border */
+.gradient-border {
+  position: relative;
+  background: #fff;
+  border-radius: 1rem;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, #2d545e, #e1b382, #2d545e);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── Custom Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #E6EDEF; /* manikan-muted */
+}
+::-webkit-scrollbar-thumb {
+  background: #72B0BA; /* forest-300 */
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2d545e; /* forest-500 */
+}
+
+/* ── Custom Text Selection ── */
+::selection {
+  background: rgba(45, 84, 94, 0.18); /* forest glow */
+  color: #12343b; /* forest-900 */
+}
+
+/* ── Custom Range Slider (Used in the 3D Viewer/App) ── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+  height: 6px;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: #EDF4F5; /* forest-50 */
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #c89666; /* gold-600 */
+  border: 2px solid #FFFFFF;
+  box-shadow: 0 0 0 3px rgba(38, 80, 89, 0.15), 0 2px 8px rgba(0, 0, 0, 0.4);
+  margin-top: -6px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 5px rgba(38, 80, 89, 0.15), 0 2px 12px rgba(38, 80, 89, 0.3);
 }
