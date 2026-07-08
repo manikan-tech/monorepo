@@ -36,8 +36,15 @@ export interface TokenPayload {
   name: string;
 }
 
+export interface CustomerTokenPayload {
+  sub: string; // customer ID
+  email: string;
+  firstName: string;
+  lastName: string;
+}
+
 export async function createToken(payload: TokenPayload): Promise<string> {
-  return new SignJWT(payload)
+  return new SignJWT(payload as any)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(JWT_EXPIRY)
@@ -49,10 +56,42 @@ export async function verifyToken(token: string): Promise<TokenPayload> {
   return payload as unknown as TokenPayload;
 }
 
+export async function createCustomerToken(
+  payload: CustomerTokenPayload
+): Promise<string> {
+  return new SignJWT(payload as any)
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(JWT_EXPIRY)
+    .sign(getJwtSecret());
+}
+
+export async function verifyCustomerToken(
+  token: string
+): Promise<CustomerTokenPayload> {
+  const { payload } = await jwtVerify(token, getJwtSecret());
+  return payload as unknown as CustomerTokenPayload;
+}
+
 // ─── Cookie Utilities ────────────────────────────────────────
+
+const CUSTOMER_JWT_COOKIE_NAME = "manikan_customer_token";
 
 export function setAuthCookie(response: NextResponse, token: string): void {
   response.cookies.set(JWT_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+    path: "/",
+  });
+}
+
+export function setCustomerAuthCookie(
+  response: NextResponse,
+  token: string
+): void {
+  response.cookies.set(CUSTOMER_JWT_COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -69,6 +108,19 @@ export async function getAuthFromCookies(): Promise<TokenPayload | null> {
 
   try {
     return await verifyToken(token);
+  } catch {
+    return null;
+  }
+}
+
+export async function getCustomerFromCookies(): Promise<CustomerTokenPayload | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(CUSTOMER_JWT_COOKIE_NAME)?.value;
+
+  if (!token) return null;
+
+  try {
+    return await verifyCustomerToken(token);
   } catch {
     return null;
   }

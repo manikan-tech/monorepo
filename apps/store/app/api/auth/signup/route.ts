@@ -54,7 +54,8 @@ export async function POST(request: NextRequest) {
 
     const retailer = await prisma.retailer.create({
       data: {
-        name: name.trim(),
+        authId: email.toLowerCase().trim(),
+        storeName: name.trim(),
         email: email.toLowerCase().trim(),
         hashedPassword,
       },
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
     const token = await createToken({
       sub: retailer.id,
       email: retailer.email,
-      name: retailer.name,
+      name: retailer.storeName,
     });
 
     const response = NextResponse.json(
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
         success: true,
         retailer: {
           id: retailer.id,
-          name: retailer.name,
+          name: retailer.storeName,
           email: retailer.email,
         },
       },
