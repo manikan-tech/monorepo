@@ -4,37 +4,18 @@ import { useState, FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthInput from "../components/AuthInput";
-import styles from "./page.module.css";
 
 /* ── SVG Icons ──────────────────────────────────────────── */
 
 const MailIcon = (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="4" width="20" height="16" rx="2" />
     <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
   </svg>
 );
 
 const LockIcon = (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
   </svg>
@@ -101,49 +82,19 @@ export default function LoginPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className={styles.form} noValidate>
-      {/* ── Logo ──────────────────────────────────────── */}
-      <div className={styles.logoArea}>
-        <div className={styles.logoMark}>
-          <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
-            <path
-              d="M20 2C10.06 2 2 10.06 2 20s8.06 18 18 18 18-8.06 18-18S29.94 2 20 2z"
-              stroke="var(--manikan-teal)"
-              strokeWidth="2.5"
-              fill="none"
-            />
-            <path
-              d="M12 28c2-6 4-16 8-16s6 10 8 16"
-              stroke="var(--manikan-teal)"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              fill="none"
-            />
-          </svg>
-        </div>
-      </div>
-
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6 animate-fade-up" noValidate>
       {/* ── Heading ────────────────────────────────────── */}
-      <div className={styles.headingArea}>
-        <h1 className={styles.title}>Welcome Back</h1>
-        <p className={styles.subtitle}>
+      <div className="flex flex-col gap-2">
+        <h1 className="font-display text-4xl font-semibold text-forest-950 tracking-tight leading-tight">Welcome <span className="gold-shimmer bg-clip-text text-transparent">Back</span></h1>
+        <p className="font-sans text-sm font-light text-forest-700/80 leading-relaxed max-w-[340px]">
           Sign in to your Manikan account.
         </p>
       </div>
 
       {/* ── Error Banner ──────────────────────────────── */}
       {error && (
-        <div className={styles.errorBanner} role="alert">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+        <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-md text-red-600 text-xs font-normal animate-fade-in" role="alert">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -153,7 +104,7 @@ export default function LoginPage() {
       )}
 
       {/* ── Fields ─────────────────────────────────────── */}
-      <div className={styles.fields}>
+      <div className="flex flex-col gap-4">
         <AuthInput
           id="login-email"
           label="Email Address"
@@ -188,25 +139,16 @@ export default function LoginPage() {
       {/* ── Submit ─────────────────────────────────────── */}
       <button
         type="submit"
-        className={styles.submitBtn}
+        className="flex items-center justify-center gap-2 w-full bg-forest-600 text-white hover:bg-forest-700 shadow-soft hover:shadow-card btn-glow rounded-xl px-5 py-2.5 font-medium transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:active:scale-100"
         disabled={isLoading}
         id="login-submit"
       >
         {isLoading ? (
-          <span className={styles.spinner} />
+          <span className="inline-block w-5 h-5 border-[2.5px] border-white/30 border-t-white rounded-full animate-spin" />
         ) : (
           <>
             Sign In
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="5" y1="12" x2="19" y2="12" />
               <polyline points="12 5 19 12 12 19" />
             </svg>
@@ -215,9 +157,9 @@ export default function LoginPage() {
       </button>
 
       {/* ── Footer Link ───────────────────────────────── */}
-      <p className={styles.footerText}>
+      <p className="text-center font-sans text-sm font-light text-forest-700/80">
         Don&apos;t have an account?{" "}
-        <Link href="/signup" className={styles.footerLink}>
+        <Link href="/signup" className="text-gold-600 font-semibold underline underline-offset-4 decoration-gold-600/30 transition-colors hover:decoration-gold-600 hover:text-gold-500">
           Sign up
         </Link>
       </p>
