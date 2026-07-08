@@ -35,6 +35,12 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Verify password ────────────────────────────────────
+    if (!retailer.hashedPassword) {
+      return NextResponse.json(
+        { error: "Invalid email or password" },
+        { status: 401 }
+      );
+    }
     const isValid = await verifyPassword(password, retailer.hashedPassword);
 
     if (!isValid) {
@@ -48,14 +54,14 @@ export async function POST(request: NextRequest) {
     const token = await createToken({
       sub: retailer.id,
       email: retailer.email,
-      name: retailer.name,
+      name: retailer.storeName,
     });
 
     const response = NextResponse.json({
       success: true,
       retailer: {
         id: retailer.id,
-        name: retailer.name,
+        name: retailer.storeName,
         email: retailer.email,
       },
     });

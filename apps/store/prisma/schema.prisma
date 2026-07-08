@@ -30,14 +30,15 @@ enum PaymentStatus {
 // ─── B2B: Retailer (existing) ───────────────────────────────────
 
 model Retailer {
-  id        String   @id @default(cuid())
-  authId    String   @unique
-  email     String   @unique
-  storeName String
-  apiKey    String   @unique @default(cuid())
-  plan      String   @default("free")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  authId         String   @unique
+  email          String   @unique
+  storeName      String
+  hashedPassword String?
+  apiKey         String   @unique @default(cuid())
+  plan           String   @default("free")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   products Product[]
   sessions MeasurementSession[]

@@ -1,0 +1,393 @@
+product_id,product_name,category,gender,brand,size_label,chest_cm,waist_cm,hip_cm,length_cm,inseam_cm,fabric,price_egp,image_url
+P001,Classic Silk Blouse,blouse,women,Nour Atelier,S,86,68,90,58,,Silk,1200,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P001.jpg
+P001,Classic Silk Blouse,blouse,women,Nour Atelier,M,90,72,94,59,,Silk,1200,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P001.jpg
+P001,Classic Silk Blouse,blouse,women,Nour Atelier,L,94,76,98,60,,Silk,1200,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P001.jpg
+P001,Classic Silk Blouse,blouse,women,Nour Atelier,XL,98,80,102,61,,Silk,1200,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P001.jpg
+P002,Linen Wide-Leg Pants,pants,women,Nour Atelier,S,,64,90,,72,Linen,950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P002.jpg
+P002,Linen Wide-Leg Pants,pants,women,Nour Atelier,M,,68,94,,73,Linen,950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P002.jpg
+P002,Linen Wide-Leg Pants,pants,women,Nour Atelier,L,,72,98,,74,Linen,950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P002.jpg
+P002,Linen Wide-Leg Pants,pants,women,Nour Atelier,XL,,76,102,,75,Linen,950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P002.jpg
+P003,Oversized Cotton Blouse,blouse,women,Cairo Thread Co.,S,90,70,92,60,,Cotton,750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P003.jpg
+P003,Oversized Cotton Blouse,blouse,women,Cairo Thread Co.,M,94,74,96,61,,Cotton,750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P003.jpg
+P003,Oversized Cotton Blouse,blouse,women,Cairo Thread Co.,L,98,78,100,62,,Cotton,750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P003.jpg
+P003,Oversized Cotton Blouse,blouse,women,Cairo Thread Co.,XL,102,82,104,63,,Cotton,750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P003.jpg
+P004,High-Waist Skinny Pants,pants,women,Cairo Thread Co.,S,,62,88,,71,Denim,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P004.JPG
+P004,High-Waist Skinny Pants,pants,women,Cairo Thread Co.,M,,66,92,,72,Denim,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P004.JPG
+P004,High-Waist Skinny Pants,pants,women,Cairo Thread Co.,L,,70,96,,73,Denim,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P004.JPG
+P004,High-Waist Skinny Pants,pants,women,Cairo Thread Co.,XL,,74,100,,74,Denim,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P004.JPG
+P005,Floral Wrap Blouse,blouse,women,Nour Atelier,S,84,66,88,57,,Viscose,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P005.jpg
+P005,Floral Wrap Blouse,blouse,women,Nour Atelier,M,88,70,92,58,,Viscose,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P005.jpg
+P005,Floral Wrap Blouse,blouse,women,Nour Atelier,L,92,74,96,59,,Viscose,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P005.jpg
+P006,Tailored Slim Pants,pants,women,Cairo Thread Co.,S,,63,87,,70,Polyester Blend,860,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P006.jpg
+P006,Tailored Slim Pants,pants,women,Cairo Thread Co.,M,,67,91,,71,Polyester Blend,860,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P006.jpg
+P006,Tailored Slim Pants,pants,women,Cairo Thread Co.,L,,71,95,,72,Polyester Blend,860,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P006.jpg
+P007,Classic Fit Dress Shirt,shirt,men,Cairo Thread Co.,M,96,84,,76,,Cotton,820,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P007.jpg
+P007,Classic Fit Dress Shirt,shirt,men,Cairo Thread Co.,L,102,90,,78,,Cotton,820,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P007.jpg
+P007,Classic Fit Dress Shirt,shirt,men,Cairo Thread Co.,XL,108,96,,80,,Cotton,820,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P007.jpg
+P007,Classic Fit Dress Shirt,shirt,men,Cairo Thread Co.,XXL,114,102,,82,,Cotton,820,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P007.jpg
+P008,Slim Fit Chino Pants,pants,men,Nour Atelier,M,,82,98,,80,Cotton Twill,930,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P008.jpg
+P008,Slim Fit Chino Pants,pants,men,Nour Atelier,L,,88,104,,81,Cotton Twill,930,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P008.jpg
+P008,Slim Fit Chino Pants,pants,men,Nour Atelier,XL,,94,110,,82,Cotton Twill,930,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P008.jpg
+P008,Slim Fit Chino Pants,pants,men,Nour Atelier,XXL,,100,116,,83,Cotton Twill,930,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P008.jpg
+P009,Linen Casual Shirt,shirt,men,Nour Atelier,M,98,86,,75,,Linen,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P009.jpg
+P009,Linen Casual Shirt,shirt,men,Nour Atelier,L,104,92,,77,,Linen,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P009.jpg
+P009,Linen Casual Shirt,shirt,men,Nour Atelier,XL,110,98,,79,,Linen,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P009.jpg
+P010,Straight Fit Denim,pants,men,Cairo Thread Co.,M,,84,100,,79,Denim,950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P010.jpg
+P010,Straight Fit Denim,pants,men,Cairo Thread Co.,L,,90,106,,80,Denim,950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P010.jpg
+P010,Straight Fit Denim,pants,men,Cairo Thread Co.,XL,,96,112,,81,Denim,950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P010.jpg
+P011,A-Line Midi Skirt,skirt,women,Nour Atelier,S,,62,88,70,,,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P011.jpg
+P011,A-Line Midi Skirt,skirt,women,Nour Atelier,M,,66,92,71,,,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P011.jpg
+P011,A-Line Midi Skirt,skirt,women,Nour Atelier,L,,70,96,72,,,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P011.jpg
+P011,A-Line Midi Skirt,skirt,women,Nour Atelier,XL,,74,100,73,,,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P011.jpg
+P012,Pleated Satin Skirt,skirt,women,Cairo Thread Co.,S,,60,86,65,,,850,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P012.jpg
+P012,Pleated Satin Skirt,skirt,women,Cairo Thread Co.,M,,64,90,66,,,850,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P012.jpg
+P012,Pleated Satin Skirt,skirt,women,Cairo Thread Co.,L,,68,94,67,,,850,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P012.jpg
+P012,Pleated Satin Skirt,skirt,women,Cairo Thread Co.,XL,,72,98,68,,,850,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P012.jpg
+P013,Striped Button-Down Blouse,blouse,women,Cairo Thread Co.,S,84,66,88,57,,Cotton,680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P013.jpg
+P013,Striped Button-Down Blouse,blouse,women,Cairo Thread Co.,M,88,70,92,58,,Cotton,680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P013.jpg
+P013,Striped Button-Down Blouse,blouse,women,Cairo Thread Co.,L,92,74,96,59,,Cotton,680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P013.jpg
+P013,Striped Button-Down Blouse,blouse,women,Cairo Thread Co.,XL,96,78,100,60,,Cotton,680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P013.jpg
+P014,Relaxed Linen Blouse,blouse,women,Nour Atelier,S,88,70,92,62,,Linen,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P014.jpg
+P014,Relaxed Linen Blouse,blouse,women,Nour Atelier,M,92,74,96,63,,Linen,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P014.jpg
+P014,Relaxed Linen Blouse,blouse,women,Nour Atelier,L,96,78,100,64,,Linen,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P014.jpg
+P014,Relaxed Linen Blouse,blouse,women,Nour Atelier,XL,100,82,104,65,,Linen,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P014.jpg
+P015,Cargo Wide-Leg Pants,pants,women,Cairo Thread Co.,S,,64,92,,73,Cotton Twill,780,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P015.jpg
+P015,Cargo Wide-Leg Pants,pants,women,Cairo Thread Co.,M,,68,96,,74,Cotton Twill,780,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P015.jpg
+P015,Cargo Wide-Leg Pants,pants,women,Cairo Thread Co.,L,,72,100,,75,Cotton Twill,780,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P015.jpg
+P015,Cargo Wide-Leg Pants,pants,women,Cairo Thread Co.,XL,,76,104,,76,Cotton Twill,780,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P015.jpg
+P016,Classic Polo Shirt,shirt,men,Cairo Thread Co.,M,100,88,,72,,Pique Cotton,650,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P016.jpg
+P016,Classic Polo Shirt,shirt,men,Cairo Thread Co.,L,106,94,,74,,Pique Cotton,650,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P016.jpg
+P016,Classic Polo Shirt,shirt,men,Cairo Thread Co.,XL,112,100,,76,,Pique Cotton,650,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P016.jpg
+P016,Classic Polo Shirt,shirt,men,Cairo Thread Co.,XXL,118,106,,78,,Pique Cotton,650,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P016.jpg
+P017,Relaxed Fit Jogger,pants,men,Nour Atelier,M,,86,104,,78,French Terry,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P017.jpg
+P017,Relaxed Fit Jogger,pants,men,Nour Atelier,L,,92,110,,79,French Terry,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P017.jpg
+P017,Relaxed Fit Jogger,pants,men,Nour Atelier,XL,,98,116,,80,French Terry,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P017.jpg
+P017,Relaxed Fit Jogger,pants,men,Nour Atelier,XXL,,104,122,,81,French Terry,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P017.jpg
+P018,Oxford Button-Down Shirt,shirt,men,Nour Atelier,M,100,88,,74,,Oxford Cotton,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P018.jpg
+P018,Oxford Button-Down Shirt,shirt,men,Nour Atelier,L,106,94,,76,,Oxford Cotton,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P018.jpg
+P018,Oxford Button-Down Shirt,shirt,men,Nour Atelier,XL,112,100,,78,,Oxford Cotton,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P018.jpg
+P018,Oxford Button-Down Shirt,shirt,men,Nour Atelier,XXL,118,106,,80,,Oxford Cotton,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P018.jpg
+P019,Cropped Denim Jacket,jacket,women,Cairo Thread Co.,S,88,72,92,52,,Denim,1100,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P019.jpg
+P019,Cropped Denim Jacket,jacket,women,Cairo Thread Co.,M,92,76,96,53,,Denim,1100,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P019.jpg
+P019,Cropped Denim Jacket,jacket,women,Cairo Thread Co.,L,96,80,100,54,,Denim,1100,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P019.jpg
+P019,Cropped Denim Jacket,jacket,women,Cairo Thread Co.,XL,100,84,104,55,,Denim,1100,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P019.jpg
+P020,Satin Evening Blouse,blouse,women,Nour Atelier,S,84,66,88,56,,Satin,1350,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P020.jpg
+P020,Satin Evening Blouse,blouse,women,Nour Atelier,M,88,70,92,57,,Satin,1350,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P020.jpg
+P020,Satin Evening Blouse,blouse,women,Nour Atelier,L,92,74,96,58,,Satin,1350,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P020.jpg
+P020,Satin Evening Blouse,blouse,women,Nour Atelier,XL,96,78,100,59,,Satin,1350,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P020.jpg
+P021,Elastic Waist Jogger,pants,women,Cairo Thread Co.,S,,62,88,,69,Jersey,640,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P021.jpg
+P021,Elastic Waist Jogger,pants,women,Cairo Thread Co.,M,,66,92,,70,Jersey,640,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P021.jpg
+P021,Elastic Waist Jogger,pants,women,Cairo Thread Co.,L,,70,96,,71,Jersey,640,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P021.jpg
+P021,Elastic Waist Jogger,pants,women,Cairo Thread Co.,XL,,74,100,,72,Jersey,640,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P021.jpg
+P022,Wrap Midi Skirt,skirt,women,Nour Atelier,S,,60,86,68,,,780,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P022.jpg
+P022,Wrap Midi Skirt,skirt,women,Nour Atelier,M,,64,90,69,,,780,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P022.jpg
+P022,Wrap Midi Skirt,skirt,women,Nour Atelier,L,,68,94,70,,,780,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P022.jpg
+P022,Wrap Midi Skirt,skirt,women,Nour Atelier,XL,,72,98,71,,,780,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P022.jpg
+P023,Puff Sleeve Blouse,blouse,women,Nour Atelier,S,86,68,90,57,,Cotton,820,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P023.jpg
+P023,Puff Sleeve Blouse,blouse,women,Nour Atelier,M,90,72,94,58,,Cotton,820,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P023.jpg
+P023,Puff Sleeve Blouse,blouse,women,Nour Atelier,L,94,76,98,59,,Cotton,820,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P023.jpg
+P023,Puff Sleeve Blouse,blouse,women,Nour Atelier,XL,98,80,102,60,,Cotton,820,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P023.jpg
+P024,Wide Leg Linen Pants,pants,women,Nour Atelier,S,,63,89,,73,Linen,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P024.jpg
+P024,Wide Leg Linen Pants,pants,women,Nour Atelier,M,,67,93,,74,Linen,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P024.jpg
+P024,Wide Leg Linen Pants,pants,women,Nour Atelier,L,,71,97,,75,Linen,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P024.jpg
+P024,Wide Leg Linen Pants,pants,women,Nour Atelier,XL,,75,101,,76,Linen,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P024.jpg
+P025,Bodycon Midi Skirt,skirt,women,Cairo Thread Co.,S,,60,86,60,,,690,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P025.jpg
+P025,Bodycon Midi Skirt,skirt,women,Cairo Thread Co.,M,,64,90,61,,,690,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P025.jpg
+P025,Bodycon Midi Skirt,skirt,women,Cairo Thread Co.,L,,68,94,62,,,690,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P025.jpg
+P025,Bodycon Midi Skirt,skirt,women,Cairo Thread Co.,XL,,72,98,63,,,690,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P025.jpg
+P026,Embroidered Linen Blouse,blouse,women,Nour Atelier,S,86,68,90,58,,Linen,1050,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P026.jpg
+P026,Embroidered Linen Blouse,blouse,women,Nour Atelier,M,90,72,94,59,,Linen,1050,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P026.jpg
+P026,Embroidered Linen Blouse,blouse,women,Nour Atelier,L,94,76,98,60,,Linen,1050,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P026.jpg
+P026,Embroidered Linen Blouse,blouse,women,Nour Atelier,XL,98,80,102,61,,Linen,1050,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P026.jpg
+P027,Straight Leg Chino,pants,women,Cairo Thread Co.,S,,62,88,,70,Cotton Twill,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P027.jpg
+P027,Straight Leg Chino,pants,women,Cairo Thread Co.,M,,66,92,,71,Cotton Twill,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P027.jpg
+P027,Straight Leg Chino,pants,women,Cairo Thread Co.,L,,70,96,,72,Cotton Twill,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P027.jpg
+P027,Straight Leg Chino,pants,women,Cairo Thread Co.,XL,,74,100,,73,Cotton Twill,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P027.jpg
+P028,Tiered Maxi Skirt,skirt,women,Nour Atelier,S,,62,88,95,,,920,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P028.jpg
+P028,Tiered Maxi Skirt,skirt,women,Nour Atelier,M,,66,92,96,,,920,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P028.jpg
+P028,Tiered Maxi Skirt,skirt,women,Nour Atelier,L,,70,96,97,,,920,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P028.jpg
+P028,Tiered Maxi Skirt,skirt,women,Nour Atelier,XL,,74,100,98,,,920,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P028.jpg
+P029,Ruffle Collar Blouse,blouse,women,Cairo Thread Co.,S,84,66,88,56,,Chiffon,750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P029.jpg
+P029,Ruffle Collar Blouse,blouse,women,Cairo Thread Co.,M,88,70,92,57,,Chiffon,750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P029.jpg
+P029,Ruffle Collar Blouse,blouse,women,Cairo Thread Co.,L,92,74,96,58,,Chiffon,750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P029.jpg
+P029,Ruffle Collar Blouse,blouse,women,Cairo Thread Co.,XL,96,78,100,59,,Chiffon,750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P029.jpg
+P030,Paperbag Waist Pants,pants,women,Nour Atelier,S,,60,86,,68,Viscose,830,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P030.jpg
+P030,Paperbag Waist Pants,pants,women,Nour Atelier,M,,64,90,,69,Viscose,830,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P030.jpg
+P030,Paperbag Waist Pants,pants,women,Nour Atelier,L,,68,94,,70,Viscose,830,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P030.jpg
+P030,Paperbag Waist Pants,pants,women,Nour Atelier,XL,,72,98,,71,Viscose,830,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P030.jpg
+P031,Blazer Jacket,jacket,women,Cairo Thread Co.,S,90,74,94,68,,Polyester Blend,1450,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P031.jpg
+P031,Blazer Jacket,jacket,women,Cairo Thread Co.,M,94,78,98,69,,Polyester Blend,1450,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P031.jpg
+P031,Blazer Jacket,jacket,women,Cairo Thread Co.,L,98,82,102,70,,Polyester Blend,1450,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P031.jpg
+P031,Blazer Jacket,jacket,women,Cairo Thread Co.,XL,102,86,106,71,,Polyester Blend,1450,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P031.jpg
+P032,Printed Wrap Blouse,blouse,women,Nour Atelier,S,84,66,88,57,,Viscose,880,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P032.jpg
+P032,Printed Wrap Blouse,blouse,women,Nour Atelier,M,88,70,92,58,,Viscose,880,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P032.jpg
+P032,Printed Wrap Blouse,blouse,women,Nour Atelier,L,92,74,96,59,,Viscose,880,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P032.jpg
+P032,Printed Wrap Blouse,blouse,women,Nour Atelier,XL,96,78,100,60,,Viscose,880,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P032.jpg
+P033,Cigarette Pants,pants,women,Cairo Thread Co.,S,,61,87,,68,Ponte,910,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P033.jpg
+P033,Cigarette Pants,pants,women,Cairo Thread Co.,M,,65,91,,69,Ponte,910,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P033.jpg
+P033,Cigarette Pants,pants,women,Cairo Thread Co.,L,,69,95,,70,Ponte,910,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P033.jpg
+P033,Cigarette Pants,pants,women,Cairo Thread Co.,XL,,73,99,,71,Ponte,910,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P033.jpg
+P034,Denim Skirt,skirt,women,Cairo Thread Co.,S,,60,86,38,,,580,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P034.jpg
+P034,Denim Skirt,skirt,women,Cairo Thread Co.,M,,64,90,39,,,580,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P034.jpg
+P034,Denim Skirt,skirt,women,Cairo Thread Co.,L,,68,94,40,,,580,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P034.jpg
+P034,Denim Skirt,skirt,women,Cairo Thread Co.,XL,,72,98,41,,,580,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P034.jpg
+P035,Sheer Organza Blouse,blouse,women,Nour Atelier,S,84,66,88,57,,Organza,1150,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P035.jpg
+P035,Sheer Organza Blouse,blouse,women,Nour Atelier,M,88,70,92,58,,Organza,1150,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P035.jpg
+P035,Sheer Organza Blouse,blouse,women,Nour Atelier,L,92,74,96,59,,Organza,1150,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P035.jpg
+P035,Sheer Organza Blouse,blouse,women,Nour Atelier,XL,96,78,100,60,,Organza,1150,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P035.jpg
+P036,Flared Palazzo Pants,pants,women,Nour Atelier,S,,62,90,,76,Chiffon,960,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P036.jpg
+P036,Flared Palazzo Pants,pants,women,Nour Atelier,M,,66,94,,77,Chiffon,960,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P036.jpg
+P036,Flared Palazzo Pants,pants,women,Nour Atelier,L,,70,98,,78,Chiffon,960,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P036.jpg
+P036,Flared Palazzo Pants,pants,women,Nour Atelier,XL,,74,102,,79,Chiffon,960,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P036.jpg
+P037,Quilted Puffer Jacket,jacket,women,Cairo Thread Co.,S,92,76,96,58,,Nylon,1680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P037.jpg
+P037,Quilted Puffer Jacket,jacket,women,Cairo Thread Co.,M,96,80,100,59,,Nylon,1680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P037.jpg
+P037,Quilted Puffer Jacket,jacket,women,Cairo Thread Co.,L,100,84,104,60,,Nylon,1680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P037.jpg
+P037,Quilted Puffer Jacket,jacket,women,Cairo Thread Co.,XL,104,88,108,61,,Nylon,1680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P037.jpg
+P038,Lace Trim Blouse,blouse,women,Nour Atelier,S,84,66,88,56,,Cotton,920,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P038.jpg
+P038,Lace Trim Blouse,blouse,women,Nour Atelier,M,88,70,92,57,,Cotton,920,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P038.jpg
+P038,Lace Trim Blouse,blouse,women,Nour Atelier,L,92,74,96,58,,Cotton,920,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P038.jpg
+P038,Lace Trim Blouse,blouse,women,Nour Atelier,XL,96,78,100,59,,Cotton,920,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P038.jpg
+P040,Knit Ribbed Blouse,blouse,women,Cairo Thread Co.,S,86,68,90,56,,Knit,700,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P040.jpg
+P040,Knit Ribbed Blouse,blouse,women,Cairo Thread Co.,M,90,72,94,57,,Knit,700,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P040.jpg
+P040,Knit Ribbed Blouse,blouse,women,Cairo Thread Co.,L,94,76,98,58,,Knit,700,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P040.jpg
+P040,Knit Ribbed Blouse,blouse,women,Cairo Thread Co.,XL,98,80,102,59,,Knit,700,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P040.jpg
+P041,Pleated Chiffon Skirt,skirt,women,Nour Atelier,S,,60,86,72,,,840,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P041.jpg
+P041,Pleated Chiffon Skirt,skirt,women,Nour Atelier,M,,64,90,73,,,840,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P041.jpg
+P041,Pleated Chiffon Skirt,skirt,women,Nour Atelier,L,,68,94,74,,,840,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P041.jpg
+P041,Pleated Chiffon Skirt,skirt,women,Nour Atelier,XL,,72,98,75,,,840,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P041.jpg
+P042,Printed Palazzo Pants,pants,women,Cairo Thread Co.,S,,62,90,,76,Viscose,790,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P042.jpg
+P042,Printed Palazzo Pants,pants,women,Cairo Thread Co.,M,,66,94,,77,Viscose,790,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P042.jpg
+P042,Printed Palazzo Pants,pants,women,Cairo Thread Co.,L,,70,98,,78,Viscose,790,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P042.jpg
+P042,Printed Palazzo Pants,pants,women,Cairo Thread Co.,XL,,74,102,,79,Viscose,790,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P042.jpg
+P043,Bomber Jacket,jacket,women,Cairo Thread Co.,S,92,76,96,56,,Satin,1250,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P043.jpg
+P043,Bomber Jacket,jacket,women,Cairo Thread Co.,M,96,80,100,57,,Satin,1250,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P043.jpg
+P043,Bomber Jacket,jacket,women,Cairo Thread Co.,L,100,84,104,58,,Satin,1250,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P043.jpg
+P043,Bomber Jacket,jacket,women,Cairo Thread Co.,XL,104,88,108,59,,Satin,1250,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P043.jpg
+P044,V-Neck Chiffon Blouse,blouse,women,Cairo Thread Co.,S,84,66,88,57,,Chiffon,680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P044.jpg
+P044,V-Neck Chiffon Blouse,blouse,women,Cairo Thread Co.,M,88,70,92,58,,Chiffon,680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P044.jpg
+P044,V-Neck Chiffon Blouse,blouse,women,Cairo Thread Co.,L,92,74,96,59,,Chiffon,680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P044.jpg
+P044,V-Neck Chiffon Blouse,blouse,women,Cairo Thread Co.,XL,96,78,100,60,,Chiffon,680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P044.jpg
+P045,Linen Pants,pants,women,Nour Atelier,S,,60,86,,32,Linen,520,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P045.jpg
+P045,Linen Pants,pants,women,Nour Atelier,M,,64,90,,33,Linen,520,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P045.jpg
+P045,Linen Pants,pants,women,Nour Atelier,L,,68,94,,34,Linen,520,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P045.jpg
+P045,Linen Pants,pants,women,Nour Atelier,XL,,72,98,,35,Linen,520,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P045.jpg
+P046,Knit Pencil Skirt,skirt,women,Cairo Thread Co.,S,,60,86,55,,,660,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P046.jpg
+P046,Knit Pencil Skirt,skirt,women,Cairo Thread Co.,M,,64,90,56,,,660,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P046.jpg
+P046,Knit Pencil Skirt,skirt,women,Cairo Thread Co.,L,,68,94,57,,,660,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P046.jpg
+P046,Knit Pencil Skirt,skirt,women,Cairo Thread Co.,XL,,72,98,58,,,660,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P046.jpg
+P047,Oversized Denim Jacket,jacket,women,Nour Atelier,S,94,78,98,58,,Denim,1300,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P047.jpg
+P047,Oversized Denim Jacket,jacket,women,Nour Atelier,M,98,82,102,59,,Denim,1300,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P047.jpg
+P047,Oversized Denim Jacket,jacket,women,Nour Atelier,L,102,86,106,60,,Denim,1300,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P047.jpg
+P047,Oversized Denim Jacket,jacket,women,Nour Atelier,XL,106,90,110,61,,Denim,1300,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P047.jpg
+P048,Ruched Side Blouse,blouse,women,Nour Atelier,S,84,66,88,57,,Jersey,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P048.jpg
+P048,Ruched Side Blouse,blouse,women,Nour Atelier,M,88,70,92,58,,Jersey,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P048.jpg
+P048,Ruched Side Blouse,blouse,women,Nour Atelier,L,92,74,96,59,,Jersey,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P048.jpg
+P048,Ruched Side Blouse,blouse,women,Nour Atelier,XL,96,78,100,60,,Jersey,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P048.jpg
+P049,Floral Midi Skirt,skirt,women,Nour Atelier,S,,62,88,70,,,810,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P049.jpg
+P049,Floral Midi Skirt,skirt,women,Nour Atelier,M,,66,92,71,,,810,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P049.jpg
+P049,Floral Midi Skirt,skirt,women,Nour Atelier,L,,70,96,72,,,810,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P049.jpg
+P049,Floral Midi Skirt,skirt,women,Nour Atelier,XL,,74,100,73,,,810,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P049.jpg
+P050,Relaxed Linen Pants,pants,women,Cairo Thread Co.,S,,64,90,,72,Linen,740,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P050.jpg
+P050,Relaxed Linen Pants,pants,women,Cairo Thread Co.,M,,68,94,,73,Linen,740,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P050.jpg
+P050,Relaxed Linen Pants,pants,women,Cairo Thread Co.,L,,72,98,,74,Linen,740,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P050.jpg
+P050,Relaxed Linen Pants,pants,women,Cairo Thread Co.,XL,,76,102,,75,Linen,740,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P050.jpg
+P051,Oversized Flannel Shirt,shirt,men,Cairo Thread Co.,M,106,94,,78,,Flannel,790,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P051.jpg
+P051,Oversized Flannel Shirt,shirt,men,Cairo Thread Co.,L,112,100,,80,,Flannel,790,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P051.jpg
+P051,Oversized Flannel Shirt,shirt,men,Cairo Thread Co.,XL,118,106,,82,,Flannel,790,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P051.jpg
+P051,Oversized Flannel Shirt,shirt,men,Cairo Thread Co.,XXL,124,112,,84,,Flannel,790,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P051.jpg
+P052,Slim Fit Dress Pants,pants,men,Nour Atelier,M,,82,98,,80,Wool Blend,1050,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P052.jpg
+P052,Slim Fit Dress Pants,pants,men,Nour Atelier,L,,88,104,,81,Wool Blend,1050,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P052.jpg
+P052,Slim Fit Dress Pants,pants,men,Nour Atelier,XL,,94,110,,82,Wool Blend,1050,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P052.jpg
+P052,Slim Fit Dress Pants,pants,men,Nour Atelier,XXL,,100,116,,83,Wool Blend,1050,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P052.jpg
+P053,Striped Linen Shirt,shirt,men,Nour Atelier,M,100,88,,74,,Linen,820,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P053.jpg
+P053,Striped Linen Shirt,shirt,men,Nour Atelier,L,106,94,,76,,Linen,820,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P053.jpg
+P053,Striped Linen Shirt,shirt,men,Nour Atelier,XL,112,100,,78,,Linen,820,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P053.jpg
+P053,Striped Linen Shirt,shirt,men,Nour Atelier,XXL,118,106,,80,,Linen,820,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P053.jpg
+P054,Cargo Pants,pants,men,Cairo Thread Co.,M,,84,102,,80,Cotton Twill,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P054.jpg
+P054,Cargo Pants,pants,men,Cairo Thread Co.,L,,90,108,,81,Cotton Twill,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P054.jpg
+P054,Cargo Pants,pants,men,Cairo Thread Co.,XL,,96,114,,82,Cotton Twill,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P054.jpg
+P054,Cargo Pants,pants,men,Cairo Thread Co.,XXL,,102,120,,83,Cotton Twill,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P054.jpg
+P055,Henley Shirt,shirt,men,Cairo Thread Co.,M,100,88,,72,,Cotton,620,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P055.jpg
+P055,Henley Shirt,shirt,men,Cairo Thread Co.,L,106,94,,74,,Cotton,620,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P055.jpg
+P055,Henley Shirt,shirt,men,Cairo Thread Co.,XL,112,100,,76,,Cotton,620,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P055.jpg
+P055,Henley Shirt,shirt,men,Cairo Thread Co.,XXL,118,106,,78,,Cotton,620,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P055.jpg
+P056,Relaxed Fit Jeans,pants,men,Nour Atelier,M,,86,104,,79,Denim,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P056.jpg
+P056,Relaxed Fit Jeans,pants,men,Nour Atelier,L,,92,110,,80,Denim,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P056.jpg
+P056,Relaxed Fit Jeans,pants,men,Nour Atelier,XL,,98,116,,81,Denim,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P056.jpg
+P056,Relaxed Fit Jeans,pants,men,Nour Atelier,XXL,,104,122,,82,Denim,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P056.jpg
+P057,Denim Shirt,shirt,men,Cairo Thread Co.,M,100,88,,75,,Denim,750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P057.jpg
+P057,Denim Shirt,shirt,men,Cairo Thread Co.,L,106,94,,77,,Denim,750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P057.jpg
+P057,Denim Shirt,shirt,men,Cairo Thread Co.,XL,112,100,,79,,Denim,750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P057.jpg
+P057,Denim Shirt,shirt,men,Cairo Thread Co.,XXL,118,106,,81,,Denim,750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P057.jpg
+P058,Tapered Sweatpants,pants,men,Cairo Thread Co.,M,,84,102,,78,French Terry,680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P058.jpg
+P058,Tapered Sweatpants,pants,men,Cairo Thread Co.,L,,90,108,,79,French Terry,680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P058.jpg
+P058,Tapered Sweatpants,pants,men,Cairo Thread Co.,XL,,96,114,,80,French Terry,680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P058.jpg
+P058,Tapered Sweatpants,pants,men,Cairo Thread Co.,XXL,,102,120,,81,French Terry,680,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P058.jpg
+P059,Printed Camp Shirt,shirt,men,Nour Atelier,M,100,88,,73,,Viscose,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P059.jpg
+P059,Printed Camp Shirt,shirt,men,Nour Atelier,L,106,94,,75,,Viscose,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P059.jpg
+P059,Printed Camp Shirt,shirt,men,Nour Atelier,XL,112,100,,77,,Viscose,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P059.jpg
+P059,Printed Camp Shirt,shirt,men,Nour Atelier,XXL,118,106,,79,,Viscose,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P059.jpg
+P060,Wide Leg Linen Pants,pants,men,Nour Atelier,M,,84,102,,81,Linen,910,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P060.jpg
+P060,Wide Leg Linen Pants,pants,men,Nour Atelier,L,,90,108,,82,Linen,910,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P060.jpg
+P060,Wide Leg Linen Pants,pants,men,Nour Atelier,XL,,96,114,,83,Linen,910,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P060.jpg
+P060,Wide Leg Linen Pants,pants,men,Nour Atelier,XXL,,102,120,,84,Linen,910,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P060.jpg
+P061,Bomber Jacket,jacket,men,Cairo Thread Co.,M,106,94,,62,,Nylon,1350,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P061.jpg
+P061,Bomber Jacket,jacket,men,Cairo Thread Co.,L,112,100,,64,,Nylon,1350,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P061.jpg
+P061,Bomber Jacket,jacket,men,Cairo Thread Co.,XL,118,106,,66,,Nylon,1350,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P061.jpg
+P061,Bomber Jacket,jacket,men,Cairo Thread Co.,XXL,124,112,,68,,Nylon,1350,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P061.jpg
+P062,Slim Fit Polo,shirt,men,Cairo Thread Co.,M,98,86,,70,,Pique Cotton,590,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P062.jpg
+P062,Slim Fit Polo,shirt,men,Cairo Thread Co.,L,104,92,,72,,Pique Cotton,590,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P062.jpg
+P062,Slim Fit Polo,shirt,men,Cairo Thread Co.,XL,110,98,,74,,Pique Cotton,590,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P062.jpg
+P062,Slim Fit Polo,shirt,men,Cairo Thread Co.,XXL,116,104,,76,,Pique Cotton,590,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P062.jpg
+P063,Corduroy Pants,pants,men,Nour Atelier,M,,82,100,,79,Corduroy,1020,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P063.jpg
+P063,Corduroy Pants,pants,men,Nour Atelier,L,,88,106,,80,Corduroy,1020,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P063.jpg
+P063,Corduroy Pants,pants,men,Nour Atelier,XL,,94,112,,81,Corduroy,1020,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P063.jpg
+P063,Corduroy Pants,pants,men,Nour Atelier,XXL,,100,118,,82,Corduroy,1020,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P063.jpg
+P064,Linen Blazer,jacket,men,Nour Atelier,M,106,94,,74,,Linen,1750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P064.jpg
+P064,Linen Blazer,jacket,men,Nour Atelier,L,112,100,,76,,Linen,1750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P064.jpg
+P064,Linen Blazer,jacket,men,Nour Atelier,XL,118,106,,78,,Linen,1750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P064.jpg
+P064,Linen Blazer,jacket,men,Nour Atelier,XXL,124,112,,80,,Linen,1750,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P064.jpg
+P065,Graphic Print Shirt,shirt,men,Cairo Thread Co.,M,100,88,,73,,Cotton,640,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P065.jpg
+P065,Graphic Print Shirt,shirt,men,Cairo Thread Co.,L,106,94,,75,,Cotton,640,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P065.jpg
+P065,Graphic Print Shirt,shirt,men,Cairo Thread Co.,XL,112,100,,77,,Cotton,640,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P065.jpg
+P065,Graphic Print Shirt,shirt,men,Cairo Thread Co.,XXL,118,106,,79,,Cotton,640,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P065.jpg
+P066,Slim Chino Shorts,pants,men,Cairo Thread Co.,M,,82,98,,32,Cotton Twill,560,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P066.jpg
+P066,Slim Chino Shorts,pants,men,Cairo Thread Co.,L,,88,104,,33,Cotton Twill,560,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P066.jpg
+P066,Slim Chino Shorts,pants,men,Cairo Thread Co.,XL,,94,110,,34,Cotton Twill,560,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P066.jpg
+P066,Slim Chino Shorts,pants,men,Cairo Thread Co.,XXL,,100,116,,35,Cotton Twill,560,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P066.jpg
+P067,Wool Blend Overcoat,jacket,men,Nour Atelier,M,110,98,,100,,Wool Blend,2800,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P067.jpg
+P067,Wool Blend Overcoat,jacket,men,Nour Atelier,L,116,104,,102,,Wool Blend,2800,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P067.jpg
+P067,Wool Blend Overcoat,jacket,men,Nour Atelier,XL,122,110,,104,,Wool Blend,2800,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P067.jpg
+P067,Wool Blend Overcoat,jacket,men,Nour Atelier,XXL,128,116,,106,,Wool Blend,2800,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P067.jpg
+P068,Short Sleeve Linen Shirt,shirt,men,Nour Atelier,M,100,88,,72,,Linen,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P068.jpg
+P068,Short Sleeve Linen Shirt,shirt,men,Nour Atelier,L,106,94,,74,,Linen,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P068.jpg
+P068,Short Sleeve Linen Shirt,shirt,men,Nour Atelier,XL,112,100,,76,,Linen,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P068.jpg
+P068,Short Sleeve Linen Shirt,shirt,men,Nour Atelier,XXL,118,106,,78,,Linen,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P068.jpg
+P069,Stretch Skinny Jeans,pants,men,Cairo Thread Co.,M,,80,96,,79,Stretch Denim,880,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P069.jpg
+P069,Stretch Skinny Jeans,pants,men,Cairo Thread Co.,L,,86,102,,80,Stretch Denim,880,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P069.jpg
+P069,Stretch Skinny Jeans,pants,men,Cairo Thread Co.,XL,,92,108,,81,Stretch Denim,880,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P069.jpg
+P069,Stretch Skinny Jeans,pants,men,Cairo Thread Co.,XXL,,98,114,,82,Stretch Denim,880,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P069.jpg
+P070,Casual Denim Jacket,jacket,men,Cairo Thread Co.,M,106,94,,60,,Denim,1200,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P070.jpg
+P070,Casual Denim Jacket,jacket,men,Cairo Thread Co.,L,112,100,,62,,Denim,1200,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P070.jpg
+P070,Casual Denim Jacket,jacket,men,Cairo Thread Co.,XL,118,106,,64,,Denim,1200,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P070.jpg
+P070,Casual Denim Jacket,jacket,men,Cairo Thread Co.,XXL,124,112,,66,,Denim,1200,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P070.jpg
+P071,Mandarin Collar Shirt,shirt,men,Nour Atelier,M,100,88,,73,,Cotton,810,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P071.jpg
+P071,Mandarin Collar Shirt,shirt,men,Nour Atelier,L,106,94,,75,,Cotton,810,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P071.jpg
+P071,Mandarin Collar Shirt,shirt,men,Nour Atelier,XL,112,100,,77,,Cotton,810,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P071.jpg
+P071,Mandarin Collar Shirt,shirt,men,Nour Atelier,XXL,118,106,,79,,Cotton,810,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P071.jpg
+P072,Linen Drawstring Shorts,pants,men,Nour Atelier,M,,82,100,,32,Linen,540,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P072.jpg
+P072,Linen Drawstring Shorts,pants,men,Nour Atelier,L,,88,106,,33,Linen,540,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P072.jpg
+P072,Linen Drawstring Shorts,pants,men,Nour Atelier,XL,,94,112,,34,Linen,540,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P072.jpg
+P072,Linen Drawstring Shorts,pants,men,Nour Atelier,XXL,,100,118,,35,Linen,540,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P072.jpg
+P073,Quilted Vest,jacket,men,Cairo Thread Co.,M,106,94,,66,,Polyester,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P073.jpg
+P073,Quilted Vest,jacket,men,Cairo Thread Co.,L,112,100,,68,,Polyester,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P073.jpg
+P073,Quilted Vest,jacket,men,Cairo Thread Co.,XL,118,106,,70,,Polyester,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P073.jpg
+P073,Quilted Vest,jacket,men,Cairo Thread Co.,XXL,124,112,,72,,Polyester,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P073.jpg
+P074,Cuban Collar Shirt,shirt,men,Cairo Thread Co.,M,100,88,,72,,Viscose,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P074.jpg
+P074,Cuban Collar Shirt,shirt,men,Cairo Thread Co.,L,106,94,,74,,Viscose,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P074.jpg
+P074,Cuban Collar Shirt,shirt,men,Cairo Thread Co.,XL,112,100,,76,,Viscose,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P074.jpg
+P074,Cuban Collar Shirt,shirt,men,Cairo Thread Co.,XXL,118,106,,78,,Viscose,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P074.jpg
+P075,Twill Carpenter Pants,pants,men,Cairo Thread Co.,M,,86,104,,80,Cotton Twill,920,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P075.jpg
+P075,Twill Carpenter Pants,pants,men,Cairo Thread Co.,L,,92,110,,81,Cotton Twill,920,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P075.jpg
+P075,Twill Carpenter Pants,pants,men,Cairo Thread Co.,XL,,98,116,,82,Cotton Twill,920,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P075.jpg
+P075,Twill Carpenter Pants,pants,men,Cairo Thread Co.,XXL,,104,122,,83,Cotton Twill,920,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P075.jpg
+P076,Seersucker Shirt,shirt,men,Nour Atelier,M,100,88,,73,,Seersucker Cotton,840,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P076.jpg
+P076,Seersucker Shirt,shirt,men,Nour Atelier,L,106,94,,75,,Seersucker Cotton,840,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P076.jpg
+P076,Seersucker Shirt,shirt,men,Nour Atelier,XL,112,100,,77,,Seersucker Cotton,840,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P076.jpg
+P076,Seersucker Shirt,shirt,men,Nour Atelier,XXL,118,106,,79,,Seersucker Cotton,840,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P076.jpg
+P077,Track Pants,pants,men,Cairo Thread Co.,M,,84,102,,78,Polyester,650,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P077.jpg
+P077,Track Pants,pants,men,Cairo Thread Co.,L,,90,108,,79,Polyester,650,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P077.jpg
+P077,Track Pants,pants,men,Cairo Thread Co.,XL,,96,114,,80,Polyester,650,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P077.jpg
+P077,Track Pants,pants,men,Cairo Thread Co.,XXL,,102,120,,81,Polyester,650,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P077.jpg
+P078,Linen Suit Jacket,jacket,men,Nour Atelier,M,108,96,,74,,Linen,1950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P078.jpg
+P078,Linen Suit Jacket,jacket,men,Nour Atelier,L,114,102,,76,,Linen,1950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P078.jpg
+P078,Linen Suit Jacket,jacket,men,Nour Atelier,XL,120,108,,78,,Linen,1950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P078.jpg
+P078,Linen Suit Jacket,jacket,men,Nour Atelier,XXL,126,114,,80,,Linen,1950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P078.jpg
+P079,Patterned Flannel Shirt,shirt,men,Cairo Thread Co.,M,100,88,,74,,Flannel,730,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P079.jpg
+P079,Patterned Flannel Shirt,shirt,men,Cairo Thread Co.,L,106,94,,76,,Flannel,730,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P079.jpg
+P079,Patterned Flannel Shirt,shirt,men,Cairo Thread Co.,XL,112,100,,78,,Flannel,730,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P079.jpg
+P079,Patterned Flannel Shirt,shirt,men,Cairo Thread Co.,XXL,118,106,,80,,Flannel,730,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P079.jpg
+P080,Straight Fit Khaki,pants,men,Nour Atelier,M,,82,100,,79,Cotton Twill,860,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P080.jpg
+P080,Straight Fit Khaki,pants,men,Nour Atelier,L,,88,106,,80,Cotton Twill,860,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P080.jpg
+P080,Straight Fit Khaki,pants,men,Nour Atelier,XL,,94,112,,81,Cotton Twill,860,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P080.jpg
+P080,Straight Fit Khaki,pants,men,Nour Atelier,XXL,,100,118,,82,Cotton Twill,860,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P080.jpg
+P081,Tie-Front Blouse,blouse,women,Cairo Thread Co.,S,84,66,88,57,,Viscose,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P081.jpg
+P081,Tie-Front Blouse,blouse,women,Cairo Thread Co.,M,88,70,92,58,,Viscose,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P081.jpg
+P081,Tie-Front Blouse,blouse,women,Cairo Thread Co.,L,92,74,96,59,,Viscose,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P081.jpg
+P081,Tie-Front Blouse,blouse,women,Cairo Thread Co.,XL,96,78,100,60,,Viscose,720,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P081.jpg
+P082,Satin Maxi Skirt,skirt,women,Nour Atelier,S,,62,88,100,,,1050,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P082.jpg
+P082,Satin Maxi Skirt,skirt,women,Nour Atelier,M,,66,92,101,,,1050,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P082.jpg
+P082,Satin Maxi Skirt,skirt,women,Nour Atelier,L,,70,96,102,,,1050,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P082.jpg
+P082,Satin Maxi Skirt,skirt,women,Nour Atelier,XL,,74,100,103,,,1050,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P082.jpg
+P083,Cold Shoulder Blouse,blouse,women,Nour Atelier,S,84,66,88,57,,Chiffon,840,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P083.jpg
+P083,Cold Shoulder Blouse,blouse,women,Nour Atelier,M,88,70,92,58,,Chiffon,840,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P083.jpg
+P083,Cold Shoulder Blouse,blouse,women,Nour Atelier,L,92,74,96,59,,Chiffon,840,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P083.jpg
+P083,Cold Shoulder Blouse,blouse,women,Nour Atelier,XL,96,78,100,60,,Chiffon,840,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P083.jpg
+P084,High Waist Culotte,pants,women,Cairo Thread Co.,S,,62,90,,55,Crepe,790,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P084.jpg
+P084,High Waist Culotte,pants,women,Cairo Thread Co.,M,,66,94,,56,Crepe,790,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P084.jpg
+P084,High Waist Culotte,pants,women,Cairo Thread Co.,L,,70,98,,57,Crepe,790,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P084.jpg
+P084,High Waist Culotte,pants,women,Cairo Thread Co.,XL,,74,102,,58,Crepe,790,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P084.jpg
+P085,Leather Look Skirt,skirt,women,Cairo Thread Co.,S,,60,86,50,,,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P085.jpg
+P085,Leather Look Skirt,skirt,women,Cairo Thread Co.,M,,64,90,51,,,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P085.jpg
+P085,Leather Look Skirt,skirt,women,Cairo Thread Co.,L,,68,94,52,,,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P085.jpg
+P085,Leather Look Skirt,skirt,women,Cairo Thread Co.,XL,,72,98,53,,,980,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P085.jpg
+P086,Utility Jacket,jacket,women,Cairo Thread Co.,S,90,74,94,62,,Cotton Twill,1380,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P086.jpg
+P086,Utility Jacket,jacket,women,Cairo Thread Co.,M,94,78,98,63,,Cotton Twill,1380,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P086.jpg
+P086,Utility Jacket,jacket,women,Cairo Thread Co.,L,98,82,102,64,,Cotton Twill,1380,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P086.jpg
+P086,Utility Jacket,jacket,women,Cairo Thread Co.,XL,102,86,106,65,,Cotton Twill,1380,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P086.jpg
+P087,Smocked Waist Blouse,blouse,women,Nour Atelier,S,86,68,90,58,,Cotton,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P087.jpg
+P087,Smocked Waist Blouse,blouse,women,Nour Atelier,M,90,72,94,59,,Cotton,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P087.jpg
+P087,Smocked Waist Blouse,blouse,women,Nour Atelier,L,94,76,98,60,,Cotton,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P087.jpg
+P087,Smocked Waist Blouse,blouse,women,Nour Atelier,XL,98,80,102,61,,Cotton,760,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P087.jpg
+P088,Velvet  Skirt,skirt,women,Nour Atelier,S,,60,86,38,,,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P088.jpg
+P088,Velvet  Skirt,skirt,women,Nour Atelier,M,,64,90,39,,,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P088.jpg
+P088,Velvet  Skirt,skirt,women,Nour Atelier,L,,68,94,40,,,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P088.jpg
+P088,Velvet  Skirt,skirt,women,Nour Atelier,XL,,72,98,41,,,890,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P088.jpg
+P089,Relaxed Blazer,jacket,women,Nour Atelier,S,92,76,96,70,,Linen,1600,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P089.jpg
+P089,Relaxed Blazer,jacket,women,Nour Atelier,M,96,80,100,71,,Linen,1600,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P089.jpg
+P089,Relaxed Blazer,jacket,women,Nour Atelier,L,100,84,104,72,,Linen,1600,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P089.jpg
+P089,Relaxed Blazer,jacket,women,Nour Atelier,XL,104,88,108,73,,Linen,1600,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P089.jpg
+P090,Long Sleeve Jersey Blouse,blouse,women,Cairo Thread Co.,S,86,68,90,58,,Jersey,580,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P090.jpg
+P090,Long Sleeve Jersey Blouse,blouse,women,Cairo Thread Co.,M,90,72,94,59,,Jersey,580,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P090.jpg
+P090,Long Sleeve Jersey Blouse,blouse,women,Cairo Thread Co.,L,94,76,98,60,,Jersey,580,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P090.jpg
+P090,Long Sleeve Jersey Blouse,blouse,women,Cairo Thread Co.,XL,98,80,102,61,,Jersey,580,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P090.jpg
+P091,Checked Overshirt,shirt,men,Nour Atelier,M,104,92,,76,,Flannel,880,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P091.jpg
+P091,Checked Overshirt,shirt,men,Nour Atelier,L,110,98,,78,,Flannel,880,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P091.jpg
+P091,Checked Overshirt,shirt,men,Nour Atelier,XL,116,104,,80,,Flannel,880,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P091.jpg
+P091,Checked Overshirt,shirt,men,Nour Atelier,XXL,122,110,,82,,Flannel,880,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P091.jpg
+P092,Slim Taper Jeans,pants,men,Cairo Thread Co.,M,,80,96,,79,Denim,930,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P092.jpg
+P092,Slim Taper Jeans,pants,men,Cairo Thread Co.,L,,86,102,,80,Denim,930,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P092.jpg
+P092,Slim Taper Jeans,pants,men,Cairo Thread Co.,XL,,92,108,,81,Denim,930,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P092.jpg
+P092,Slim Taper Jeans,pants,men,Cairo Thread Co.,XXL,,98,114,,82,Denim,930,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P092.jpg
+P093,Casual Chore Jacket,jacket,men,Cairo Thread Co.,M,108,96,,64,,Canvas,1150,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P093.jpg
+P093,Casual Chore Jacket,jacket,men,Cairo Thread Co.,L,114,102,,66,,Canvas,1150,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P093.jpg
+P093,Casual Chore Jacket,jacket,men,Cairo Thread Co.,XL,120,108,,68,,Canvas,1150,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P093.jpg
+P093,Casual Chore Jacket,jacket,men,Cairo Thread Co.,XXL,126,114,,70,,Canvas,1150,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P093.jpg
+P094,Short Sleeve Oxford,shirt,men,Cairo Thread Co.,M,100,88,,71,,Oxford Cotton,690,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P094.jpg
+P094,Short Sleeve Oxford,shirt,men,Cairo Thread Co.,L,106,94,,73,,Oxford Cotton,690,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P094.jpg
+P094,Short Sleeve Oxford,shirt,men,Cairo Thread Co.,XL,112,100,,75,,Oxford Cotton,690,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P094.jpg
+P094,Short Sleeve Oxford,shirt,men,Cairo Thread Co.,XXL,118,106,,77,,Oxford Cotton,690,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P094.jpg
+P095,Pull-On Linen Trousers,pants,men,Nour Atelier,M,,84,102,,80,Linen,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P095.jpg
+P095,Pull-On Linen Trousers,pants,men,Nour Atelier,L,,90,108,,81,Linen,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P095.jpg
+P095,Pull-On Linen Trousers,pants,men,Nour Atelier,XL,,96,114,,82,Linen,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P095.jpg
+P095,Pull-On Linen Trousers,pants,men,Nour Atelier,XXL,,102,120,,83,Linen,870,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P095.jpg
+P096,Shacket Shirt Jacket,jacket,men,Nour Atelier,M,108,96,,72,,Wool Blend,1450,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P096.jpg
+P096,Shacket Shirt Jacket,jacket,men,Nour Atelier,L,114,102,,74,,Wool Blend,1450,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P096.jpg
+P096,Shacket Shirt Jacket,jacket,men,Nour Atelier,XL,120,108,,76,,Wool Blend,1450,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P096.jpg
+P096,Shacket Shirt Jacket,jacket,men,Nour Atelier,XXL,126,114,,78,,Wool Blend,1450,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P096.jpg
+P097,Linen Camp Shirt,shirt,men,Nour Atelier,M,100,88,,72,,Linen,780,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P097.jpg
+P097,Linen Camp Shirt,shirt,men,Nour Atelier,L,106,94,,74,,Linen,780,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P097.jpg
+P097,Linen Camp Shirt,shirt,men,Nour Atelier,XL,112,100,,76,,Linen,780,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P097.jpg
+P097,Linen Camp Shirt,shirt,men,Nour Atelier,XXL,118,106,,78,,Linen,780,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P097.jpg
+P098,Jogger Shorts,pants,men,Cairo Thread Co.,M,,82,100,,30,French Terry,490,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P098.jpg
+P098,Jogger Shorts,pants,men,Cairo Thread Co.,L,,88,106,,31,French Terry,490,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P098.jpg
+P098,Jogger Shorts,pants,men,Cairo Thread Co.,XL,,94,112,,32,French Terry,490,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P098.jpg
+P098,Jogger Shorts,pants,men,Cairo Thread Co.,XXL,,100,118,,33,French Terry,490,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P098.jpg
+P099,Waxed Cotton Jacket,jacket,men,Cairo Thread Co.,M,108,96,,70,,Waxed Cotton,1850,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P099.jpg
+P099,Waxed Cotton Jacket,jacket,men,Cairo Thread Co.,L,114,102,,72,,Waxed Cotton,1850,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P099.jpg
+P099,Waxed Cotton Jacket,jacket,men,Cairo Thread Co.,XL,120,108,,74,,Waxed Cotton,1850,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P099.jpg
+P099,Waxed Cotton Jacket,jacket,men,Cairo Thread Co.,XXL,126,114,,76,,Waxed Cotton,1850,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P099.jpg
+P100,Printed Satin Shirt,shirt,men,Nour Atelier,M,100,88,,73,,Satin,950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P0100.jpg
+P100,Printed Satin Shirt,shirt,men,Nour Atelier,L,106,94,,75,,Satin,950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P0100.jpg
+P100,Printed Satin Shirt,shirt,men,Nour Atelier,XL,112,100,,77,,Satin,950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P0100.jpg
+P100,Printed Satin Shirt,shirt,men,Nour Atelier,XXL,118,106,,79,,Satin,950,https://lhuudputwdjphaunimvn.supabase.co/storage/v1/object/public/catalog/P0100.jpg
