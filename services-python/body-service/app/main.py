@@ -1,33 +1,917 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Dict, Any
+"""
+Manikan SMPL Engine — v2  (Differentiable Optimisation)
+========================================================
+Generates static 3D human avatars (A-pose, .glb) from body measurements
+using a **differentiable optimisation loop** that solves for SMPL β
+parameters by minimising the error between user-provided measurements
+and *actual vertex-ring measurements* on the generated mesh.
 
-app = FastAPI(
-    title="Manikan Body Service",
-    description="Service for 3D body & SMPL calculations",
-    version="0.1.0"
+Architecture (v2):
+    1. FastAPI receives body measurements (height, weight, chest, waist, hips).
+    2. At startup, vertex "measurement rings" are pre-computed on the mean
+       SMPL body using landmark indices from the SMPL-Anthropometry project.
+    3. An Adam optimiser iteratively adjusts 10 β parameters so that the
+       circumferences measured on the SMPL mesh converge to the targets.
+    4. The final mesh is uniformly scaled to the exact target height and
+       exported to binary .glb via trimesh.
+
+References:
+    • DavidBoja/SMPL-Anthropometry  (landmark & measurement definitions)
+    • SMPL: A Skinned Multi-Person Linear Model (Loper et al. 2015)
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import math
+from contextlib import asynccontextmanager
+from enum import Enum
+from typing import Dict, List
+
+import numpy as np
+import torch
+import trimesh
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
+
+from .config import (
+    CORS_ORIGINS,
+    DEVICE,
+    MODEL_DIR,
+    NUM_BETAS,
+    OPT_BETA_CLAMP,
+    OPT_BETA_CLAMP_01,
+    OPT_BETA_INIT,
+    OPT_EARLY_STOP_LOSS,
+    OPT_ITERATIONS,
+    OPT_LR,
+    OPT_SHAPE_PRIOR,
+    PORT,
+    RING_X_MAX,
+    RING_Y_BAND,
 )
 
-class BodyMeasurements(BaseModel):
-    height: float
-    weight: float
-    chest: float
-    waist: float
-    hips: float
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
+)
+logger = logging.getLogger("manikan")
 
-@app.get("/")
-def read_root():
-    return {"service": "body-service", "status": "active", "description": "3D Body & SMPL calculations API"}
 
-@app.post("/calculate/smpl")
-def calculate_smpl(measurements: BodyMeasurements) -> Dict[str, Any]:
-    try:
-        # Placeholder for SMPL model parameter generation
-        mock_shape_coeffs = [float(x) * 0.1 for x in range(10)]
-        return {
-            "status": "success",
-            "smpl_shape_parameters": mock_shape_coeffs,
-            "estimated_volume_liters": round(measurements.height * measurements.weight * 0.005, 2)
+# ---------------------------------------------------------------------------
+# Pydantic Schemas
+# ---------------------------------------------------------------------------
+class Sex(str, Enum):
+    male = "male"
+    female = "female"
+
+
+class MeasurementsPayload(BaseModel):
+    """Input body measurements in metric units."""
+
+    sex: Sex
+    height_cm: float = Field(
+        ..., gt=100, lt=250, description="Standing height in centimetres"
+    )
+    weight_kg: float = Field(
+        ..., gt=30, lt=250, description="Body mass in kilograms"
+    )
+    chest_cm: float = Field(
+        ..., gt=50, lt=200, description="Chest circumference in centimetres"
+    )
+    waist_cm: float = Field(
+        ..., gt=40, lt=200, description="Waist circumference in centimetres"
+    )
+    hips_cm: float = Field(
+        ..., gt=50, lt=200, description="Hip circumference in centimetres"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  SMPL LANDMARK INDICES  (from DavidBoja/SMPL-Anthropometry)
+# ═══════════════════════════════════════════════════════════════════════════
+# These are vertex indices on the 6890-vertex SMPL mesh that correspond to
+# anatomical landmarks used by the SMPL-Anthropometry project for
+# defining measurement planes.
+
+SMPL_LANDMARKS = {
+    "HEAD_TOP":           412,
+    "LEFT_HEEL":          3458,
+    "RIGHT_HEEL":         6858,
+    # ── Circumference landmarks ──────────────────────────────────────────
+    "LEFT_NIPPLE":        3042,   # chest circumference plane
+    "RIGHT_NIPPLE":       6489,
+    "BELLY_BUTTON":       3501,   # waist circumference plane
+    "BACK_BELLY_BUTTON":  3022,
+    "PUBIC_BONE":         3145,   # hip circumference plane
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  VERTEX RING EXTRACTION  (pre-computed once per gender at startup)
+# ═══════════════════════════════════════════════════════════════════════════
+# A "vertex ring" is an ordered list of vertex indices that form a closed
+# loop around the torso at a given Y-height.  Summing adjacent-vertex
+# Euclidean distances around this ring gives a differentiable circumference.
+
+_ring_cache: Dict[str, Dict[str, List[int]]] = {}
+
+
+def _extract_vertex_ring(
+    verts: np.ndarray,
+    target_y: float,
+    y_band: float = RING_Y_BAND,
+    x_max: float = RING_X_MAX,
+    min_verts: int = 12,
+) -> List[int]:
+    """
+    Extract an ordered ring of vertex indices at a horizontal cross-section.
+
+    Algorithm:
+        1. Select vertices with Y ∈ [target_y − band, target_y + band]
+        2. Exclude vertices with |X| > x_max  (filters arms in A-pose)
+        3. Project selected vertices to the XZ plane
+        4. Compute the 2D convex hull — this gives ONLY the outermost
+           perimeter vertices, eliminating interior vertices that would
+           cause a criss-cross path and inflate the circumference
+        5. Return the hull-ordered index list (closed ring)
+
+    The ring is computed on the *mean shape* (β=0) mesh.  Because SMPL
+    topology is fixed, the same vertex indices form a valid ring for any β.
+    """
+    from scipy.spatial import ConvexHull
+
+    y_coords = verts[:, 1]
+    x_coords = verts[:, 0]
+
+    mask = (np.abs(y_coords - target_y) < y_band) & (np.abs(x_coords) < x_max)
+    indices = np.where(mask)[0]
+
+    # Widen band if too few vertices captured
+    while len(indices) < min_verts and y_band < 0.06:
+        y_band *= 1.5
+        mask = (np.abs(y_coords - target_y) < y_band) & (
+            np.abs(x_coords) < x_max
+        )
+        indices = np.where(mask)[0]
+
+    if len(indices) < 4:
+        logger.warning(
+            "Ring extraction: only %d vertices at Y=%.4f (band=%.4f, x_max=%.3f)",
+            len(indices), target_y, y_band, x_max,
+        )
+        # Fallback: sort by angle
+        selected = verts[indices]
+        cx, cz = selected[:, 0].mean(), selected[:, 2].mean()
+        angles = np.arctan2(selected[:, 2] - cz, selected[:, 0] - cx)
+        return indices[np.argsort(angles)].tolist()
+
+    # Project to XZ plane and compute convex hull
+    selected_xz = verts[indices][:, [0, 2]]  # (N, 2) — X and Z coords
+    hull = ConvexHull(selected_xz)
+    hull_order = hull.vertices  # indices into 'selected_xz' in CCW order
+
+    return indices[hull_order].tolist()
+
+
+def _precompute_rings(model) -> Dict[str, List[int]]:
+    """
+    Run a β=0 forward pass and extract vertex rings for chest, waist, hip.
+
+    The Y-height of each ring is determined by the SMPL-Anthropometry
+    landmark positions:
+        • Chest  → average Y of LEFT_NIPPLE and RIGHT_NIPPLE
+        • Waist  → average Y of BELLY_BUTTON and BACK_BELLY_BUTTON
+        • Hip    → Y of PUBIC_BONE
+    """
+
+    with torch.no_grad():
+        output = model(
+            betas=torch.zeros(1, NUM_BETAS, dtype=torch.float32, device=DEVICE),
+            global_orient=torch.zeros(1, 3, dtype=torch.float32, device=DEVICE),
+            body_pose=torch.zeros(1, 69, dtype=torch.float32, device=DEVICE),
+            return_verts=True,
+        )
+    verts = output.vertices.squeeze(0).cpu().numpy()  # (6890, 3)
+
+    # Landmark Y-coordinates on the mean shape
+    chest_y = (
+        verts[SMPL_LANDMARKS["LEFT_NIPPLE"], 1]
+        + verts[SMPL_LANDMARKS["RIGHT_NIPPLE"], 1]
+    ) / 2.0
+
+    waist_y = (
+        verts[SMPL_LANDMARKS["BELLY_BUTTON"], 1]
+        + verts[SMPL_LANDMARKS["BACK_BELLY_BUTTON"], 1]
+    ) / 2.0
+
+    hip_y = verts[SMPL_LANDMARKS["PUBIC_BONE"], 1]
+
+    rings = {
+        "chest": _extract_vertex_ring(verts, chest_y),
+        "waist": _extract_vertex_ring(verts, waist_y),
+        "hip":   _extract_vertex_ring(verts, hip_y, x_max=0.30),  # hips are wider
+    }
+
+    for name, ring in rings.items():
+        logger.info(
+            "  Ring %-6s: %3d vertices at Y ≈ %.4f",
+            name, len(ring),
+            {"chest": chest_y, "waist": waist_y, "hip": hip_y}[name],
+        )
+
+    return rings
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  DIFFERENTIABLE MEASUREMENT FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════
+# These operate on torch.Tensors and preserve the autograd graph so that
+# gradients flow all the way back to the β parameters.
+
+def _measure_height(vertices: torch.Tensor) -> torch.Tensor:
+    """
+    Differentiable height = max(Y) − min(Y).
+
+    torch.max / torch.min propagate gradients to the argmax / argmin
+    vertex, which is sufficient to drive the height component of β.
+    Returns height in metres (SMPL native unit).
+    """
+    return vertices[:, 1].max() - vertices[:, 1].min()
+
+
+def _measure_ring_circumference(
+    vertices: torch.Tensor,
+    ring_indices: List[int],
+) -> torch.Tensor:
+    """
+    Differentiable circumference via the "virtual tape measure" method.
+
+    Given an ordered ring of vertex indices, compute the perimeter:
+        C = Σᵢ ‖v[ring[i+1]] − v[ring[i]]‖₂
+
+    The ring wraps around (last vertex connects back to first).
+    All operations (indexing, subtraction, norm, sum) are autograd-safe.
+
+    Returns circumference in metres.
+    """
+    idx = torch.tensor(ring_indices, dtype=torch.long, device=vertices.device)
+    ring_verts = vertices[idx]                          # (N, 3)
+    ring_verts_next = torch.roll(ring_verts, -1, dims=0)  # shifted by one
+    diffs = ring_verts_next - ring_verts                # (N, 3)
+    dists = torch.norm(diffs, dim=1)                    # (N,)
+    return dists.sum()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  DIFFERENTIABLE OPTIMISATION LOOP
+# ═══════════════════════════════════════════════════════════════════════════
+
+def solve_betas(
+    model,
+    rings: Dict[str, List[int]],
+    target_height_cm: float,
+    target_weight_kg: float,
+    target_chest_cm: float,
+    target_waist_cm: float,
+    target_hips_cm: float,
+    num_iters: int = OPT_ITERATIONS,
+    lr: float = OPT_LR,
+) -> torch.Tensor:
+    """
+    Physics-Informed β Optimiser  (v4 — unit-correct, stable)
+    ══════════════════════════════════════════════════════════
+
+    Key fixes over v3:
+      • Convex-hull rings eliminate the 297cm criss-cross bug
+      • Direct β₀ anchor for mass (no more fragile BMI-from-circumference)
+      • Asymmetric clamping: β₀,β₁ ∈ [-5,5], rest ∈ [-4,4]
+      • Height fully decoupled — guaranteed via global scaling
+
+    Returns
+    -------
+    torch.Tensor — shape (1, 10), detached optimised β values.
+    """
+
+    # ── Trainable parameters — warm start at +0.1 ─────────────────────
+    betas = torch.full(
+        (1, NUM_BETAS), OPT_BETA_INIT,
+        dtype=torch.float32, device=DEVICE, requires_grad=True,
+    )
+    optimizer = torch.optim.Adam([betas], lr=lr)
+
+    # ── Fixed pose tensors (A-pose = all zeros) ───────────────────────
+    global_orient = torch.zeros(1, 3, dtype=torch.float32, device=DEVICE)
+    body_pose = torch.zeros(1, 69, dtype=torch.float32, device=DEVICE)
+
+    # ── Target values ─────────────────────────────────────────────────
+    target_height_m = target_height_cm / 100.0
+    t_ch = target_chest_cm
+    t_wa = target_waist_cm
+    t_hi = target_hips_cm
+
+    # Direct β₀ anchor from BMI — gives the optimizer a concrete
+    # "mass" target without relying on fragile circumference-to-BMI
+    # regression.  SMPL β₀ is the first PCA axis ≈ overall body mass.
+    target_bmi = target_weight_kg / (target_height_m ** 2)
+    target_beta0 = (target_bmi - 22.0) * 0.5
+
+    for i in range(num_iters):
+        optimizer.zero_grad()
+
+        # ── Forward pass through SMPL ─────────────────────────────────
+        output = model(
+            betas=betas,
+            global_orient=global_orient,
+            body_pose=body_pose,
+            return_verts=True,
+        )
+        verts = output.vertices.squeeze(0)  # (6890, 3)
+
+        # ── GLOBAL SCALING: height is guaranteed, not optimised ───────
+        mesh_height = _measure_height(verts)
+        scale_factor = target_height_m / (mesh_height + 1e-6)
+        verts_scaled = verts * scale_factor
+
+        # ── Measure circumferences (metres → cm) ─────────────────────
+        c_chest_cm = _measure_ring_circumference(verts_scaled, rings["chest"]) * 100.0
+        c_waist_cm = _measure_ring_circumference(verts_scaled, rings["waist"]) * 100.0
+        c_hips_cm  = _measure_ring_circumference(verts_scaled, rings["hip"])   * 100.0
+
+        # ── Circumference losses (cm²) ────────────────────────────────
+        loss_chest = (c_chest_cm - t_ch) ** 2
+        loss_waist = (c_waist_cm - t_wa) ** 2
+        loss_hips  = (c_hips_cm  - t_hi) ** 2
+
+        # ── Direct β₀ mass anchor ─────────────────────────────────────
+        # This gives the optimizer a strong, clean gradient for overall
+        # body mass instead of the noisy BMI-from-circumference proxy.
+        loss_mass = (betas[0, 0] - target_beta0) ** 2
+
+        # ── Shape prior (L2) ──────────────────────────────────────────
+        loss_prior = OPT_SHAPE_PRIOR * (betas ** 2).sum()
+
+        # ── Weighted total loss ───────────────────────────────────────
+        loss = (
+            10.0 * loss_mass         # strongest — anchors body mass
+            + 5.0  * loss_waist      # high — defines torso bulk
+            + 2.0  * loss_chest      # secondary shape
+            + 2.0  * loss_hips       # secondary shape
+            + loss_prior             # keeps body realistic
+        )
+
+        loss.backward()
+        optimizer.step()
+
+        # ── Asymmetric clamping ───────────────────────────────────────
+        # β₀ (mass) and β₁ (height) need more range than shape params
+        with torch.no_grad():
+            betas[0, :2].clamp_(-OPT_BETA_CLAMP_01, OPT_BETA_CLAMP_01)
+            betas[0, 2:].clamp_(-OPT_BETA_CLAMP, OPT_BETA_CLAMP)
+
+        # ── Logging ───────────────────────────────────────────────────
+        loss_val = loss.item()
+        if i % 15 == 0 or i == num_iters - 1:
+            logger.info(
+                "  iter %3d | loss=%7.2f | chest=%.1fcm  "
+                "waist=%.1fcm  hips=%.1fcm  β₀=%.2f(target=%.2f)",
+                i, loss_val,
+                c_chest_cm.item(), c_waist_cm.item(), c_hips_cm.item(),
+                betas[0, 0].item(), target_beta0,
+            )
+
+        # ── Early stopping ────────────────────────────────────────────
+        if loss_val < OPT_EARLY_STOP_LOSS:
+            logger.info("  Early stop at iter %d (loss=%.3f)", i, loss_val)
+            break
+
+    final_betas = betas.detach().clone()
+    logger.info(
+        "  Optimised β = %s",
+        np.array2string(
+            final_betas.squeeze().cpu().numpy(), precision=3, separator=", "
+        ),
+    )
+    return final_betas
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  SMPL MODEL LOADER
+# ═══════════════════════════════════════════════════════════════════════════
+# One model per gender, cached in memory.
+
+_smpl_models: Dict[str, object] = {}
+
+
+def _verify_model_files() -> None:
+    """Verify that the cleaned SMPL model .pkl files exist."""
+    smpl_dir = MODEL_DIR / "smpl"
+    for name in ("SMPL_MALE.pkl", "SMPL_FEMALE.pkl"):
+        path = smpl_dir / name
+        if path.exists():
+            size_mb = path.stat().st_size / 1_048_576
+            logger.info("✓  %s  (%.1f MB)", name, size_mb)
+        else:
+            logger.error(
+                "✗  %s not found in %s.  Run:\n"
+                "     python tools/clean_smpl_pkl.py\n"
+                "   to convert the original SMPL .pkl files.",
+                name,
+                smpl_dir,
+            )
+
+
+def _load_smpl_model(gender: str):
+    """
+    Lazily load, cache, and pre-compute measurement rings for the SMPL model.
+    """
+    import smplx
+
+    if gender in _smpl_models:
+        return _smpl_models[gender], _ring_cache[gender]
+
+    logger.info("Loading SMPL model for gender='%s' from %s …", gender, MODEL_DIR)
+
+    model = smplx.create(
+        model_path=str(MODEL_DIR),
+        model_type="smpl",
+        gender=gender,
+        num_betas=NUM_BETAS,
+        batch_size=1,
+    ).to(DEVICE)
+
+    model.eval()
+    _smpl_models[gender] = model
+
+    # Pre-compute vertex rings on the mean shape
+    logger.info("Pre-computing measurement rings for gender='%s' …", gender)
+    rings = _precompute_rings(model)
+    _ring_cache[gender] = rings
+
+    logger.info("SMPL model ready for gender='%s'.", gender)
+    return model, rings
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  MESH GENERATION PIPELINE  (v2 — Optimisation-based)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def generate_avatar_mesh(
+    sex: str,
+    height_cm: float,
+    weight_kg: float,
+    chest_cm: float,
+    waist_cm: float,
+    hips_cm: float,
+) -> bytes:
+    """
+    End-to-end pipeline:
+        measurements → Adam optimisation → β → SMPL → scale → .glb
+
+    Returns
+    -------
+    bytes — Binary GLB content.
+    """
+
+    # ── Step 1: Load model + pre-computed rings ───────────────────────
+    model, rings = _load_smpl_model(sex)
+
+    # ── Step 2: Solve for β via differentiable optimisation ───────────
+    logger.info(
+        "Optimising β for sex=%s h=%.0fcm w=%.0fkg "
+        "chest=%.0fcm waist=%.0fcm hips=%.0fcm …",
+        sex, height_cm, weight_kg, chest_cm, waist_cm, hips_cm,
+    )
+    betas = solve_betas(
+        model=model,
+        rings=rings,
+        target_height_cm=height_cm,
+        target_weight_kg=weight_kg,
+        target_chest_cm=chest_cm,
+        target_waist_cm=waist_cm,
+        target_hips_cm=hips_cm,
+    )
+
+    # ── Step 3: Final forward pass with optimised β ───────────────────
+    with torch.no_grad():
+        output = model(
+            betas=betas.to(DEVICE),
+            global_orient=torch.zeros(1, 3, dtype=torch.float32, device=DEVICE),
+            body_pose=torch.zeros(1, 69, dtype=torch.float32, device=DEVICE),
+            return_verts=True,
+        )
+
+    vertices = output.vertices.detach().cpu().numpy().squeeze()  # (6890, 3)
+    faces = model.faces
+    if not isinstance(faces, np.ndarray):
+        faces = np.array(faces, dtype=np.int64)
+
+    # ── Step 4: Uniform scale to exact target height ──────────────────
+    mesh_height_m = vertices[:, 1].max() - vertices[:, 1].min()
+    target_height_m = height_cm / 100.0
+
+    if mesh_height_m > 0:
+        scale = target_height_m / mesh_height_m
+        vertices *= scale
+        logger.info(
+            "Scaled mesh: %.4f m → %.4f m  (factor %.4f)",
+            mesh_height_m, target_height_m, scale,
+        )
+
+    # ── Step 5: Export to GLB ─────────────────────────────────────────
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    material = trimesh.visual.material.PBRMaterial(
+        baseColorFactor=[180, 160, 140, 255],
+        metallicFactor=0.0,
+        roughnessFactor=0.7,
+    )
+    mesh.visual = trimesh.visual.TextureVisuals(material=material)
+
+    glb_bytes: bytes = mesh.export(file_type="glb")
+    logger.info("GLB export complete: %d bytes", len(glb_bytes))
+    return glb_bytes
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  FASTAPI APPLICATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Verify model files and signal readiness."""
+    _verify_model_files()
+    logger.info("Manikan SMPL Engine v2 (Optimisation) is ready.")
+    yield
+    logger.info("Shutting down.")
+
+
+app = FastAPI(
+    title="Manikan SMPL Engine",
+    description=(
+        "Generates static 3D human avatars (.glb) from standard body "
+        "measurements using differentiable optimisation of SMPL β parameters."
+    ),
+    version="2.0.0",
+    lifespan=lifespan,
+)
+
+# ── CORS — allow the frontend dev server to reach the API ────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/health")
+async def health():
+    """Liveness probe."""
+    return {"status": "ok"}
+
+
+@app.post(
+    "/generate-avatar",
+    summary="Generate a 3D avatar from body measurements",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {"model/gltf-binary": {}},
+            "description": "Binary GLB file containing the generated 3D avatar mesh.",
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    },
+)
+async def generate_avatar(payload: MeasurementsPayload):
+    """
+    Accepts body measurements and returns a static A-pose 3D avatar as a
+    binary `.glb` file.
+
+    Internally runs ~150 iterations of Adam optimisation to solve for the
+    10 SMPL shape parameters (β) that best match the provided
+    measurements on the mesh surface.
+    """
+    loop = asyncio.get_event_loop()
+    try:
+        glb_bytes = await loop.run_in_executor(
+            None,
+            lambda: generate_avatar_mesh(
+                sex=payload.sex.value,
+                height_cm=payload.height_cm,
+                weight_kg=payload.weight_kg,
+                chest_cm=payload.chest_cm,
+                waist_cm=payload.waist_cm,
+                hips_cm=payload.hips_cm,
+            ),
+        )
+    except FileNotFoundError as exc:
+        logger.exception("SMPL model file not found")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "SMPL model files are not available.  Ensure the .pkl files "
+                "are placed in models/smpl/ and have been cleaned of chumpy "
+                "objects.  See README for instructions."
+            ),
+        ) from exc
+    except ValueError as exc:
+        if str(exc) == "TOO_SMALL":
+            raise HTTPException(status_code=400, detail="TOO_SMALL") from exc
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Avatar generation failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return Response(
+        content=glb_bytes,
+        media_type="model/gltf-binary",
+        headers={
+            "Content-Disposition": f'attachment; filename="manikan_{payload.sex.value}.glb"',
+        },
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  DRESSED AVATAR — body mesh wearing a garment (t-shirt + pants)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ---------------------------------------------------------------------------
+# Dressed Avatar Payload
+# ---------------------------------------------------------------------------
+class DressedAvatarPayload(BaseModel):
+    """Generate a body mesh wearing a t-shirt."""
+    sex: Sex
+    height_cm: float = Field(..., gt=100, lt=250)
+    weight_kg: float = Field(..., gt=30, lt=250)
+    chest_cm: float = Field(..., gt=50, lt=200)
+    waist_cm: float = Field(..., gt=40, lt=200)
+    hips_cm: float = Field(..., gt=50, lt=200)
+    tshirt_color_hex: str = Field(
+        ..., description="Hex colour for the t-shirt, e.g. '#1a1a2e'"
+    )
+    garment_chest_cm: float = Field(...)
+    garment_length_cm: float = Field(...)
+    garment_sleeve_cm: float = Field(...)
+    garment_shoulder_cm: float = Field(...)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  SMPL BODY-PART SEGMENTATION  —  T-Shirt Region Identification
+# ═══════════════════════════════════════════════════════════════════════════
+# SMPL has 24 joints that define body parts.  Each vertex is assigned to
+# a body part via the LBS (Linear Blend Skinning) weights.  We use the
+# dominant joint per vertex to classify it.
+#
+# T-shirt covers:
+#   Joint  0 = Pelvis (upper part)
+#   Joint  1 = L_Hip   → exclude (legs)
+#   Joint  2 = R_Hip   → exclude (legs)
+#   Joint  3 = Spine1
+#   Joint  6 = Spine2
+#   Joint  9 = Spine3
+#   Joint 12 = Neck (lower part)
+#   Joint 13 = L_Collar
+#   Joint 14 = R_Collar
+#   Joint 16 = L_Shoulder
+#   Joint 17 = R_Shoulder
+#   Joint 18 = L_Elbow  → include upper arm only (check Y)
+#   Joint 19 = R_Elbow  → include upper arm only (check Y)
+#
+# We'll use a dynamic Y-threshold to cut off below the garment length.
+
+TSHIRT_JOINT_IDS = {0, 3, 6, 9, 13, 14, 16, 17, 18, 19}
+
+
+# ---------------------------------------------------------------------------
+# Dressed Avatar Generation Pipeline
+# ---------------------------------------------------------------------------
+
+def generate_dressed_avatar_mesh(
+    sex: str,
+    height_cm: float,
+    weight_kg: float,
+    chest_cm: float,
+    waist_cm: float,
+    hips_cm: float,
+    tshirt_color_hex: str,
+    garment_chest_cm: float,
+    garment_length_cm: float,
+    garment_sleeve_cm: float,
+    garment_shoulder_cm: float,
+) -> bytes:
+    """
+    Generate a body mesh with a t-shirt applied via per-vertex colouring.
+
+    The t-shirt region gets the specified colour with fabric-like material,
+    while exposed skin retains the natural skin colour.
+    Vertices in the t-shirt region are offset slightly outward along their
+    normals to simulate fabric thickness (~2mm).
+    """
+
+    # Step 1: Load cached SMPL model
+    model, rings = _load_smpl_model(sex)
+
+    # Step 2: Optimise betas (fewer iterations for speed — dressed avatar)
+    logger.info("Generating dressed avatar (tshirt_color=%s)…", tshirt_color_hex)
+    betas = solve_betas(
+        model=model, rings=rings,
+        target_height_cm=height_cm, target_weight_kg=weight_kg,
+        target_chest_cm=chest_cm, target_waist_cm=waist_cm,
+        target_hips_cm=hips_cm,
+        num_iters=40,
+    )
+
+    # Step 3: Final forward pass
+    with torch.no_grad():
+        output = model(
+            betas=betas.to(DEVICE),
+            global_orient=torch.zeros(1, 3, dtype=torch.float32, device=DEVICE),
+            body_pose=torch.zeros(1, 69, dtype=torch.float32, device=DEVICE),
+            return_verts=True,
+        )
+
+    vertices = output.vertices.detach().cpu().numpy().squeeze()  # (6890, 3)
+    faces = model.faces
+    if not isinstance(faces, np.ndarray):
+        faces = np.array(faces, dtype=np.int64)
+
+    # Step 4: Scale to target height
+    mesh_height_m = vertices[:, 1].max() - vertices[:, 1].min()
+    target_height_m = height_cm / 100.0
+    if mesh_height_m > 0:
+        scale = target_height_m / mesh_height_m
+        vertices *= scale
+
+    # Step 5: Compute dynamic t-shirt mask & realistic fit offset
+    weights = model.lbs_weights.detach().cpu().numpy()
+    dominant_joint = np.argmax(weights, axis=1)
+    tshirt_mask = np.isin(dominant_joint, list(TSHIRT_JOINT_IDS))
+
+    # Find the top of the garment (shoulder/collar highest point)
+    shoulder_verts = np.isin(dominant_joint, [13, 14, 16, 17])
+    garment_top_y = np.max(vertices[shoulder_verts, 1])
+
+    # Dynamic Hem: exactly `garment_length_cm` below the shoulder, adjusted by 0.70 for body contour draping
+    hem_y = garment_top_y - (garment_length_cm / 100.0) * 0.70
+    below_hem = vertices[:, 1] < hem_y
+    tshirt_mask = tshirt_mask & ~below_hem
+
+    # Dynamic Sleeves: Robust 3D distance from shoulder joint
+    if np.any(dominant_joint == 16) and np.any(dominant_joint == 17):
+        l_shoulder = vertices[dominant_joint == 16].mean(axis=0)
+        r_shoulder = vertices[dominant_joint == 17].mean(axis=0)
+        
+        l_arm_mask = np.isin(dominant_joint, [16, 18])
+        r_arm_mask = np.isin(dominant_joint, [17, 19])
+        
+        dist_l = np.linalg.norm(vertices - l_shoulder, axis=1)
+        dist_r = np.linalg.norm(vertices - r_shoulder, axis=1)
+        
+        # 0.85 factor accounts for fabric wrapping around the bicep
+        sleeve_m = (garment_sleeve_cm / 100.0) * 0.85
+        arm_too_long = (l_arm_mask & (dist_l > sleeve_m)) | (r_arm_mask & (dist_r > sleeve_m))
+        tshirt_mask = tshirt_mask & ~arm_too_long
+
+    # Physically Realistic Fit Offset
+    temp_mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    normals = temp_mesh.vertex_normals
+    
+    horizontal_normals = normals.copy()
+    horizontal_normals[:, 1] = 0
+    norm = np.linalg.norm(horizontal_normals, axis=1, keepdims=True)
+    norm[norm == 0] = 1
+    horizontal_normals = horizontal_normals / norm
+
+    diff_cm = (garment_chest_cm * 2) - chest_cm
+    base_thickness = 0.005 * scale  # 5mm thickness so it looks like a real garment
+
+    if diff_cm < -25:
+        raise ValueError("TOO_SMALL")
+
+    if diff_cm > 0:
+        # Smoothly expand torso based on LBS weights (prevents swollen arms/neck)
+        torso_weights = weights[:, [0, 3, 6, 9]].sum(axis=1)
+        looseness_radius = (diff_cm / (2 * math.pi * 100.0)) * 0.6  # dampened expansion
+        expansion = horizontal_normals * looseness_radius * torso_weights[:, None]
+        vertices[tshirt_mask] += expansion[tshirt_mask]
+
+    # Apply base thickness to all fabric
+    vertices[tshirt_mask] += normals[tshirt_mask] * base_thickness
+
+    # Step 6: Build per-vertex colours
+    # Parse t-shirt colour hex
+    hex_clean = tshirt_color_hex.lstrip('#')
+    tr = int(hex_clean[0:2], 16)
+    tg = int(hex_clean[2:4], 16)
+    tb = int(hex_clean[4:6], 16)
+
+    # Skin colour
+    skin_r, skin_g, skin_b = 200, 168, 142  # warm skin tone
+
+    # Create per-vertex RGBA
+    vertex_colors = np.zeros((len(vertices), 4), dtype=np.uint8)
+    vertex_colors[:, 0] = skin_r
+    vertex_colors[:, 1] = skin_g
+    vertex_colors[:, 2] = skin_b
+    vertex_colors[:, 3] = 255
+
+    # Apply t-shirt colour
+    vertex_colors[tshirt_mask, 0] = tr
+    vertex_colors[tshirt_mask, 1] = tg
+    vertex_colors[tshirt_mask, 2] = tb
+
+    # Apply black pants
+    pants_joints = [0, 1, 2, 4, 5, 7, 8]  # Pelvis + Legs + Ankles (excluding feet 10, 11)
+    pants_mask = np.isin(dominant_joint, pants_joints) & ~tshirt_mask
+    vertices[pants_mask] += normals[pants_mask] * (0.002 * scale)  # 2mm thickness
+    
+    vertex_colors[pants_mask, 0] = 20  # Very dark grey/black
+    vertex_colors[pants_mask, 1] = 20
+    vertex_colors[pants_mask, 2] = 20
+
+    # Step 7: Export to GLB with vertex colours
+    mesh = trimesh.Trimesh(
+        vertices=vertices,
+        faces=faces,
+        vertex_colors=vertex_colors,
+        process=False,
+    )
+
+    glb_bytes: bytes = mesh.export(file_type="glb")
+    logger.info("Dressed GLB export complete: %d bytes", len(glb_bytes))
+    return glb_bytes
+
+
+@app.post(
+    "/generate-dressed-avatar",
+    summary="Generate a 3D avatar wearing a t-shirt",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {"model/gltf-binary": {}},
+            "description": "Binary GLB file with the body mesh wearing a t-shirt.",
+        }
+    },
+)
+async def generate_dressed_avatar(payload: DressedAvatarPayload):
+    """
+    Generate a body mesh with a t-shirt applied via vertex colouring.
+    The t-shirt region is determined by SMPL body-part segmentation.
+    Runs in a thread pool to avoid blocking the async event loop.
+    """
+    loop = asyncio.get_event_loop()
+    try:
+        glb_bytes = await loop.run_in_executor(
+            None,
+            lambda: generate_dressed_avatar_mesh(
+                sex=payload.sex.value,
+                height_cm=payload.height_cm,
+                weight_kg=payload.weight_kg,
+                chest_cm=payload.chest_cm,
+                waist_cm=payload.waist_cm,
+                hips_cm=payload.hips_cm,
+                tshirt_color_hex=payload.tshirt_color_hex,
+                garment_chest_cm=payload.garment_chest_cm,
+                garment_length_cm=payload.garment_length_cm,
+                garment_sleeve_cm=payload.garment_sleeve_cm,
+                garment_shoulder_cm=payload.garment_shoulder_cm,
+            ),
+        )
+    except FileNotFoundError as exc:
+        logger.exception("SMPL model file not found")
+        raise HTTPException(status_code=503, detail="SMPL model files not available.") from exc
+    except ValueError as exc:
+        if str(exc) == "TOO_SMALL":
+            raise HTTPException(status_code=400, detail="TOO_SMALL") from exc
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Dressed avatar generation failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return Response(
+        content=glb_bytes,
+        media_type="model/gltf-binary",
+        headers={
+            "Content-Disposition": f'attachment; filename="manikan_dressed_{payload.sex.value}.glb"',
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=PORT,
+        reload=True,
+        log_level="info",
+    )

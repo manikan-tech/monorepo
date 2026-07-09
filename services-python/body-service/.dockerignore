@@ -8,3 +8,11 @@ __pycache__/
 .gitignore
 Dockerfile
 .dockerignore
+
+# Licensed SMPL model files — never bake into the image
+models/smpl/*.pkl
+models/smpl/*.npz
+
+# Local artifacts
+*.glb
+.env
