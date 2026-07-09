@@ -4,6 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 
+import { useCart } from "./CartContext";
+
 // ── Icons ─────────────────────────────────────────────────────────────
 const SearchIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -35,6 +37,7 @@ const navLinks = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const { cartCount } = useCart();
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-manikan-border/50 shadow-[0_4px_30px_rgba(18,52,59,0.03)] backdrop-blur-xl transition-all duration-300">
@@ -52,6 +55,7 @@ export default function Navbar() {
               src="/logo.png" 
               alt="Manikan Logo" 
               fill 
+              sizes="(max-width: 768px) 150px, 200px"
               className="object-contain object-left animate-logo-shine"
               priority
             />
@@ -90,12 +94,14 @@ export default function Navbar() {
             <button className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform">
               <WishlistIcon />
             </button>
-            <button className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform relative">
+            <Link href="/cart" className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform relative cursor-pointer block">
               <CartIcon />
-              <span className="absolute -top-1.5 -right-1.5 bg-forest-600 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow-sm">
-                0
-              </span>
-            </button>
+              {cartCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-gold-500 text-forest-950 text-[10px] font-bold w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-sm animate-fade-in-up">
+                  {cartCount}
+                </span>
+              )}
+            </Link>
           </div>
 
           <div className="flex items-center gap-3">

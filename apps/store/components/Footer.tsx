@@ -17,6 +17,7 @@ export default function Footer() {
                 src="/logo.png" 
                 alt="Manikan Logo" 
                 fill 
+                sizes="128px"
                 className="object-contain object-left brightness-0 invert" 
               />
             </Link>

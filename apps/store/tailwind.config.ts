@@ -75,15 +75,7 @@ const config: Config = {
         'gold': '0 4px 24px rgba(200, 150, 102, 0.22)',
         'glow': '0 0 40px rgba(45, 84, 94, 0.18)',
       },
-      animation: {
-        'fade-in': 'fadeIn 0.5s ease-out forwards',
-        'fade-up': 'fadeUp 0.6s ease-out forwards',
-        'pulse-glow': 'pulseGlow 3s ease-in-out infinite',
-        'shimmer-fast': 'shimmer 3s linear infinite',
-        'shimmer-slow': 'shimmer 4s linear infinite',
-        'float': 'float 4s ease-in-out infinite',
-        'slow-zoom': 'slowZoom 20s ease-in-out infinite',
-      },
+
       keyframes: {
         fadeIn: {
           '0%': { opacity: '0', transform: 'translateY(8px)' },
@@ -108,9 +100,24 @@ const config: Config = {
         slowZoom: {
           '0%, 100%': { transform: 'scale(1)' },
           '50%': { transform: 'scale(1.08)' },
+        },
+        fadeInUp: {
+          '0%': { opacity: '0', transform: 'translateY(60px) scale(0.90)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
         }
-      }
-    }
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.5s ease-out forwards',
+        'fade-up': 'fadeUp 0.6s ease-out forwards',
+        'pulse-glow': 'pulseGlow 3s ease-in-out infinite',
+        'shimmer-fast': 'shimmer 3s linear infinite',
+        'shimmer-slow': 'shimmer 4s linear infinite',
+        'float': 'float 4s ease-in-out infinite',
+        'slow-zoom': 'slowZoom 20s ease-in-out infinite',
+        'logo-shine': 'logoShine 4s ease-in-out infinite',
+        'fade-in-up': 'fadeInUp 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
+      },
+    },
   },
   plugins: [],
 };
