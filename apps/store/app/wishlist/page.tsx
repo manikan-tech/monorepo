@@ -69,10 +69,21 @@ export default function WishlistPage() {
                                 <Link href={`/store/${item.slug}`}>
                                     <h3 className="text-[14px] font-medium text-forest-950 truncate group-hover:text-gold-600 transition-colors">{item.name}</h3>
                                 </Link>
-                                <div className="flex items-center justify-between mt-1">
-                                    <span className="font-semibold text-forest-900 text-sm">EGP {item.priceEgp.toLocaleString()}</span>
-                                    {item.discountPct > 0 && (
-                                        <span className="text-xs text-red-500 font-semibold">-{item.discountPct}%</span>
+                                <div className="flex items-center gap-2 mt-1">
+                                    {item.discountPct > 0 ? (
+                                        <>
+                                            <span className="font-semibold text-forest-900 text-sm">
+                                                EGP {(item.priceEgp * (1 - item.discountPct / 100)).toLocaleString()}
+                                            </span>
+                                            <span className="text-xs text-forest-700/40 line-through">
+                                                EGP {item.priceEgp.toLocaleString()}
+                                            </span>
+                                            <span className="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-sm">
+                                                -{item.discountPct}%
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <span className="font-semibold text-forest-900 text-sm">EGP {item.priceEgp.toLocaleString()}</span>
                                     )}
                                 </div>
                             </div>

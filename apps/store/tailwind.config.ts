@@ -104,6 +104,15 @@ const config: Config = {
         fadeInUp: {
           '0%': { opacity: '0', transform: 'translateY(60px) scale(0.90)' },
           '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
+        marquee: {
+          '0%': { transform: 'translateX(0%)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
+        scan: {
+          '0%, 100%': { transform: 'translateY(-20px)', opacity: '0' },
+          '10%, 90%': { opacity: '1' },
+          '50%': { transform: 'translateY(200px)' },
         }
       },
       animation: {
@@ -116,6 +125,8 @@ const config: Config = {
         'slow-zoom': 'slowZoom 20s ease-in-out infinite',
         'logo-shine': 'logoShine 4s ease-in-out infinite',
         'fade-in-up': 'fadeInUp 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
+        'marquee': 'marquee 25s linear infinite',
+        'scan': 'scan 3s ease-in-out infinite',
       },
     },
   },

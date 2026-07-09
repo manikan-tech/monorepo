@@ -69,8 +69,26 @@ export default function CartPage() {
                       <h3 className="font-display text-lg font-semibold text-forest-950 hover:text-gold-600 transition-colors">{item.name}</h3>
                     </Link>
                     <p className="text-sm text-forest-700/60 mt-1">Size: {item.sizeLabel}</p>
+                    {!item.isActive && (
+                      <p className="text-xs text-red-500 font-medium mt-1">This item is no longer available.</p>
+                    )}
                   </div>
-                  <span className="font-semibold text-forest-950 whitespace-nowrap">EGP {(item.priceEgp * item.quantity).toLocaleString()}</span>
+                  <div className="flex flex-col items-end">
+                    {item.discountPct > 0 ? (
+                      <>
+                        <span className="font-semibold text-forest-950 whitespace-nowrap">
+                          EGP {(item.priceEgp * (1 - item.discountPct / 100) * item.quantity).toLocaleString()}
+                        </span>
+                        <span className="text-xs text-forest-700/50 line-through">
+                          EGP {(item.priceEgp * item.quantity).toLocaleString()}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="font-semibold text-forest-950 whitespace-nowrap">
+                        EGP {(item.priceEgp * item.quantity).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex justify-between items-end">
                   {/* Quantity Controls */}
@@ -124,7 +142,8 @@ export default function CartPage() {
 
             <button
               onClick={() => router.push("/checkout")}
-              className="relative overflow-hidden flex items-center justify-center gap-2 w-full bg-gold-500 text-forest-950 rounded-2xl py-4 font-semibold hover:bg-gold-400 transition-all duration-300 hover:shadow-[0_0_20px_rgba(200,150,102,0.4)] hover:-translate-y-0.5 active:scale-[0.98]"
+              disabled={items.some(i => !i.isActive)}
+              className="relative overflow-hidden flex items-center justify-center gap-2 w-full bg-gold-500 text-forest-950 rounded-2xl py-4 font-semibold hover:bg-gold-400 transition-all duration-300 hover:shadow-[0_0_20px_rgba(200,150,102,0.4)] hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:-translate-y-0 disabled:hover:shadow-none"
             >
               <div className="absolute inset-0 w-full h-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)] bg-[length:200%_100%] animate-shimmer-slow pointer-events-none" />
               <span className="relative z-10">Proceed to Checkout</span>

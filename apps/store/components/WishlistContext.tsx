@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import Modal from "./Modal";
+import Link from "next/link";
 
 export type WishlistItem = {
     id: string;
@@ -27,6 +29,7 @@ const WishlistContext = createContext<WishlistContextType | undefined>(undefined
 export function WishlistProvider({ children }: { children: ReactNode }) {
     const [items, setItems] = useState<WishlistItem[]>([]);
     const [loading, setLoading] = useState(false);
+    const [showAuthModal, setShowAuthModal] = useState(false);
 
     const refresh = useCallback(async () => {
         setLoading(true);
@@ -67,7 +70,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
             if (res.status === 401) {
                 // Roll back and prompt login
                 setItems((prev) => [...prev, existing]);
-                alert("Please sign in to manage your wishlist.");
+                setShowAuthModal(true);
             }
         } else {
             // Add
@@ -77,7 +80,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
                 body: JSON.stringify({ productId }),
             });
             if (res.status === 401) {
-                alert("Please sign in to add items to your wishlist.");
+                setShowAuthModal(true);
                 return;
             }
             if (res.ok) {
@@ -110,6 +113,32 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     return (
         <WishlistContext.Provider value={{ items, loading, isWishlisted, toggle, refresh }}>
             {children}
+            <Modal
+                isOpen={showAuthModal}
+                onClose={() => setShowAuthModal(false)}
+                title="Sign In Required"
+            >
+                <div className="flex flex-col gap-4">
+                    <p className="text-forest-700">
+                        Please sign in or create an account to save items to your wishlist.
+                    </p>
+                    <div className="flex gap-3 justify-end mt-2">
+                        <button 
+                            onClick={() => setShowAuthModal(false)}
+                            className="px-4 py-2 text-sm font-medium text-forest-700 hover:text-forest-950 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <Link 
+                            href="/login"
+                            onClick={() => setShowAuthModal(false)}
+                            className="px-5 py-2 bg-forest-900 text-white rounded-xl text-sm font-medium hover:bg-forest-800 transition-colors"
+                        >
+                            Sign In
+                        </Link>
+                    </div>
+                </div>
+            </Modal>
         </WishlistContext.Provider>
     );
 }

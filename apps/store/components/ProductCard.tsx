@@ -51,10 +51,28 @@ export default function ProductCard({ product }: { product: any }) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5 px-1">
+      <div className="flex flex-col gap-1.5 px-1 mt-2">
         <span className="text-[11px] font-bold text-forest-700/50 uppercase tracking-widest">{product.brand}</span>
         <h3 className="font-sans text-[15px] font-medium text-forest-950 truncate transition-colors group-hover:text-gold-600">{product.name}</h3>
-        <span className="font-sans text-[15px] text-forest-900 font-semibold mt-1">EGP {product.priceEgp?.toLocaleString()}</span>
+        <div className="flex items-center gap-2 mt-0.5">
+          {product.discountPct > 0 ? (
+            <>
+              <span className="font-sans text-[15px] text-forest-900 font-semibold">
+                EGP {(product.priceEgp * (1 - product.discountPct / 100)).toLocaleString()}
+              </span>
+              <span className="text-xs text-forest-700/50 line-through">
+                EGP {product.priceEgp?.toLocaleString()}
+              </span>
+              <span className="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-sm">
+                -{product.discountPct}%
+              </span>
+            </>
+          ) : (
+            <span className="font-sans text-[15px] text-forest-900 font-semibold">
+              EGP {product.priceEgp?.toLocaleString()}
+            </span>
+          )}
+        </div>
       </div>
     </Link>
   );
