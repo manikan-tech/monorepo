@@ -28,33 +28,7 @@ export async function GET(request: NextRequest) {
         }
 
         if (categorySlug) {
-            // Find category and its immediate child categories to support hierarchical filters
-            const targetCategory = await prisma.category.findUnique({
-                where: { slug: categorySlug.toLowerCase().trim() },
-                include: { children: true }
-            });
-
-            if (targetCategory) {
-                const categoryIds = [
-                    targetCategory.id,
-                    ...targetCategory.children.map((c) => c.id)
-                ];
-                where.categoryId = { in: categoryIds };
-            } else {
-                // If category parameter exists but slug isn't found, return empty results
-                return NextResponse.json(
-                    {
-                        products: [],
-                        pagination: {
-                            total: 0,
-                            page,
-                            limit,
-                            totalPages: 0
-                        }
-                    },
-                    { status: 200 }
-                );
-            }
+            where.category = { equals: categorySlug, mode: "insensitive" };
         }
 
         // Determine sorting criteria
