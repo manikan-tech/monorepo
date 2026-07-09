@@ -1,26 +1,22 @@
-# Use an official lightweight Python image
+# ── Manikan Body Service (SMPL engine) ──────────────────────────────────
 FROM python:3.11-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PORT=8001
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8001 \
+    BODY_MODEL_DIR=/app/models
 
-# Set the working directory
 WORKDIR /app
 
-# Install system dependencies if any are needed
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install python dependencies
+# torch/smplx/trimesh/scipy all ship manylinux wheels for py3.11 — no compiler
+# toolchain needed, which keeps the image lean.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application files
+# App code. The licensed SMPL .pkl files are excluded via .dockerignore and
+# must be provided at runtime (e.g. mounted volume or a secret store):
+#   docker run -v "$(pwd)/models/smpl:/app/models/smpl" -p 8001:8001 body-service
 COPY . .
 
-# Expose port and run
-EXPOSE ${PORT}
-CMD uvicorn app.main:app --host 0.0.0.0 --port 8001
+EXPOSE 8001
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]

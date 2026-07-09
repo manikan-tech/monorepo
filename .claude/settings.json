@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth *)",
+      "Bash(gh repo *)",
+      "Bash(gh search *)",
+      "Bash(gh api *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://api.github.com/repos/Mostafa-Khalifaa/Manikan-MVP)",
+      "Bash(curl -s \"https://api.github.com/users/Mostafa-Khalifaa\")",
+      "Bash(curl -s \"https://api.github.com/users/Mostafa-Khalifaa/repos?per_page=100\")",
+      "Bash(curl -s \"https://api.github.com/search/repositories?q=Manikan\")",
+      "Bash(cd ~/Documents/Coding/manikan-mvp/Manikan-MVP *)",
+      "Read(//home/hashim/Documents/Coding/manikan-mvp/Manikan-MVP/**)",
+      "Bash(wc -l backend/main.py backend/requirements.txt backend/test_generate.py backend/tools/clean_smpl_pkl.py frontend/package.json frontend/vite.config.js)",
+      "Bash(wc -l frontend/src/components/*.jsx frontend/src/components/manikan/ManikanWidget.jsx frontend/src/pages/manikan/Visualization.jsx frontend/src/pages/manikan/SizeRecommendation.jsx frontend/src/App.jsx)",
+      "Bash(ls -lh backend/models/smpl/)",
+      "Read(//home/hashim/Documents/Coding/manikan-mvp/Manikan-MVP/backend/**)",
+      "Bash(python3 -m pip --version)",
+      "Bash(python3 -)",
+      "Bash(python3 -m py_compile app/main.py app/config.py tools/clean_smpl_pkl.py)"
+    ]
+  }
+}

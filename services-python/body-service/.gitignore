@@ -1,0 +1,17 @@
+# ─── Licensed SMPL model files — NEVER commit ───────────────────────────
+# These are large (~38–53 MB each) and covered by the SMPL license
+# (research license for ITI; commercial license required post-graduation).
+# Each developer must obtain and place them locally.
+# See models/smpl/README.md for setup instructions.
+models/smpl/*.pkl
+models/smpl/*.npz
+
+# ─── Python ─────────────────────────────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# ─── Local artifacts ────────────────────────────────────────────────────
+*.glb
+.env
