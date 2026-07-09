@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manikan Widget — Embed Test Host</title>
+    <!--
+      Deliberately clashing styles below, to prove the embedded widget is
+      unaffected by the host page's CSS (and vice versa) via Shadow DOM.
+    -->
+    <style>
+      body {
+        font-family: Georgia, serif;
+        background: #222;
+        color: #eee;
+        max-width: 640px;
+        margin: 60px auto;
+        padding: 0 20px;
+      }
+      button {
+        background: red;
+        color: yellow;
+        border: 5px dashed lime;
+        font-size: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Retailer's Product Page (simulated)</h1>
+    <p>
+      This is a plain HTML page standing in for a retailer's site — no
+      framework, no build step. Below is the exact one-tag embed described
+      in MANIKAN_PROJECT.md. Everything the widget needs (React, Three.js,
+      styles) is bundled into that single file.
+    </p>
+    <button type="button" disabled>A native page button (for style-clash contrast)</button>
+
+    <!-- Run `npm run build:lib` first to produce dist-lib/manikan-widget.js -->
+    <script
+      src="./dist-lib/manikan-widget.js"
+      data-retailer-id="demo-retailer"
+      data-product-id="tshirt-001"
+    ></script>
+  </body>
+</html>

@@ -17,7 +17,29 @@
       "Read(//home/hashim/Documents/Coding/manikan-mvp/Manikan-MVP/backend/**)",
       "Bash(python3 -m pip --version)",
       "Bash(python3 -)",
-      "Bash(python3 -m py_compile app/main.py app/config.py tools/clean_smpl_pkl.py)"
+      "Bash(python3 -m py_compile app/main.py app/config.py tools/clean_smpl_pkl.py)",
+      "Read(//home/hashim/Documents/Coding/manikan-mvp/Manikan-MVP/frontend/src/**)",
+      "Read(//home/hashim/Documents/Coding/manikan-mvp/Manikan-MVP/frontend/src/components/**)",
+      "Read(//home/hashim/Documents/Coding/manikan-mvp/Manikan-MVP/frontend/**)",
+      "Bash(cd ~/Documents/Coding/manikan-mvp/Manikan-MVP/frontend *)",
+      "Bash(npm --version)",
+      "Bash(node -e \"console.log\\(require\\('/home/hashim/Documents/Coding/manikan-tech/monorepo/package.json'\\).workspaces\\)\")",
+      "Bash(npm install *)",
+      "Bash(command -v corepack)",
+      "Bash(corepack --version)",
+      "Bash(npx -y npm@11 install)",
+      "Bash(npx -y npm@11 --version)",
+      "Bash(npx -y npm@11 -v --loglevel silent)",
+      "Bash(python3 -c ' *)",
+      "Bash(node -e \"console.log\\('react:', require.resolve\\('react/package.json', {paths:['apps/widget']}\\)\\)\")",
+      "Bash(node -e \"console.log\\('three:', require.resolve\\('three/package.json', {paths:['apps/widget']}\\)\\)\")",
+      "Bash(npm run *)",
+      "Bash(git -c color.ui=never status --short apps/widget)",
+      "Bash(git -c color.ui=never status --short)",
+      "Bash(git check-ignore *)",
+      "Bash(openssl rand *)",
+      "Bash(cd /home/hashim/Coding/manikan-tech/monorepo/apps/store 2>/dev/null || cd /home/hashim/Documents/Coding/manikan-tech/monorepo/apps/store *)",
+      "Read(//home/hashim/Coding/manikan-tech/monorepo/apps/**)"
     ]
   }
 }

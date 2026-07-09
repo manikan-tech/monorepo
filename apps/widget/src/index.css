@@ -1,0 +1,243 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+@import "tailwindcss";
+@import "./widget.css";
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Manikan Widget — Design Tokens & Global Styles
+   Ported from the Manikan-MVP source repo (Tailwind v4 @theme). Kept
+   self-contained under apps/widget so it never collides with the store's
+   Tailwind v3 setup.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+@theme {
+  /* ── Engine theme tokens (mapped onto the Manikan forest/gold palette) ── */
+  --color-surface-primary: var(--color-manikan-bg);
+  --color-surface-secondary: var(--color-manikan-card);
+  --color-surface-elevated: var(--color-cream-50);
+  --color-surface-hover: var(--color-forest-50);
+  --color-border-subtle: var(--color-manikan-border);
+  --color-border-accent: var(--color-forest-300);
+  --color-accent: var(--color-forest-600);
+  --color-accent-bright: var(--color-gold-600);
+  --color-accent-glow: rgba(38, 80, 89, 0.15);
+  --color-accent-secondary: var(--color-gold-400);
+  --color-text-primary: var(--color-forest-900);
+  --color-text-secondary: var(--color-forest-700);
+  --color-text-muted: var(--color-forest-500);
+  --color-success: #34d399;
+  --color-danger: #f87171;
+  --font-display: 'Inter', 'SF Pro Display', system-ui, sans-serif;
+
+  /* ── Manikan site: Night Blue / Teal ─────────────────────────────────── */
+  --color-forest-50:  #EDF4F5;
+  --color-forest-100: #D4E8EB;
+  --color-forest-200: #A8D0D6;
+  --color-forest-300: #72B0BA;
+  --color-forest-400: #4A8F99;
+  --color-forest-500: #2d545e;
+  --color-forest-600: #265059;
+  --color-forest-700: #1e4a53;
+  --color-forest-800: #163c44;
+  --color-forest-900: #12343b;
+  --color-forest-950: #0a2229;
+
+  /* ── Manikan site: Sand Tan ──────────────────────────────────────────── */
+  --color-gold-50:  #FDF7EE;
+  --color-gold-100: #FAEDD8;
+  --color-gold-200: #F5D9B0;
+  --color-gold-300: #ECC480;
+  --color-gold-400: #e1b382;
+  --color-gold-500: #D49B63;
+  --color-gold-600: #c89666;
+  --color-gold-700: #A87548;
+  --color-gold-800: #885C38;
+  --color-gold-900: #6E4A2C;
+
+  /* ── Manikan site: Cream neutrals ────────────────────────────────────── */
+  --color-cream-50:  #F4F8F8;
+  --color-cream-100: #E6F0F1;
+  --color-cream-200: #C8E0E3;
+  --color-cream-300: #A0C7CC;
+  --color-cream-400: #72A8AF;
+  --color-cream-500: #4A8892;
+
+  /* ── Manikan site: Surface tokens ────────────────────────────────────── */
+  --color-manikan-bg:     #F3F7F7;
+  --color-manikan-card:   #FFFFFF;
+  --color-manikan-border: #CAD6D8;
+  --color-manikan-muted:  #E6EDEF;
+
+  /* ── Manikan fonts ───────────────────────────────────────────────────── */
+  --font-manikan-display: 'Cormorant Garamond', 'DM Serif Display', Georgia, serif;
+  --font-manikan-body:    'DM Sans', system-ui, sans-serif;
+
+  /* ── Manikan shadows ─────────────────────────────────────────────────── */
+  --shadow-soft: 0 2px 20px rgba(18,52,59,0.07);
+  --shadow-card: 0 4px 32px rgba(18,52,59,0.10);
+  --shadow-lift: 0 8px 48px rgba(18,52,59,0.16);
+  --shadow-gold: 0 4px 24px rgba(200,150,102,0.22);
+  --shadow-glow: 0 0 40px rgba(45,84,94,0.18);
+}
+
+/* ── Global Reset ────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-display);
+  background-color: var(--color-surface-primary);
+  color: var(--color-text-primary);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* ── Custom Range Slider ─────────────────────────────────────────────────── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+  height: 6px;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--color-accent) 0%,
+    var(--color-accent) var(--slider-progress, 50%),
+    var(--color-surface-hover) var(--slider-progress, 50%),
+    var(--color-surface-hover) 100%
+  );
+}
+
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--color-surface-hover);
+}
+
+input[type="range"]::-moz-range-progress {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--color-accent);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-accent-bright);
+  border: 2px solid var(--color-surface-primary);
+  box-shadow:
+    0 0 0 3px var(--color-accent-glow),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+  margin-top: -6px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-accent-bright);
+  border: 2px solid var(--color-surface-primary);
+  box-shadow:
+    0 0 0 3px var(--color-accent-glow),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.2);
+  box-shadow:
+    0 0 0 5px var(--color-accent-glow),
+    0 2px 12px rgba(99, 102, 241, 0.4);
+}
+
+input[type="range"]:hover::-moz-range-thumb {
+  transform: scale(1.2);
+  box-shadow:
+    0 0 0 5px var(--color-accent-glow),
+    0 2px 12px rgba(99, 102, 241, 0.4);
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-hover);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px var(--color-accent-glow), 0 0 40px rgba(99, 102, 241, 0.08); }
+  50%      { box-shadow: 0 0 30px var(--color-accent-glow), 0 0 60px rgba(99, 102, 241, 0.15); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* ── Body/Avatar Processing Overlay Animations ─────────────────────────── */
+@keyframes scanBeam {
+  0%   { top: 0%;   opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+@keyframes progressSweep {
+  0%   { width: 5%;  margin-left: 0; }
+  50%  { width: 60%; margin-left: 20%; }
+  100% { width: 5%;  margin-left: 95%; }
+}
+
+@keyframes fadeInOut {
+  0%   { opacity: 0; transform: translateY(4px); }
+  20%  { opacity: 1; transform: translateY(0); }
+  80%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-4px); }
+}
+
+.loading-measure-lines line {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
