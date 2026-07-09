@@ -7,9 +7,6 @@ export async function GET(request: NextRequest) {
         const categories = await prisma.category.findMany({
             orderBy: { name: "asc" }
         });
-
-        // If no categories exist in the database (e.g. dummy data was only seeded into products), 
-        // dynamically generate them from the unique products' string fields.
         if (categories.length === 0) {
             const distinctProducts = await prisma.product.findMany({
                 select: { category: true },
