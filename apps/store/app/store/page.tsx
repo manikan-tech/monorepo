@@ -7,7 +7,10 @@ export default function StorePage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  
+
+  // Categories from API
+  const [categories, setCategories] = useState<{ id: string; name: string; slug: string }[]>([]);
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -18,11 +21,24 @@ export default function StorePage() {
   const [gender, setGender] = useState("");
   const [sort, setSort] = useState("newest");
 
+  // Fetch categories on mount
+  useEffect(() => {
+    fetch("/api/categories")
+      .then((r) => r.json())
+      .then((data) => {
+        // Flatten tree to get all categories (incl. children)
+        const flatten = (cats: any[]): any[] =>
+          cats.flatMap((c: any) => [{ id: c.id, name: c.name, slug: c.slug }, ...flatten(c.children ?? [])]);
+        setCategories(flatten(data.categories ?? []));
+      })
+      .catch(() => { });
+  }, []);
+
   const fetchProducts = useCallback(async (page: number, cat: string, gen: string, srt: string) => {
     try {
       setLoading(true);
       setError("");
-      
+
       let url = `/api/products?page=${page}&limit=${limit}`;
       if (cat) url += `&category=${cat}`;
       if (gen) url += `&gender=${gen}`;
@@ -30,7 +46,7 @@ export default function StorePage() {
 
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to load products. Make sure your database is running!");
-      
+
       const data = await res.json();
       setProducts(data.products || []);
       setTotalPages(data.pagination?.totalPages || 1);
@@ -65,8 +81,8 @@ export default function StorePage() {
       {/* ── Filters & Sort ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10 animate-fade-in-up opacity-0" style={{ animationDelay: '200ms' }}>
         <div className="flex flex-wrap gap-3">
-          <select 
-            value={category} 
+          <select
+            value={category}
             onChange={(e) => {
               setCategory(e.target.value);
               setCurrentPage(1);
@@ -74,14 +90,12 @@ export default function StorePage() {
             className="px-4 py-2.5 rounded-xl border-2 border-forest-100 bg-cream-50 text-forest-900 text-sm font-medium focus:outline-none focus:border-gold-400 transition-colors cursor-pointer hover:bg-white"
           >
             <option value="">All Categories</option>
-            <option value="blouse">Blouses</option>
-            <option value="jacket">Jackets</option>
-            <option value="pants">Pants</option>
-            <option value="shirt">Shirts</option>
-            <option value="skirt">Skirts</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.slug}>{cat.name}</option>
+            ))}
           </select>
-          <select 
-            value={gender} 
+          <select
+            value={gender}
             onChange={(e) => {
               setGender(e.target.value);
               setCurrentPage(1);
@@ -93,9 +107,9 @@ export default function StorePage() {
             <option value="men">Men</option>
           </select>
         </div>
-        
-        <select 
-          value={sort} 
+
+        <select
+          value={sort}
           onChange={(e) => {
             setSort(e.target.value);
             setCurrentPage(1);
@@ -125,8 +139,8 @@ export default function StorePage() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-16">
             {products.map((product: any, index: number) => (
-              <div 
-                key={product.id} 
+              <div
+                key={product.id}
                 className="opacity-0 animate-fade-in-up"
                 style={{ animationDelay: `${(index % limit) * 75}ms` }}
               >
@@ -147,10 +161,10 @@ export default function StorePage() {
                 className="p-2.5 rounded-full border border-forest-200 text-forest-900 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-forest-50 hover:border-forest-300 transition-all"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m15 18-6-6 6-6"/>
+                  <path d="m15 18-6-6 6-6" />
                 </svg>
               </button>
-              
+
               <div className="flex gap-2">
                 {Array.from({ length: totalPages }).map((_, i) => (
                   <button
@@ -159,11 +173,10 @@ export default function StorePage() {
                       setCurrentPage(i + 1);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
-                    className={`w-10 h-10 rounded-full text-sm font-medium transition-all ${
-                      currentPage === i + 1 
-                        ? 'bg-forest-900 text-white shadow-soft' 
-                        : 'text-forest-700 hover:bg-forest-100'
-                    }`}
+                    className={`w-10 h-10 rounded-full text-sm font-medium transition-all ${currentPage === i + 1
+                      ? 'bg-forest-900 text-white shadow-soft'
+                      : 'text-forest-700 hover:bg-forest-100'
+                      }`}
                   >
                     {i + 1}
                   </button>
@@ -179,7 +192,7 @@ export default function StorePage() {
                 className="p-2.5 rounded-full border border-forest-200 text-forest-900 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-forest-50 hover:border-forest-300 transition-all"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m9 18 6-6-6-6"/>
+                  <path d="m9 18 6-6-6-6" />
                 </svg>
               </button>
             </div>

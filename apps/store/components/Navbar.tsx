@@ -47,14 +47,14 @@ export default function Navbar() {
       </div>
 
       <div className="max-w-[1400px] mx-auto px-6 h-24 flex items-center justify-between">
-        
+
         {/* ── Logo ── */}
         <Link href="/" className="flex items-center gap-2 group">
           <div className="relative w-56 h-16 transition-transform duration-500 group-hover:scale-105 group-hover:-translate-y-0.5">
-            <Image 
-              src="/logo.png" 
-              alt="Manikan Logo" 
-              fill 
+            <Image
+              src="/logo.png"
+              alt="Manikan Logo"
+              fill
               sizes="(max-width: 768px) 150px, 200px"
               className="object-contain object-left animate-logo-shine"
               priority
@@ -66,18 +66,16 @@ export default function Navbar() {
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
             return (
-              <Link 
-                key={link.name} 
+              <Link
+                key={link.name}
                 href={link.href}
-                className={`relative font-sans text-[15px] font-medium tracking-wide transition-all duration-300 group py-2 ${
-                  isActive ? "text-forest-900" : "text-forest-700/80 hover:text-gold-600"
-                }`}
+                className={`relative font-sans text-[15px] font-medium tracking-wide transition-all duration-300 group py-2 ${isActive ? "text-forest-900" : "text-forest-700/80 hover:text-gold-600"
+                  }`}
               >
                 {link.name}
-                <span 
-                  className={`absolute bottom-0 left-1/2 -translate-x-1/2 h-[2px] bg-gold-500 transition-all duration-300 ease-out ${
-                    isActive ? "w-full" : "w-0 group-hover:w-full"
-                  }`} 
+                <span
+                  className={`absolute bottom-0 left-1/2 -translate-x-1/2 h-[2px] bg-gold-500 transition-all duration-300 ease-out ${isActive ? "w-full" : "w-0 group-hover:w-full"
+                    }`}
                 />
               </Link>
             );
@@ -86,7 +84,7 @@ export default function Navbar() {
 
         {/* ── Icons & Sign In ── */}
         <div className="flex items-center gap-6">
-          
+
           <div className="hidden md:flex items-center gap-5 pr-4 border-r border-manikan-border/60">
             <button className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform">
               <SearchIcon />
@@ -105,8 +103,8 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link 
-              href="/login" 
+            <Link
+              href="/login"
               className="relative overflow-hidden flex items-center justify-center px-6 py-2.5 text-sm font-medium text-white bg-forest-600 rounded-xl hover:bg-forest-700 btn-glow shadow-soft hover:shadow-card transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
             >
               <div className="absolute inset-0 w-full h-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent)] bg-[length:200%_100%] animate-shimmer-slow pointer-events-none" />

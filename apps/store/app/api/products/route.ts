@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
         }
 
         if (categorySlug) {
-            where.category = { equals: categorySlug, mode: "insensitive" };
+            where.categoryRef = { slug: { equals: categorySlug, mode: "insensitive" } };
         }
 
         // Determine sorting criteria
