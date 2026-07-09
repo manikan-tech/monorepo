@@ -21,6 +21,7 @@ export async function GET() {
                     priceEgp: true,
                     discountPct: true,
                     imageUrl: true,
+                    isActive: true,
                 },
             },
             variant: {

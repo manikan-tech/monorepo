@@ -18,6 +18,11 @@ export default function CheckoutPage() {
     const [error, setError] = useState("");
     const [addrLoading, setAddrLoading] = useState(true);
 
+    const [showNewAddress, setShowNewAddress] = useState(false);
+    const [newAddress, setNewAddress] = useState({ label: "Home", street: "", city: "", state: "", zipCode: "", isDefault: false });
+    const [addingAddress, setAddingAddress] = useState(false);
+    const [addressError, setAddressError] = useState("");
+
     useEffect(() => {
         fetch("/api/addresses")
             .then((r) => r.json())
@@ -30,6 +35,28 @@ export default function CheckoutPage() {
             .catch(() => { })
             .finally(() => setAddrLoading(false));
     }, []);
+
+    const handleAddAddress = async () => {
+        setAddingAddress(true);
+        setAddressError("");
+        try {
+            const res = await fetch("/api/addresses", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(newAddress),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to add address");
+            setAddresses(prev => [data.address, ...prev]);
+            setSelectedAddress(data.address.id);
+            setShowNewAddress(false);
+            setNewAddress({ label: "Home", street: "", city: "", state: "", zipCode: "", isDefault: false });
+        } catch (err: any) {
+            setAddressError(err.message);
+        } finally {
+            setAddingAddress(false);
+        }
+    };
 
     const handlePlaceOrder = async () => {
         setLoading(true);
@@ -90,7 +117,29 @@ export default function CheckoutPage() {
                                         </div>
                                     </label>
                                 ))}
-                                <a href="/account/addresses" className="text-sm text-gold-600 hover:underline mt-2">+ Add new address</a>
+                                {!showNewAddress ? (
+                                    <button onClick={() => setShowNewAddress(true)} className="text-sm font-medium text-gold-600 hover:underline mt-2 self-start">+ Add new address</button>
+                                ) : (
+                                    <div className="mt-4 p-5 rounded-2xl bg-forest-50 border border-forest-900/10 flex flex-col gap-4">
+                                        <h3 className="font-semibold text-forest-950 text-sm">New Address Details</h3>
+                                        {addressError && <p className="text-xs text-red-500">{addressError}</p>}
+                                        <input type="text" placeholder="Address Label (e.g. Home, Work)" value={newAddress.label} onChange={e => setNewAddress({...newAddress, label: e.target.value})} className="px-3 py-2 rounded-xl text-sm border focus:outline-gold-400" />
+                                        <input type="text" placeholder="Street Address" value={newAddress.street} onChange={e => setNewAddress({...newAddress, street: e.target.value})} className="px-3 py-2 rounded-xl text-sm border focus:outline-gold-400" />
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <input type="text" placeholder="City" value={newAddress.city} onChange={e => setNewAddress({...newAddress, city: e.target.value})} className="px-3 py-2 rounded-xl text-sm border focus:outline-gold-400" />
+                                            <input type="text" placeholder="State/Region" value={newAddress.state} onChange={e => setNewAddress({...newAddress, state: e.target.value})} className="px-3 py-2 rounded-xl text-sm border focus:outline-gold-400" />
+                                        </div>
+                                        <input type="text" placeholder="Zip Code (optional)" value={newAddress.zipCode} onChange={e => setNewAddress({...newAddress, zipCode: e.target.value})} className="px-3 py-2 rounded-xl text-sm border focus:outline-gold-400 w-1/2" />
+                                        <label className="flex items-center gap-2 mt-1 cursor-pointer">
+                                            <input type="checkbox" checked={newAddress.isDefault} onChange={e => setNewAddress({...newAddress, isDefault: e.target.checked})} className="accent-gold-500 rounded" />
+                                            <span className="text-sm text-forest-700/80">Set as my default address</span>
+                                        </label>
+                                        <div className="flex justify-end gap-3 mt-2">
+                                            <button onClick={() => setShowNewAddress(false)} className="text-xs font-medium text-forest-700/60 hover:text-forest-950">Cancel</button>
+                                            <button onClick={handleAddAddress} disabled={addingAddress} className="px-4 py-2 bg-forest-900 text-white rounded-xl text-xs font-medium disabled:opacity-60">{addingAddress ? "Saving..." : "Save Address"}</button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -127,12 +176,20 @@ export default function CheckoutPage() {
                         <h2 className="font-display text-2xl font-semibold mb-6">Order Summary</h2>
 
                         <div className="flex flex-col gap-3 mb-6">
-                            {items.map((item) => (
-                                <div key={item.id} className="flex justify-between text-sm">
-                                    <span className="text-white/70 truncate pr-4">{item.name} × {item.quantity} <span className="text-white/40">({item.sizeLabel})</span></span>
-                                    <span className="text-white font-medium whitespace-nowrap">EGP {(item.priceEgp * item.quantity).toLocaleString()}</span>
-                                </div>
-                            ))}
+                            {items.map((item) => {
+                                const discountedPrice = item.priceEgp * (1 - item.discountPct / 100);
+                                return (
+                                    <div key={item.id} className="flex flex-col text-sm">
+                                        <div className="flex justify-between">
+                                            <span className="text-white/70 truncate pr-4">{item.name} × {item.quantity} <span className="text-white/40">({item.sizeLabel})</span></span>
+                                            <span className="text-white font-medium whitespace-nowrap">EGP {(discountedPrice * item.quantity).toLocaleString()}</span>
+                                        </div>
+                                        {!item.isActive && (
+                                            <span className="text-xs text-red-400 mt-1">This item is no longer available. Please remove it from your cart.</span>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
 
                         <div className="border-t border-white/10 pt-4 flex flex-col gap-3 text-sm mb-6">
@@ -149,7 +206,7 @@ export default function CheckoutPage() {
 
                         <button
                             onClick={handlePlaceOrder}
-                            disabled={loading || (addresses.length > 0 && !selectedAddress)}
+                            disabled={loading || (addresses.length > 0 && !selectedAddress) || items.some(i => !i.isActive)}
                             className="relative overflow-hidden flex items-center justify-center gap-2 w-full bg-gold-500 text-forest-950 rounded-2xl py-4 font-semibold hover:bg-gold-400 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             <div className="absolute inset-0 w-full h-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)] bg-[length:200%_100%] animate-shimmer-slow pointer-events-none" />

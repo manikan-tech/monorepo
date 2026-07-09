@@ -8,6 +8,31 @@ export async function GET(request: NextRequest) {
             orderBy: { name: "asc" }
         });
 
+        // If no categories exist in the database (e.g. dummy data was only seeded into products), 
+        // dynamically generate them from the unique products' string fields.
+        if (categories.length === 0) {
+            const distinctProducts = await prisma.product.findMany({
+                select: { category: true },
+                distinct: ['category'],
+                where: { isActive: true }
+            });
+            
+            const dynamicCategories = distinctProducts
+                .filter(p => p.category)
+                .map((p, i) => ({
+                    id: `dynamic-${i}`,
+                    name: p.category.charAt(0).toUpperCase() + p.category.slice(1),
+                    slug: p.category,
+                    description: null,
+                    imageUrl: null,
+                    parentId: null,
+                    children: []
+                }))
+                .sort((a, b) => a.name.localeCompare(b.name));
+            
+            return NextResponse.json({ categories: dynamicCategories }, { status: 200 });
+        }
+
         // Structure categories into a tree (roots with children nested under children property)
         const categoryMap = new Map<string, any>();
 

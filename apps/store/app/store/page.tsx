@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import ProductCard from "../../components/ProductCard";
 
 export default function StorePage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  
+  const searchParams = useSearchParams();
+  const search = searchParams.get("search") || "";
 
   // Categories from API
   const [categories, setCategories] = useState<{ id: string; name: string; slug: string }[]>([]);
@@ -19,6 +23,7 @@ export default function StorePage() {
   // Filter State
   const [category, setCategory] = useState("");
   const [gender, setGender] = useState("");
+  const [brand, setBrand] = useState("");
   const [sort, setSort] = useState("newest");
 
   // Fetch categories on mount
@@ -34,7 +39,7 @@ export default function StorePage() {
       .catch(() => { });
   }, []);
 
-  const fetchProducts = useCallback(async (page: number, cat: string, gen: string, srt: string) => {
+  const fetchProducts = useCallback(async (page: number, cat: string, gen: string, brnd: string, srt: string, q: string) => {
     try {
       setLoading(true);
       setError("");
@@ -42,7 +47,9 @@ export default function StorePage() {
       let url = `/api/products?page=${page}&limit=${limit}`;
       if (cat) url += `&category=${cat}`;
       if (gen) url += `&gender=${gen}`;
+      if (brnd) url += `&brand=${brnd}`;
       if (srt) url += `&sort=${srt}`;
+      if (q) url += `&search=${encodeURIComponent(q)}`;
 
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to load products. Make sure your database is running!");
@@ -63,19 +70,27 @@ export default function StorePage() {
   // }, [category, gender, sort]);
 
   useEffect(() => {
-    fetchProducts(currentPage, category, gender, sort);
-  }, [currentPage, category, gender, sort, fetchProducts]);
+    fetchProducts(currentPage, category, gender, brand, sort, search);
+  }, [currentPage, category, gender, brand, sort, search, fetchProducts]);
 
   return (
     <div className="max-w-[1400px] mx-auto px-6 py-16">
       {/* ── Page Header ── */}
       <div className="mb-16 text-center max-w-2xl mx-auto flex flex-col items-center">
-        <h1 className="font-display text-4xl md:text-5xl font-semibold text-forest-950 mb-4 animate-fade-in-up opacity-0" style={{ animationDelay: '0ms' }}>
-          The <span className="italic bg-clip-text text-transparent bg-gradient-to-r from-gold-400 via-yellow-200 to-gold-600 bg-[length:200%_auto] animate-shimmer-slow">Collection</span>
-        </h1>
-        <p className="font-sans text-forest-700/80 leading-relaxed animate-fade-in-up opacity-0" style={{ animationDelay: '100ms' }}>
-          Explore our latest arrivals. Every item in the catalog is fully supported by Manikan's 3D Virtual Try-On and AI size recommendations.
-        </p>
+        {search ? (
+          <h1 className="font-display text-3xl md:text-4xl font-semibold text-forest-950 mb-4 animate-fade-in-up opacity-0" style={{ animationDelay: '0ms' }}>
+            Search results for <span className="italic bg-clip-text text-transparent bg-gradient-to-r from-gold-400 via-yellow-200 to-gold-600 bg-[length:200%_auto] animate-shimmer-slow">"{search}"</span>
+          </h1>
+        ) : (
+          <>
+            <h1 className="font-display text-4xl md:text-5xl font-semibold text-forest-950 mb-4 animate-fade-in-up opacity-0" style={{ animationDelay: '0ms' }}>
+              The <span className="italic bg-clip-text text-transparent bg-gradient-to-r from-gold-400 via-yellow-200 to-gold-600 bg-[length:200%_auto] animate-shimmer-slow">Collection</span>
+            </h1>
+            <p className="font-sans text-forest-700/80 leading-relaxed animate-fade-in-up opacity-0" style={{ animationDelay: '100ms' }}>
+              Explore our latest arrivals. Every item in the catalog is fully supported by Manikan's 3D Virtual Try-On and AI size recommendations.
+            </p>
+          </>
+        )}
       </div>
 
       {/* ── Filters & Sort ── */}
@@ -105,6 +120,18 @@ export default function StorePage() {
             <option value="">All Genders</option>
             <option value="women">Women</option>
             <option value="men">Men</option>
+          </select>
+          <select
+            value={brand}
+            onChange={(e) => {
+              setBrand(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="px-4 py-2.5 rounded-xl border-2 border-forest-100 bg-cream-50 text-forest-900 text-sm font-medium focus:outline-none focus:border-gold-400 transition-colors cursor-pointer hover:bg-white"
+          >
+            <option value="">All Brands</option>
+            <option value="Nour Atelier">Nour Atelier</option>
+            <option value="Cairo Thread Co.">Cairo Thread Co.</option>
           </select>
         </div>
 

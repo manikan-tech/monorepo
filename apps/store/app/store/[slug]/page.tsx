@@ -43,6 +43,7 @@ export default function ProductDetailPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [cartError, setCartError] = useState("");
   const [showSizeModal, setShowSizeModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Reviews
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -110,6 +111,8 @@ export default function ProductDetailPage() {
       setShowSizeModal(true);
       return;
     }
+    if (selectedVariant.stock === 0) return; // Paranoia check
+
     setIsAdding(true);
     setCartError("");
     const result = await addToCart({ productId: product.id, variantId: selectedVariant.id, quantity: 1 });
@@ -126,6 +129,13 @@ export default function ProductDetailPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ productId: product.id, ...reviewForm }),
     });
+    
+    if (res.status === 401) {
+      setSubmittingReview(false);
+      setShowAuthModal(true);
+      return;
+    }
+
     const data = await res.json();
     if (res.ok) {
       setReviewMsg("✓ Review submitted!");
@@ -139,6 +149,8 @@ export default function ProductDetailPage() {
     }
     setSubmittingReview(false);
   };
+
+  const displayPrice = selectedVariant?.priceOverride ?? product.priceEgp;
 
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-12 md:py-20">
@@ -166,11 +178,22 @@ export default function ProductDetailPage() {
             <span className="text-[12px] font-bold uppercase tracking-[0.2em] bg-clip-text text-transparent bg-gradient-to-r from-gold-400 via-gold-200 to-gold-600 bg-[length:200%_auto] animate-shimmer-slow">{product.brand}</span>
             <h1 className="font-display text-3xl md:text-4xl font-semibold text-forest-950 mt-2 leading-tight">{product.name}</h1>
 
-            <div className="flex items-baseline gap-3 mt-4">
-              <span className="text-3xl font-semibold text-gold-600 animate-pulse-glow">EGP {product.priceEgp?.toLocaleString()}</span>
-              {product.discountPct > 0 && (
-                <span className="text-sm text-red-500 font-medium bg-red-50 px-2.5 py-1 rounded-full">
-                  -{product.discountPct}%
+            <div className="flex items-baseline gap-3 mt-4 transition-all duration-300">
+              {product.discountPct > 0 ? (
+                <>
+                  <span className="text-3xl font-semibold text-gold-600 animate-pulse-glow">
+                    EGP {(displayPrice * (1 - product.discountPct / 100)).toLocaleString()}
+                  </span>
+                  <span className="text-lg text-forest-700/50 line-through">
+                    EGP {displayPrice?.toLocaleString()}
+                  </span>
+                  <span className="text-sm font-bold text-red-500 bg-red-50 px-2.5 py-1 rounded-full">
+                    -{product.discountPct}%
+                  </span>
+                </>
+              ) : (
+                <span className="text-3xl font-semibold text-gold-600 animate-pulse-glow">
+                  EGP {displayPrice?.toLocaleString()}
                 </span>
               )}
             </div>
@@ -194,11 +217,13 @@ export default function ProductDetailPage() {
             )}
             <button
               onClick={handleAddToCart}
-              disabled={isAdding}
-              className="flex items-center justify-center gap-2 w-full bg-forest-900 text-white rounded-2xl py-4 font-medium shadow-soft hover:bg-forest-800 transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-80"
+              disabled={isAdding || (selectedVariant && selectedVariant.stock === 0)}
+              className="flex items-center justify-center gap-2 w-full bg-forest-900 text-white rounded-2xl py-4 font-medium shadow-soft hover:bg-forest-800 transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-80 disabled:cursor-not-allowed"
             >
               {isAdding ? (
                 <span className="inline-block w-5 h-5 border-[2px] border-white/30 border-t-white rounded-full animate-spin" />
+              ) : selectedVariant && selectedVariant.stock === 0 ? (
+                "Out of Stock"
               ) : (
                 <>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -262,11 +287,27 @@ export default function ProductDetailPage() {
             ) : (
               reviews.map((r) => (
                 <div key={r.id} className="bg-white rounded-2xl p-6 border border-forest-900/5 shadow-soft">
-                  <div className="flex items-start justify-between mb-2">
-                    <StarRating rating={r.rating} />
-                    {r.isVerified && (
-                      <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">✓ Verified</span>
-                    )}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      {r.customer?.avatarUrl ? (
+                        <img src={r.customer.avatarUrl} alt="Avatar" className="w-10 h-10 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-forest-100 flex items-center justify-center text-forest-900 font-semibold uppercase">
+                          {r.customer?.firstName?.[0] || "?"}
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-semibold text-forest-950">
+                          {r.customer?.firstName} {r.customer?.lastName}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <StarRating rating={r.rating} />
+                          {r.isVerified && (
+                            <span className="text-[10px] font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">✓ Verified</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   {r.title && <h4 className="font-semibold text-forest-950 mt-2">{r.title}</h4>}
                   {r.comment && <p className="text-sm text-forest-700/80 mt-1 leading-relaxed">{r.comment}</p>}
@@ -336,6 +377,33 @@ export default function ProductDetailPage() {
           Please select a size before adding <span className="font-semibold text-forest-900">{product.name}</span> to your cart.
           If you're unsure, try our Virtual Try-On feature for an AI-powered size recommendation!
         </p>
+      </Modal>
+
+      <Modal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        title="Sign In Required"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-forest-700">
+            Please sign in or create an account to write a review.
+          </p>
+          <div className="flex gap-3 justify-end mt-2">
+            <button 
+              onClick={() => setShowAuthModal(false)}
+              className="px-4 py-2 text-sm font-medium text-forest-700 hover:text-forest-950 transition-colors"
+            >
+              Cancel
+            </button>
+            <Link 
+              href="/login"
+              onClick={() => setShowAuthModal(false)}
+              className="px-5 py-2 bg-forest-900 text-white rounded-xl text-sm font-medium hover:bg-forest-800 transition-colors"
+            >
+              Sign In
+            </Link>
+          </div>
+        </div>
       </Modal>
     </div>
   );

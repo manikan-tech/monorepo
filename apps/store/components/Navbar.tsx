@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 
 import { useCart } from "./CartContext";
+import { useWishlist } from "./WishlistContext";
 
 // ── Icons ─────────────────────────────────────────────────────────────
 const SearchIcon = () => (
@@ -37,7 +39,22 @@ const navLinks = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { cartCount } = useCart();
+  const { items: wishlistItems } = useWishlist();
+  const wishlistCount = wishlistItems?.length || 0;
+
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/store?search=${encodeURIComponent(searchQuery.trim())}`);
+      setIsSearchOpen(false);
+      setSearchQuery("");
+    }
+  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-manikan-border/50 shadow-[0_4px_30px_rgba(18,52,59,0.03)] backdrop-blur-xl transition-all duration-300">
@@ -86,12 +103,34 @@ export default function Navbar() {
         <div className="flex items-center gap-6">
 
           <div className="hidden md:flex items-center gap-5 pr-4 border-r border-manikan-border/60">
-            <button className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform">
-              <SearchIcon />
-            </button>
-            <button className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform">
+            {isSearchOpen ? (
+              <form onSubmit={handleSearch} className="flex items-center">
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onBlur={() => !searchQuery && setIsSearchOpen(false)}
+                  className="w-48 px-3 py-1.5 text-sm bg-forest-50 border border-forest-900/10 rounded-l-xl focus:outline-none focus:border-gold-400 text-forest-900"
+                />
+                <button type="submit" className="px-3 py-1.5 bg-forest-900 text-white rounded-r-xl hover:bg-forest-800 transition-colors">
+                  <SearchIcon />
+                </button>
+              </form>
+            ) : (
+              <button onClick={() => setIsSearchOpen(true)} className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform">
+                <SearchIcon />
+              </button>
+            )}
+            <Link href="/wishlist" className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform relative cursor-pointer block">
               <WishlistIcon />
-            </button>
+              {wishlistCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-gold-500 text-forest-950 text-[10px] font-bold w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-sm animate-fade-in-up">
+                  {wishlistCount}
+                </span>
+              )}
+            </Link>
             <Link href="/cart" className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform relative cursor-pointer block">
               <CartIcon />
               {cartCount > 0 && (
