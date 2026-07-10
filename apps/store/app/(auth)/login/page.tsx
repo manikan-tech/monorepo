@@ -47,12 +47,9 @@ export default function LoginPage() {
     return Object.keys(errors).length === 0;
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function handleAsyncSubmit() {
     setError("");
-
     if (!validate()) return;
-
     setIsLoading(true);
 
     try {
@@ -68,6 +65,11 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        // If account exists but not activated, redirect to activation page
+        if (data.requiresActivation) {
+          router.push(`/activation?email=${encodeURIComponent(data.email)}`);
+          return;
+        }
         setError(data.error || "Something went wrong. Please try again.");
         return;
       }
@@ -79,6 +81,11 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    void handleAsyncSubmit();
   }
 
   return (
