@@ -167,7 +167,8 @@ Manikan is built as **4 independent microservices + 1 embeddable widget**. Each 
 ```
 POST /api/measurements          → create session, trigger SMPL + recommendation
 POST /api/retailer/upload-catalog → ingest retailer CSV, seed pgvector
-POST /api/tryon                 → proxy VTON request (never expose VTON service URL to widget)
+POST /api/tryon                 → [IMPLEMENTED] proxy to Body Service /generate-dressed-avatar; reads garment data from DB, persists MeasurementSession, streams .glb (widget never calls Python directly)
+POST /api/avatar                → [IMPLEMENTED] proxy to Body Service /generate-avatar; streams bare body .glb (no product/session context)
 GET  /api/retailer/analytics    → dashboard stats
 ```
 
