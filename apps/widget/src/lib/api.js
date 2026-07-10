@@ -1,21 +1,20 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   Body Service API client
+   Store Service API client
 
-   Talks directly to services-python/body-service for now (dev/local mode).
-   Per MANIKAN_PROJECT.md the widget should ultimately call the Store
-   service instead (which proxies to body-service internally) — swap
-   BODY_API_URL for a Store endpoint here when that proxy route exists;
-   no component code needs to change.
+   The widget talks to the Store service (Next.js), which orchestrates and
+   proxies to the Python Body Service. Per MANIKAN_PROJECT.md the widget must
+   NEVER call the Body Service directly — the Store is the single entry point
+   (validation, MeasurementSession persistence, rate limiting, hidden URLs).
    ───────────────────────────────────────────────────────────────────────── */
 
-const BODY_API_URL = import.meta.env.VITE_BODY_API_URL || 'http://localhost:8001'
+const STORE_API_URL = import.meta.env.VITE_STORE_API_URL || 'http://localhost:3000'
 
 async function postForGlb(path, payload, { timeoutMs = 120_000 } = {}) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const response = await fetch(`${BODY_API_URL}${path}`, {
+    const response = await fetch(`${STORE_API_URL}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
@@ -24,7 +23,7 @@ async function postForGlb(path, payload, { timeoutMs = 120_000 } = {}) {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.detail || `Server error: ${response.status}`)
+      throw new Error(errorData.error || errorData.detail || `Server error: ${response.status}`)
     }
 
     const blob = await response.blob()
@@ -34,12 +33,12 @@ async function postForGlb(path, payload, { timeoutMs = 120_000 } = {}) {
   }
 }
 
-/** Generate a bare A-pose body avatar. Returns an object URL to a .glb. */
+/** Generate a bare A-pose body avatar via the Store proxy. Returns an object URL to a .glb. */
 export function generateAvatar(measurements) {
-  return postForGlb('/generate-avatar', measurements)
+  return postForGlb('/api/avatar', measurements)
 }
 
-/** Generate a body avatar wearing a garment. Returns an object URL to a .glb. */
+/** Generate a garment try-on via the Store proxy. Returns an object URL to a .glb. */
 export function generateDressedAvatar(payload) {
-  return postForGlb('/generate-dressed-avatar', payload)
+  return postForGlb('/api/tryon', payload)
 }

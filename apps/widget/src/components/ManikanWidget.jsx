@@ -70,17 +70,15 @@ export default function ManikanWidget({ product, onClose }) {
 
     try {
       const url = await generateDressedAvatar({
+        product_id: product.id,
+        size,
         sex,
         height_cm: height,
         weight_kg: weight,
         chest_cm: chest,
         waist_cm: waist,
         hips_cm: hips,
-        tshirt_color_hex: product.color_hex,
-        garment_chest_cm: product.sizes[size].chest_width_cm,
-        garment_length_cm: product.sizes[size].body_length_cm,
-        garment_sleeve_cm: product.sizes[size].sleeve_length_cm,
-        garment_shoulder_cm: product.sizes[size].shoulder_width_cm,
+        recommended_size: recommendedSize,
       })
 
       if (previousUrlRef.current) {
@@ -96,7 +94,7 @@ export default function ManikanWidget({ product, onClose }) {
     } finally {
       setIsGenerating(false)
     }
-  }, [sex, height, weight, chest, waist, hips, product.color_hex, product.sizes])
+  }, [sex, height, weight, chest, waist, hips, product.id, recommendedSize])
 
   // Handle "Generate My Body Model" click
   const handleGenerateBody = async () => {
