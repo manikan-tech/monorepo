@@ -16,7 +16,7 @@ type Review = {
   comment?: string;
   isVerified: boolean;
   createdAt: string;
-  customer?: { firstName?: string; lastName?: string };
+  customer?: { firstName?: string; lastName?: string; avatarUrl?: string };
 };
 
 const StarRating = ({ rating }: { rating: number }) => (
@@ -129,7 +129,7 @@ export default function ProductDetailPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ productId: product.id, ...reviewForm }),
     });
-    
+
     if (res.status === 401) {
       setSubmittingReview(false);
       setShowAuthModal(true);
@@ -389,13 +389,13 @@ export default function ProductDetailPage() {
             Please sign in or create an account to write a review.
           </p>
           <div className="flex gap-3 justify-end mt-2">
-            <button 
+            <button
               onClick={() => setShowAuthModal(false)}
               className="px-4 py-2 text-sm font-medium text-forest-700 hover:text-forest-950 transition-colors"
             >
               Cancel
             </button>
-            <Link 
+            <Link
               href="/login"
               onClick={() => setShowAuthModal(false)}
               className="px-5 py-2 bg-forest-900 text-white rounded-xl text-sm font-medium hover:bg-forest-800 transition-colors"
