@@ -85,7 +85,6 @@ export async function POST(request: NextRequest) {
     //  system + FastAPI VPC network isolation so the Body Service is never a
     //  public door. See docs/enterprise-roadmap.md § Security.
     // ═══════════════════════════════════════════════════════════════════════
-
     // ── 2. Validate required inputs ──
     if (!product_id || !size) {
         return NextResponse.json(

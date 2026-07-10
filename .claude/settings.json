@@ -42,7 +42,20 @@
       "Read(//home/hashim/Coding/manikan-tech/monorepo/apps/**)",
       "Bash(grep -rln \"NEXT_PUBLIC_SUPABASE\\\\|SUPABASE_SERVICE_KEY\" app --include=\"*.ts\" --include=\"*.tsx\")",
       "Bash(grep -rln \"@supabase/supabase-js\\\\|@supabase/ssr\" app --include=\"*.ts\" --include=\"*.tsx\")",
-      "Bash(grep -n \"supabase\\\\|Supabase\" app/api/auth/login/route.ts app/api/auth/signup/route.ts app/lib/auth.ts)"
+      "Bash(grep -n \"supabase\\\\|Supabase\" app/api/auth/login/route.ts app/api/auth/signup/route.ts app/lib/auth.ts)",
+      "Bash(awk -F',' '{print $3}')",
+      "Bash(awk -F',' '{print $1}')",
+      "Bash(ls app/api/widget)",
+      "Bash(grep -rn \"8001\\\\|BODY_SERVICE\\\\|body-service\\\\|generate-avatar\" app)",
+      "Bash(sed -n '/model MeasurementSession/,/^}/p' prisma/schema.prisma)",
+      "Bash(grep -rln \"Access-Control-Allow-Origin\\\\|OPTIONS\" app/api)",
+      "mcp__claude_ai_Lucid__lucid_create_erd",
+      "mcp__claude_ai_Lucid__share_document_with_collaborators",
+      "mcp__claude_ai_Lucid__lucid_create_document_share_link",
+      "Bash(node /tmp/claude-1000/-home-hashim-Documents-Coding-manikan-tech-monorepo/0d28cc86-32c9-4907-9219-fbab9a1b99c4/scratchpad/db_check.mjs)",
+      "Bash(grep -n '```' MANIKAN_PROJECT.md)",
+      "mcp__claude_ai_Lucid__fetch",
+      "mcp__claude_ai_Lucid__lucid_export_document_as_PNG"
     ]
   }
 }

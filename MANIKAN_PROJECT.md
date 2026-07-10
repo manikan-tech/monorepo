@@ -167,8 +167,7 @@ Manikan is built as **4 independent microservices + 1 embeddable widget**. Each 
 ```
 POST /api/measurements          → create session, trigger SMPL + recommendation
 POST /api/retailer/upload-catalog → ingest retailer CSV, seed pgvector
-POST /api/tryon                 → [IMPLEMENTED, Phase 3a] proxy to Body Service /generate-dressed-avatar; reads garment data from DB, persists MeasurementSession (+ anonymous shopperRef), streams .glb. NOTE: auth (retailer key + Origin allowlist) is Phase 3b — currently unauthenticated. See docs/enterprise-roadmap.md
-POST /api/avatar                → [IMPLEMENTED, Phase 3a] proxy to Body Service /generate-avatar; streams bare body .glb (no product/session context)
+POST /api/tryon                 → proxy VTON request (never expose VTON service URL to widget)
 GET  /api/retailer/analytics    → dashboard stats
 ```
 
