@@ -5,7 +5,7 @@ import { useState } from "react";
 interface AuthInputProps {
   id: string;
   label: string;
-  type?: "text" | "email" | "password";
+  type?: "text" | "email" | "password" | "tel";
   placeholder?: string;
   value: string;
   onChange: (value: string) => void;

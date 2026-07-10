@@ -3,8 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
-
+import { useEffect, useState } from "react";
+import { createClient } from "../app/lib/supabase/client";
 import { useCart } from "./CartContext";
 import { useWishlist } from "./WishlistContext";
 
@@ -46,6 +46,23 @@ export default function Navbar() {
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    
+    // Initial fetch
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data?.user || null);
+    });
+    
+    // Subscribe to auth state changes (e.g. login/logout in other tabs)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,6 +71,12 @@ export default function Navbar() {
       setIsSearchOpen(false);
       setSearchQuery("");
     }
+  };
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
   };
 
   return (
@@ -142,13 +165,22 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="relative overflow-hidden flex items-center justify-center px-6 py-2.5 text-sm font-medium text-white bg-forest-600 rounded-xl hover:bg-forest-700 btn-glow shadow-soft hover:shadow-card transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
-            >
-              <div className="absolute inset-0 w-full h-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent)] bg-[length:200%_100%] animate-shimmer-slow pointer-events-none" />
-              <span className="relative z-10">Sign In</span>
-            </Link>
+            {user ? (
+              <button
+                onClick={handleSignOut}
+                className="relative overflow-hidden flex items-center justify-center px-6 py-2.5 text-sm font-medium text-forest-900 bg-white border border-forest-200 rounded-xl hover:bg-forest-50 shadow-soft transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
+              >
+                Sign Out
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="relative overflow-hidden flex items-center justify-center px-6 py-2.5 text-sm font-medium text-white bg-forest-600 rounded-xl hover:bg-forest-700 btn-glow shadow-soft hover:shadow-card transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
+              >
+                <div className="absolute inset-0 w-full h-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent)] bg-[length:200%_100%] animate-shimmer-slow pointer-events-none" />
+                <span className="relative z-10">Sign In</span>
+              </Link>
+            )}
           </div>
 
         </div>
