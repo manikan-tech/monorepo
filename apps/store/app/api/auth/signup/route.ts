@@ -1,92 +1,89 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "../../../lib/supabase/server";
 import { prisma } from "../../../lib/prisma";
-import { hashPassword, createToken, setAuthCookie } from "../../../lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, password } = body;
+    const { firstName, lastName, phone, email, password } = body;
 
     // ── Validation ─────────────────────────────────────────
-    if (!name || typeof name !== "string" || name.trim().length < 2) {
-      return NextResponse.json(
-        { error: "Name is required (minimum 2 characters)" },
-        { status: 400 }
-      );
+    if (!firstName || typeof firstName !== "string" || firstName.trim().length < 2) {
+      return NextResponse.json({ error: "First name is required (minimum 2 characters)" }, { status: 400 });
+    }
+
+    if (!lastName || typeof lastName !== "string" || lastName.trim().length < 2) {
+      return NextResponse.json({ error: "Last name is required (minimum 2 characters)" }, { status: 400 });
     }
 
     if (!email || typeof email !== "string") {
-      return NextResponse.json(
-        { error: "Email is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: "Please enter a valid email address" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
     }
 
     if (!password || typeof password !== "string" || password.length < 8) {
-      return NextResponse.json(
-        { error: "Password must be at least 8 characters" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
     }
 
-    // ── Check for existing account ─────────────────────────
-    const existingRetailer = await prisma.retailer.findUnique({
+    // ── Check for existing Customer ─────────────────────────
+    const existingCustomer = await prisma.customer.findUnique({
       where: { email: email.toLowerCase().trim() },
     });
 
-    if (existingRetailer) {
-      return NextResponse.json(
-        { error: "An account with this email already exists" },
-        { status: 409 }
-      );
+    if (existingCustomer) {
+      return NextResponse.json({ error: "An account with this email already exists" }, { status: 409 });
     }
 
-    // ── Create retailer ────────────────────────────────────
-    const hashedPassword = await hashPassword(password);
+    // ── Sign up via Supabase Auth ──────────────────────────
+    const supabase = await createClient();
 
-    const retailer = await prisma.retailer.create({
-      data: {
-        authId: email.toLowerCase().trim(),
-        storeName: name.trim(),
-        email: email.toLowerCase().trim(),
-        hashedPassword,
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: email.toLowerCase().trim(),
+      password,
+      options: {
+        data: {
+          full_name: `${firstName.trim()} ${lastName.trim()}`,
+          phone: phone?.trim() || null,
+        },
       },
     });
 
-    // ── Generate JWT and set cookie ────────────────────────
-    const token = await createToken({
-      sub: retailer.id,
-      email: retailer.email,
-      name: retailer.storeName,
+    if (signUpError) {
+      console.error("Supabase signup error:", signUpError);
+      return NextResponse.json({ error: signUpError.message }, { status: 400 });
+    }
+
+    if (!data.user) {
+      return NextResponse.json({ error: "Signup failed. Please try again." }, { status: 500 });
+    }
+
+    // ── Create Customer profile in Prisma ───────────────────
+    await prisma.customer.create({
+      data: {
+        authId: data.user.id,
+        email: email.toLowerCase().trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phone: phone?.trim() || null,
+      },
     });
 
-    const response = NextResponse.json(
+    // ── Return success (requires email verification) ────────
+    return NextResponse.json(
       {
         success: true,
-        retailer: {
-          id: retailer.id,
-          name: retailer.storeName,
-          email: retailer.email,
-        },
+        requiresActivation: true,
+        email: email.toLowerCase().trim(),
+        message: "Account created. Please check your email for the verification code.",
       },
       { status: 201 }
     );
-
-    setAuthCookie(response, token);
-    return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Signup error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

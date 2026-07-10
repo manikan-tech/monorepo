@@ -35,15 +35,16 @@ model Retailer {
   email          String   @unique
   storeName      String
   hashedPassword String?
+  isActivated    Boolean  @default(false)
   apiKey         String   @unique @default(cuid())
   plan           String   @default("free")
-  isActivated    Boolean  @default(false)
+
   widgetSettings Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  products Product[]
-  sessions MeasurementSession[]
+  products  Product[]
+  sessions  MeasurementSession[]
 }
 
 // ─── Category ───────────────────────────────────────────────────
