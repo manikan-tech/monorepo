@@ -62,3 +62,37 @@ export async function GET(
         );
     }
 }
+
+import { getAuthFromCookies } from "../../../lib/auth";
+
+export async function DELETE(
+    request: NextRequest,
+    { params }: { params: Promise<{ slug: string }> }
+) {
+    try {
+        const user = await getAuthFromCookies();
+        if (!user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { slug: productId } = await params;
+
+        // Check if the product belongs to the retailer
+        const product = await prisma.product.findUnique({
+            where: { id: productId },
+        });
+
+        if (!product || product.retailerId !== user.sub) {
+            return NextResponse.json({ error: "Product not found or unauthorized" }, { status: 404 });
+        }
+
+        await prisma.product.delete({
+            where: { id: productId },
+        });
+
+        return NextResponse.json({ success: true });
+    } catch (error: any) {
+        console.error("Delete product error:", error);
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
+}

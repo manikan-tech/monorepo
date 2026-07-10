@@ -14,10 +14,23 @@ type Product = {
 
 export default function ProductDataGrid({ products }: { products: Product[] }) {
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearch(e.target.value);
+    setCurrentPage(1);
+  };
 
   const filteredProducts = products.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     p.productCode.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE) || 1;
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
   );
 
   if (products.length === 0) {
@@ -37,17 +50,17 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-card border border-manikan-border overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-card border border-manikan-border overflow-hidden flex flex-col">
       <div className="p-4 border-b border-manikan-border bg-cream-50/30">
         <input
           type="text"
           placeholder="Search by name or code..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={handleSearchChange}
           className="w-full max-w-md px-4 py-2 bg-white border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
         />
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto flex-1">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-forest-50/50 text-forest-800 text-sm font-medium border-b border-manikan-border">
@@ -56,10 +69,11 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
               <th className="px-6 py-4">Category</th>
               <th className="px-6 py-4">Price</th>
               <th className="px-6 py-4">Stock</th>
+              <th className="px-6 py-4 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-manikan-border">
-            {filteredProducts.map((product) => (
+            {paginatedProducts.map((product) => (
               <tr key={product.id} className="hover:bg-cream-50/30 transition-colors group">
                 <td className="px-6 py-4 flex items-center space-x-4">
                   <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-manikan-border group-hover:border-forest-200 transition-colors">
@@ -84,17 +98,69 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
                     <span className="text-red-500 font-medium">Out of stock</span>
                   )}
                 </td>
+                <td className="px-6 py-4 text-right">
+                  <div className="flex justify-end gap-2">
+                    <button className="text-sm px-3 py-1.5 rounded bg-cream-50 text-forest-700 hover:bg-cream-100 transition-colors" onClick={() => alert("Edit product feature coming soon!")}>
+                      Edit
+                    </button>
+                    <button 
+                      className="text-sm px-3 py-1.5 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                      onClick={async () => {
+                        if (confirm('Are you sure you want to delete this product?')) {
+                          try {
+                            const res = await fetch(`/api/products/${product.id}`, { method: 'DELETE' });
+                            if (res.ok) {
+                              window.location.reload();
+                            } else {
+                              alert('Failed to delete product');
+                            }
+                          } catch (e) {
+                            console.error(e);
+                          }
+                        }
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
-            {filteredProducts.length === 0 && (
+            {paginatedProducts.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-manikan-text-secondary">
+                <td colSpan={6} className="px-6 py-12 text-center text-manikan-text-secondary">
                   No products match your search.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+      </div>
+      
+      {/* Pagination Controls */}
+      <div className="p-4 border-t border-manikan-border bg-cream-50/30 flex items-center justify-between text-sm text-manikan-text-secondary">
+        <div>
+          Showing <span className="font-medium text-forest-900">{filteredProducts.length > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0}</span> to <span className="font-medium text-forest-900">{Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)}</span> of <span className="font-medium text-forest-900">{filteredProducts.length}</span> products
+        </div>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1.5 rounded border border-manikan-border hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Previous
+          </button>
+          <span className="px-2 font-medium text-forest-900">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1.5 rounded border border-manikan-border hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </div>
   );

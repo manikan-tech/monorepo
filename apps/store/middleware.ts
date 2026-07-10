@@ -1,29 +1,20 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { updateSession } from "./app/lib/supabase/middleware";
 
-export function middleware(request: NextRequest) {
-  const token = request.cookies.get("manikan_auth_token")?.value;
-
-  // Protect /dashboard routes
-  if (request.nextUrl.pathname.startsWith("/dashboard")) {
-    if (!token) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-  }
-
-  // Prevent logged-in users from accessing /login or /signup
-  if (
-    request.nextUrl.pathname === "/login" ||
-    request.nextUrl.pathname === "/signup"
-  ) {
-    if (token) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-  }
-
-  return NextResponse.next();
+export async function middleware(request: NextRequest) {
+  // Supabase Auth handles all route protection and redirections
+  return await updateSession(request);
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login", "/signup"],
+  // Match only specific routes to avoid running on static assets or breaking storefront routing (404 fix)
+  matcher: [
+    "/dashboard/:path*",
+    "/account/:path*",
+    "/login",
+    "/signup",
+    "/forgot-password",
+    "/reset-password"
+  ],
 };
