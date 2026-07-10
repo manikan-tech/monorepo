@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Upsert to avoid duplicate entries (schema enforces unique [customerId, productId])
-    const wishlistItem = await prisma.wishlist.upsert({
+    await prisma.wishlist.upsert({
         where: {
             customerId_productId: {
                 customerId: customer.sub,
@@ -86,6 +86,30 @@ export async function POST(request: NextRequest) {
             productId,
         },
         update: {}, // no-op if already exists
+    });
+
+    // Fetch the full item with product details for the frontend optimistic update
+    const wishlistItem = await prisma.wishlist.findUnique({
+        where: {
+            customerId_productId: {
+                customerId: customer.sub,
+                productId,
+            },
+        },
+        include: {
+            product: {
+                select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                    brand: true,
+                    priceEgp: true,
+                    discountPct: true,
+                    imageUrl: true,
+                    isActive: true,
+                },
+            },
+        },
     });
 
     return NextResponse.json({ wishlistItem }, { status: 201 });

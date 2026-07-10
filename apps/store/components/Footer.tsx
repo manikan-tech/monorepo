@@ -47,9 +47,10 @@ export default function Footer() {
           {/* Links Col 3 */}
           <div className="flex flex-col gap-4">
             <h4 className="font-display text-lg font-semibold text-gold-400">Legal</h4>
-            <Link href="/terms" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Terms of Service</Link>
-            <Link href="/privacy" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Privacy Policy</Link>
-            <Link href="/refunds" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Return Policy</Link>
+            <Link href="/legal/terms" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Terms of Service</Link>
+            <Link href="/legal/privacy" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Privacy Policy</Link>
+            <Link href="/legal/refund" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Return Policy</Link>
+            <Link href="/legal/shipping" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Shipping Policy</Link>
           </div>
         </div>
 

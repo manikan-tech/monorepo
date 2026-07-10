@@ -27,6 +27,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"customer" | "retailer">("customer");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -47,12 +48,9 @@ export default function LoginPage() {
     return Object.keys(errors).length === 0;
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function handleAsyncSubmit() {
     setError("");
-
     if (!validate()) return;
-
     setIsLoading(true);
 
     try {
@@ -62,23 +60,34 @@ export default function LoginPage() {
         body: JSON.stringify({
           email: email.toLowerCase().trim(),
           password,
+          role,
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
+        // If account exists but not activated, redirect to activation page
+        if (data.requiresActivation) {
+          router.push(`/activation?email=${encodeURIComponent(data.email)}`);
+          return;
+        }
         setError(data.error || "Something went wrong. Please try again.");
         return;
       }
 
-      // Success — redirect to dashboard
-      router.push("/");
+      // Success — redirect based on role provided by backend
+      router.push(data.redirect || "/");
     } catch {
       setError("Network error. Please check your connection and try again.");
     } finally {
       setIsLoading(false);
     }
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    void handleAsyncSubmit();
   }
 
   return (
@@ -89,6 +98,24 @@ export default function LoginPage() {
         <p className="font-sans text-sm font-light text-forest-700/80 leading-relaxed max-w-[340px]">
           Sign in to your Manikan account.
         </p>
+      </div>
+
+      {/* ── Role Tabs ──────────────────────────────────── */}
+      <div className="flex bg-forest-50 p-1 rounded-xl">
+        <button
+          type="button"
+          onClick={() => { setRole("customer"); setError(""); }}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${role === "customer" ? "bg-white text-forest-900 shadow-sm" : "text-forest-700/70 hover:text-forest-900"}`}
+        >
+          Shopper
+        </button>
+        <button
+          type="button"
+          onClick={() => { setRole("retailer"); setError(""); }}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${role === "retailer" ? "bg-white text-forest-900 shadow-sm" : "text-forest-700/70 hover:text-forest-900"}`}
+        >
+          Retailer
+        </button>
       </div>
 
       {/* ── Error Banner ──────────────────────────────── */}
@@ -119,21 +146,28 @@ export default function LoginPage() {
           error={fieldErrors.email}
           autoComplete="email"
         />
-        <AuthInput
-          id="login-password"
-          label="Password"
-          type="password"
-          placeholder="••••••••"
-          value={password}
-          onChange={(v) => {
-            setPassword(v);
-            if (fieldErrors.password)
-              setFieldErrors((p) => ({ ...p, password: "" }));
-          }}
-          icon={LockIcon}
-          error={fieldErrors.password}
-          autoComplete="current-password"
-        />
+        <div className="flex flex-col gap-1">
+          <AuthInput
+            id="login-password"
+            label="Password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(v) => {
+              setPassword(v);
+              if (fieldErrors.password)
+                setFieldErrors((p) => ({ ...p, password: "" }));
+            }}
+            icon={LockIcon}
+            error={fieldErrors.password}
+            autoComplete="current-password"
+          />
+          <div className="flex justify-end mt-1">
+            <Link href="/forgot-password" className="text-xs font-medium text-gold-600 hover:text-gold-700 transition-colors">
+              Forgot password?
+            </Link>
+          </div>
+        </div>
       </div>
 
       {/* ── Submit ─────────────────────────────────────── */}

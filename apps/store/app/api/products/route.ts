@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
         const categorySlug = searchParams.get("category");
         const brand = searchParams.get("brand");
         const sort = searchParams.get("sort");
+        const search = searchParams.get("search");
 
         const skip = (page - 1) * limit;
 
@@ -27,8 +28,28 @@ export async function GET(request: NextRequest) {
             where.brand = { equals: brand, mode: "insensitive" };
         }
 
+        const andConditions: Prisma.ProductWhereInput[] = [];
+
         if (categorySlug) {
-            where.category = { equals: categorySlug, mode: "insensitive" };
+            andConditions.push({
+                OR: [
+                    { categoryRef: { slug: { equals: categorySlug, mode: "insensitive" } } },
+                    { category: { equals: categorySlug, mode: "insensitive" } },
+                ]
+            });
+        }
+
+        if (search) {
+            andConditions.push({
+                OR: [
+                    { name: { contains: search, mode: "insensitive" } },
+                    { description: { contains: search, mode: "insensitive" } },
+                ]
+            });
+        }
+        
+        if (andConditions.length > 0) {
+            where.AND = andConditions;
         }
 
         // Determine sorting criteria
