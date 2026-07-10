@@ -59,12 +59,9 @@ export default function SignupPage() {
     return Object.keys(errors).length === 0;
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function handleAsyncSubmit() {
     setError("");
-
     if (!validate()) return;
-
     setIsLoading(true);
 
     try {
@@ -85,13 +82,22 @@ export default function SignupPage() {
         return;
       }
 
-      // Success — redirect to dashboard
-      router.push("/");
+      // Success — redirect to activation page for OTP verification
+      if (data.requiresActivation) {
+        router.push(`/activation?email=${encodeURIComponent(data.email)}`);
+      } else {
+        router.push("/");
+      }
     } catch {
       setError("Network error. Please check your connection and try again.");
     } finally {
       setIsLoading(false);
     }
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    void handleAsyncSubmit();
   }
 
   return (
