@@ -1,5 +1,5 @@
 # Use an official lightweight Python image
-FROM python:3.11-slim
+FROM python:3.10-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -23,4 +23,4 @@ COPY . .
 
 # Expose port and run
 EXPOSE ${PORT}
-CMD uvicorn app.main:app --host 0.0.0.0 --port 8003
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]
