@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { createClient } from "../app/lib/supabase/client";
 import Modal from "./Modal";
 import Link from "next/link";
 
@@ -57,7 +58,15 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
-    useEffect(() => { refresh(); }, [refresh]);
+    useEffect(() => {
+    refresh();
+    // Re-fetch wishlist whenever auth state changes (login / logout)
+    const supabase = createClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      void refresh();
+    });
+    return () => subscription.unsubscribe();
+  }, [refresh]);
 
     const isWishlisted = (productId: string) => items.some((i) => i.productId === productId);
 
