@@ -56,7 +56,11 @@ export default function Vton2D() {
         try {
             const formData = new FormData();
             formData.append("human_image", humanFile);
-            formData.append("garment_image_url", selectedGarment.imageUrl);
+            // Resolve relative URLs to absolute URLs relative to the window origin
+            const absoluteGarmentUrl = selectedGarment.imageUrl.startsWith("http")
+                ? selectedGarment.imageUrl
+                : `${window.location.origin}${selectedGarment.imageUrl}`;
+            formData.append("garment_image_url", absoluteGarmentUrl);
             formData.append("category", selectedGarment.category);
             if (selectedGarment.name) {
                 formData.append("description", selectedGarment.name);

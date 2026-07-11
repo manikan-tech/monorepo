@@ -27,15 +27,35 @@ export async function POST(request: NextRequest) {
     if (signInError) {
       console.error("Supabase login error:", signInError);
 
-      if (signInError.message?.toLowerCase().includes("email not confirmed")) {
-        return NextResponse.json(
-          {
-            error: "Please verify your email before signing in",
-            requiresActivation: true,
-            email: email.toLowerCase().trim(),
-          },
-          { status: 403 }
-        );
+      // Supabase returns `invalid_credentials` for BOTH wrong password AND
+      // unconfirmed email. Use the admin client to distinguish the two cases.
+      if (
+        signInError.code === "invalid_credentials" ||
+        signInError.message?.toLowerCase().includes("email not confirmed") ||
+        signInError.message?.toLowerCase().includes("invalid login credentials")
+      ) {
+        try {
+          const { supabaseAdmin } = await import("../../../lib/supabase/admin");
+          const { data: adminData } = await supabaseAdmin.auth.admin.listUsers();
+          const existingUser = adminData?.users?.find(
+            (u) => u.email?.toLowerCase() === email.toLowerCase().trim()
+          );
+
+          if (existingUser && !existingUser.email_confirmed_at) {
+            // User exists but hasn't confirmed their email yet
+            return NextResponse.json(
+              {
+                error: "Please verify your email before signing in",
+                requiresActivation: true,
+                email: email.toLowerCase().trim(),
+              },
+              { status: 403 }
+            );
+          }
+        } catch (adminErr) {
+          console.error("Admin lookup error:", adminErr);
+          // Fall through to generic error
+        }
       }
 
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
@@ -53,7 +73,10 @@ export async function POST(request: NextRequest) {
 
     if (customer) {
       if (role === "retailer") {
-        return NextResponse.json({ error: "This email belongs to a customer, please select Login as Customer." }, { status: 403 });
+        return NextResponse.json(
+          { error: "This email belongs to a customer, please select Login as Customer." },
+          { status: 403 }
+        );
       }
       return NextResponse.json({
         success: true,
@@ -68,7 +91,10 @@ export async function POST(request: NextRequest) {
 
     if (retailer) {
       if (role === "customer") {
-        return NextResponse.json({ error: "This email belongs to a retailer, please select Login as Retailer." }, { status: 403 });
+        return NextResponse.json(
+          { error: "This email belongs to a retailer, please select Login as Retailer." },
+          { status: 403 }
+        );
       }
 
       // Update the Retailer's authId to match Supabase if it wasn't already synced
