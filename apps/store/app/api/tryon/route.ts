@@ -1,30 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../lib/prisma";
 import { getCustomerFromCookies } from "../../lib/auth";
+import { authorizeWidgetRequest } from "../../lib/widget-auth";
 
 // ─── POST /api/tryon ───
 // Orchestrator proxy for the embeddable widget's 3D virtual try-on.
 // The widget NEVER calls the Python Body Service directly (MANIKAN_PROJECT.md).
 //
 // Flow:
+//   0. Security gate (Phase 3b): key + fail-closed Origin + allowlist + rate
+//      limit — see lib/widget-auth.ts.
 //   1. Validate the incoming measurements + product/size.
 //   2. Resolve the product + variant from the DB — the DB is the source of
-//      truth for garment colour/measurements (not trusted from the client).
+//      truth for garment colour/measurements (not trusted from the client) —
+//      and verify it belongs to the authenticated retailer (tenant isolation).
 //   3. Proxy to the Body Service /generate-dressed-avatar (returns a .glb).
-//   4. Persist a MeasurementSession (retailerId derived server-side from the
-//      product; customerId best-effort from the cookie; shopperRef = the
-//      widget's anonymous visitor token).
+//   4. Persist a MeasurementSession (retailerId from the authenticated retailer;
+//      customerId best-effort from the cookie; shopperRef = the widget's
+//      anonymous visitor token).
 //   5. Stream the .glb back to the widget with CORS headers.
 
 const BODY_SERVICE_URL = process.env.BODY_SERVICE_URL || "http://localhost:8001";
 
-// Embeddable widget runs cross-origin on retailer sites → permissive CORS.
-// ─── TODO(Phase 3b — Security): CORS is wide-open for MVP. Tighten to the
-//     retailer's registered origins once the allowlist exists. ───
+// Embeddable widget runs cross-origin on retailer sites → CORS must allow the
+// key header. NOTE: CORS is NOT the security boundary (it's browser-enforced);
+// the server-side Origin allowlist in widget-auth.ts is. See § Security docs.
 const CORS_HEADERS: Record<string, string> = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, X-Manikan-Key",
     "Access-Control-Expose-Headers": "X-Manikan-Session-Id",
 };
 
@@ -33,6 +37,13 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest) {
+    // ── 0. Security gate (key + fail-closed Origin + allowlist + rate limit) ──
+    const auth = await authorizeWidgetRequest(request, CORS_HEADERS);
+    if (!auth.ok) {
+        return auth.response;
+    }
+    const { retailer } = auth;
+
     // ── 1. Parse body ──
     let body: {
         product_id?: string;
@@ -68,24 +79,6 @@ export async function POST(request: NextRequest) {
         shopper_ref,
     } = body;
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  TODO(Phase 3b — Security): NOT YET IMPLEMENTED
-    // ═══════════════════════════════════════════════════════════════════════
-    //  This endpoint is currently UNAUTHENTICATED. Before public launch, add
-    //  here (fail-closed → 403):
-    //    1. Retailer key validation — read the public `data-retailer-key`
-    //       (Retailer.apiKey) the widget sends; reject if unknown/inactive.
-    //    2. Origin allowlist — compare request.headers.get("origin") against
-    //       Retailer.widgetSettings.allowedOrigins. NOTE: Origin is only
-    //       trustworthy for real browser requests; it is trivially forged by
-    //       server-side callers, so it must be paired with (3).
-    //    3. Rate limiting per key (a basic in-memory / Upstash stub for MVP).
-    //    4. Plan/subscription enforcement via Retailer.plan.
-    //  Enterprise: migrate to a Two-Key (Backend-to-Frontend short-lived token)
-    //  system + FastAPI VPC network isolation so the Body Service is never a
-    //  public door. See docs/enterprise-roadmap.md § Security.
-    // ═══════════════════════════════════════════════════════════════════════
-
     // ── 2. Validate required inputs ──
     if (!product_id || !size) {
         return NextResponse.json(
@@ -111,6 +104,15 @@ export async function POST(request: NextRequest) {
     });
 
     if (!product || !product.isActive) {
+        return NextResponse.json(
+            { error: "Product not found" },
+            { status: 404, headers: CORS_HEADERS }
+        );
+    }
+
+    // Tenant isolation: the product must belong to the authenticated retailer.
+    // 404 (not 403) so we don't reveal that another tenant's product exists.
+    if (product.retailerId !== retailer.id) {
         return NextResponse.json(
             { error: "Product not found" },
             { status: 404, headers: CORS_HEADERS }
@@ -194,7 +196,7 @@ export async function POST(request: NextRequest) {
         const customer = await getCustomerFromCookies();
         const session = await prisma.measurementSession.create({
             data: {
-                retailerId: product.retailerId,
+                retailerId: retailer.id,
                 customerId: customer?.sub ?? null,
                 shopperRef: shopper_ref ?? null,
                 productId: product.id,

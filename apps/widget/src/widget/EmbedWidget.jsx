@@ -10,7 +10,7 @@ import ManikanWidget from '../components/ManikanWidget'
    floating "Try It On" bubble that opens ManikanWidget exactly as-is; its
    own onClose prop closes it back down to just the bubble.
    ───────────────────────────────────────────────────────────────────────── */
-export default function EmbedWidget({ product, retailerId }) {
+export default function EmbedWidget({ product, retailerKey }) {
   const [open, setOpen] = useState(false)
 
   if (open) {
@@ -23,7 +23,7 @@ export default function EmbedWidget({ product, retailerId }) {
       className="mw-primary-btn"
       style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 999999 }}
       id="manikan-trigger"
-      data-retailer-id={retailerId}
+      data-retailer-key={retailerKey}
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />

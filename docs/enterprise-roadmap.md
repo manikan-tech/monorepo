@@ -12,23 +12,28 @@ Status legend: ✅ implemented · 🟡 MVP stub · 🔴 not implemented
 
 ## § Security & Auth
 
-**Current (MVP, Phase 3a):** 🔴 The proxy routes (`/api/tryon`, `/api/avatar`)
-are **unauthenticated**. Any caller can hit them with any `product_id`. CORS is
-wide-open (`*`). The Body Service (FastAPI) is itself a public, unauthenticated
-door on port 8001.
+**Current (MVP, Phase 3b):** 🟡 The proxy routes (`/api/tryon`, `/api/avatar`)
+are gated by `apps/store/app/lib/widget-auth.ts`, enforced fail-closed before
+any product/engine logic:
+1. ✅ **Retailer key validation** — the widget sends a *public* key as the
+   `X-Manikan-Key` header (`= Retailer.apiKey`). Resolved to an **active**
+   retailer (`isActivated`), else `401` (missing) / `403` (unknown/inactive).
+2. ✅ **Fail-closed Origin gate** — a **missing** `Origin` → `403`; an `Origin`
+   not in `Retailer.widgetSettings.allowedOrigins` → `403`.
+3. ✅ **Rate limiting** — per-retailer fixed-window stub (30 req / 60s),
+   `lib/rate-limit.ts` → `429` + `Retry-After`.
+4. ✅ **Tenant isolation** — the requested product must belong to the
+   authenticated retailer, else `404` (`/api/tryon`).
 
-**Phase 3b (next MVP hardening):** 🔴
-1. **Retailer key validation** — the widget embeds a *public* key
-   (`data-retailer-key` = `Retailer.apiKey`, Stripe `pk_...` style). The proxy
-   looks it up; unknown/inactive → **403 (fail closed)**.
-2. **Origin allowlist** — compare `request.headers.get("origin")` against
-   `Retailer.widgetSettings.allowedOrigins`.
-   ⚠️ **Origin is only trustworthy for real browser requests** — it is trivially
-   forged by any server-side caller (`curl -H "Origin: ..."`). So it is a *first
-   layer*, never the whole auth story. Decide fail-open vs fail-closed when
-   Origin is **absent** (some privacy modes / `Referrer-Policy: no-referrer`).
-3. **Rate limiting** per key — basic in-memory / Upstash stub for MVP.
-4. **Plan enforcement** via `Retailer.plan` (free vs premium quotas).
+Auth failures return a **generic `403`** body (no enumeration oracle).
+
+⚠️ **Accepted residual risk:** `Origin` is trivially forged by a server-side
+caller, so someone holding BOTH a leaked valid key AND a known allowed origin
+can still reach the engine — the rate limit only caps the blast radius. Still
+🔴 (future): **plan/quota enforcement** via `Retailer.plan`; a **shared-store
+(Redis/Upstash)** limiter with cross-instance coordination; an **IP/global
+pre-limit** to shield the DB from bogus-key floods; a **`pk_live_` key format**
+distinct from any secret key.
 
 **Enterprise (future):** 🔴
 - **Two-Key (Backend-to-Frontend Token) system:** the public key only mints a
