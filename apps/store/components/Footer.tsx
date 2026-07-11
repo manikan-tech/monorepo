@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -12,14 +11,15 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
           {/* Brand Col */}
           <div className="col-span-1 md:col-span-1 flex flex-col gap-4">
-            <Link href="/" className="relative w-32 h-10 transition-transform duration-300 hover:scale-105 hover:-translate-y-0.5 inline-block">
-              <Image 
-                src="/logo.png" 
-                alt="Manikan Logo" 
-                fill 
-                sizes="128px"
-                className="object-contain object-left brightness-0 invert" 
-              />
+            <Link href="/" suppressHydrationWarning className="group inline-flex transition-all duration-300 hover:scale-105 hover:-translate-y-0.5">
+              <div className="bg-white rounded-2xl px-4 py-2 shadow-[0_0_20px_rgba(200,150,102,0.25)] border border-gold-400/30 transition-all duration-300 group-hover:shadow-[0_0_30px_rgba(200,150,102,0.5)] group-hover:border-gold-400/60">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logo.png"
+                  alt="Manikan Logo"
+                  style={{ width: 140, height: 44, objectFit: "contain" }}
+                />
+              </div>
             </Link>
             <p className="font-sans text-sm text-cream-200 leading-relaxed max-w-[280px] mt-2">
               The next generation of 3D virtual try-ons and highly accurate body modeling for fashion e-commerce.

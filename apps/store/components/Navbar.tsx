@@ -30,6 +30,15 @@ const CartIcon = () => (
   </svg>
 );
 
+const DashboardIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+  </svg>
+);
+
 const navLinks = [
   { name: "Collection", href: "/store" },
   { name: "Virtual Try-On", href: "/visualize" },
@@ -40,28 +49,48 @@ const navLinks = [
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { cartCount } = useCart();
-  const { items: wishlistItems } = useWishlist();
+  const { cartCount, refreshCart } = useCart();
+  const { items: wishlistItems, refresh: refreshWishlist } = useWishlist();
   const wishlistCount = wishlistItems?.length || 0;
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [user, setUser] = useState<any>(null);
+  const [isRetailer, setIsRetailer] = useState(false);
+
+  // ── Check if the logged-in user is a Retailer ────────────────────
+  const checkRole = async (email: string | undefined) => {
+    if (!email) { setIsRetailer(false); return; }
+    try {
+      const res = await fetch(`/api/retailer/me`);
+      setIsRetailer(res.ok);
+    } catch {
+      setIsRetailer(false);
+    }
+  };
 
   useEffect(() => {
     const supabase = createClient();
-    
+
     // Initial fetch
     supabase.auth.getUser().then(({ data }) => {
-      setUser(data?.user || null);
+      const u = data?.user || null;
+      setUser(u);
+      checkRole(u?.email);
     });
-    
-    // Subscribe to auth state changes (e.g. login/logout in other tabs)
+
+    // Subscribe to auth state changes — refreshes cart/wishlist on login/logout
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
+      const u = session?.user || null;
+      setUser(u);
+      checkRole(u?.email);
+      // Refresh data stores whenever auth state changes
+      void refreshCart();
+      void refreshWishlist();
     });
 
     return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -146,32 +175,56 @@ export default function Navbar() {
                 <SearchIcon />
               </button>
             )}
-            <Link href="/wishlist" className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform relative cursor-pointer block">
-              <WishlistIcon />
-              {wishlistCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-gold-500 text-forest-950 text-[10px] font-bold w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-sm animate-fade-in-up">
-                  {wishlistCount}
-                </span>
-              )}
-            </Link>
-            <Link href="/cart" className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform relative cursor-pointer block">
-              <CartIcon />
-              {cartCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-gold-500 text-forest-950 text-[10px] font-bold w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-sm animate-fade-in-up">
-                  {cartCount}
-                </span>
-              )}
-            </Link>
+            {!isRetailer && (
+              <>
+                <Link href="/wishlist" className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform relative cursor-pointer block">
+                  <WishlistIcon />
+                  {wishlistCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-gold-500 text-forest-950 text-[10px] font-bold w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-sm animate-fade-in-up">
+                      {wishlistCount}
+                    </span>
+                  )}
+                </Link>
+                <Link href="/cart" className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform relative cursor-pointer block">
+                  <CartIcon />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-gold-500 text-forest-950 text-[10px] font-bold w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-sm animate-fade-in-up">
+                      {cartCount}
+                    </span>
+                  )}
+                </Link>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
             {user ? (
-              <button
-                onClick={handleSignOut}
-                className="relative overflow-hidden flex items-center justify-center px-6 py-2.5 text-sm font-medium text-forest-900 bg-white border border-forest-200 rounded-xl hover:bg-forest-50 shadow-soft transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
-              >
-                Sign Out
-              </button>
+              <>
+                {/* Dashboard button — only shown to Retailers */}
+                {isRetailer ? (
+                  <Link
+                    href="/dashboard"
+                    className="hidden md:flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gold-700 bg-gold-50 border border-gold-200 rounded-xl hover:bg-gold-100 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
+                  >
+                    <DashboardIcon />
+                    Dashboard
+                  </Link>
+                ) : (
+                  <Link
+                    href="/account"
+                    className="hidden md:flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-forest-700 bg-forest-50 border border-forest-200 rounded-xl hover:bg-forest-100 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    Profile
+                  </Link>
+                )}
+                <button
+                  onClick={handleSignOut}
+                  className="relative overflow-hidden flex items-center justify-center px-6 py-2.5 text-sm font-medium text-forest-900 bg-white border border-forest-200 rounded-xl hover:bg-forest-50 shadow-soft transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
+                >
+                  Sign Out
+                </button>
+              </>
             ) : (
               <Link
                 href="/login"

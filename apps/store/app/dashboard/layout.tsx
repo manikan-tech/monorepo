@@ -1,5 +1,4 @@
 import React from "react";
-import Link from "next/link";
 import { getAuthFromCookies } from "../lib/auth";
 import { redirect } from "next/navigation";
 import SidebarNav from "./SidebarNav";
@@ -19,11 +18,22 @@ export default async function DashboardLayout({
     <div className="flex min-h-screen bg-manikan-bg text-manikan-text">
       {/* Sidebar */}
       <aside className="w-64 bg-forest-950 text-white flex flex-col shadow-lift">
-        <div className="p-6">
-          <h2 className="font-display text-2xl tracking-wide text-gold-300">
-            Manikan<span className="text-white">.io</span>
-          </h2>
-          <p className="text-forest-200 text-sm mt-1 opacity-80">Retailer Dashboard</p>
+        <div className="px-6 py-7 border-b border-forest-800">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C8966A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3a2 2 0 0 1 2 2c0 1-.8 1.7-1.7 2L20 14H4l7.7-7C10.8 6.7 10 6 10 5a2 2 0 0 1 2-2Z"/>
+                <path d="M4 14c0 3 1.7 4 8 4s8-1 8-4"/>
+              </svg>
+              <span className="font-display text-[10px] font-medium tracking-[0.3em] text-gold-400 uppercase">
+                Retailer
+              </span>
+            </div>
+            <h2 className="font-display text-2xl font-bold tracking-tight" style={{ background: "linear-gradient(135deg, #C8966A 0%, #F0C080 50%, #C8966A 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+              Dashboard
+            </h2>
+            <div className="h-[2px] w-12 rounded-full mt-1" style={{ background: "linear-gradient(90deg, #C8966A, transparent)" }} />
+          </div>
         </div>
 
         <SidebarNav />
@@ -43,17 +53,6 @@ export default async function DashboardLayout({
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-cream-50/50">
-        <header className="h-20 flex items-center justify-between px-10 border-b border-manikan-border bg-white/60 backdrop-blur-md sticky top-0 z-10">
-          <h1 className="text-xl font-display font-medium text-forest-900">Dashboard</h1>
-          <div className="flex items-center space-x-4">
-             <button className="text-manikan-text-secondary hover:text-manikan-teal transition-colors">
-               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-               </svg>
-             </button>
-          </div>
-        </header>
-
         <div className="p-10 flex-1 animate-fade-up">
           {children}
         </div>

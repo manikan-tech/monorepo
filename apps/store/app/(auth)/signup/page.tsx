@@ -140,6 +140,7 @@ export default function SignupPage() {
       <div className="flex flex-col gap-2">
         <h1 className="font-display text-4xl font-semibold text-forest-950 tracking-tight leading-tight">Create an <span className="gold-shimmer bg-clip-text text-transparent">Account</span></h1>
         <p className="font-sans text-sm font-light text-forest-700/80 leading-relaxed max-w-[340px]">
+          Join Manikan and enjoy a personalized AI-powered fashion experience.
         </p>
       </div>
 

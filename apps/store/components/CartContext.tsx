@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { createClient } from "../app/lib/supabase/client";
 import Modal from "./Modal";
 import Link from "next/link";
 
@@ -75,6 +76,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refreshCart();
+    // Re-fetch cart whenever auth state changes (login / logout)
+    const supabase = createClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      void refreshCart();
+    });
+    return () => subscription.unsubscribe();
   }, [refreshCart]);
 
   const addToCart = async ({ productId, variantId, quantity = 1 }: { productId: string; variantId: string; quantity?: number }): Promise<{ error?: string }> => {
