@@ -37,6 +37,8 @@ model Retailer {
   hashedPassword String?
   apiKey         String   @unique @default(cuid())
   plan           String   @default("free")
+  isActivated    Boolean  @default(false)
+  widgetSettings Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -84,6 +86,7 @@ model Product {
   stock       Int                          @default(0)
   isActive    Boolean                      @default(true)
   embedding   Unsupported("vector(1536)")?
+  tshirtColorHex String?                    // garment colour (hex) for the 3D virtual try-on
   createdAt   DateTime                     @default(now())
   updatedAt   DateTime                     @updatedAt
 
@@ -113,6 +116,11 @@ model ProductVariant {
   hipCm          Float?
   lengthCm       Float?
   inseamCm       Float?
+  // ─── Flat garment measurements — used by the 3D virtual try-on engine ───
+  garmentChestCm     Float?
+  garmentLengthCm    Float?
+  garmentSleeveCm    Float?
+  garmentShoulderCm  Float?
 
   product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   cartItems  CartItem[]
@@ -259,11 +267,13 @@ model MeasurementSession {
   id                 String   @id @default(cuid())
   retailerId         String
   customerId         String?
+  shopperRef         String?  // anonymous visitor token (MVP Tier 2) — see docs/enterprise-roadmap.md
   productId          String
   heightCm           Float
   weightKg           Float
   chestCm            Float
   waistCm            Float
+  hipsCm             Float
   measurementVersion String   @default("v1")
   bodyShapeParams    Json?
   recommendedSize    String?

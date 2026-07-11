@@ -4,6 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 import fs from "fs";
 import path from "path";
+import { seedDemoTshirts } from "./demo-tshirts";
 
 const { Pool } = pg;
 
@@ -242,6 +243,11 @@ async function main() {
     }
 
     console.log(`Successfully seeded ${productCount} products with all their sizing variants.`);
+
+    // Seed the Manikan demo T-shirts (virtual try-on enabled) for the widget
+    const tshirtCount = await seedDemoTshirts(prisma, retailer.id);
+    console.log(`Seeded ${tshirtCount} demo t-shirts (virtual try-on enabled).`);
+
     console.log("🌱 Database seeding complete!");
 }
 
