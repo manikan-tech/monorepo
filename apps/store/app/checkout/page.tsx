@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useCart } from "../../components/CartContext";
 import { useRouter } from "next/navigation";
+import { createClient } from "../lib/supabase/client";
 
 type Address = { id: string; label: string; street: string; city: string; state: string; country: string; isDefault: boolean };
 
@@ -22,6 +23,14 @@ export default function CheckoutPage() {
     const [newAddress, setNewAddress] = useState({ label: "Home", street: "", city: "", state: "", zipCode: "", isDefault: false });
     const [addingAddress, setAddingAddress] = useState(false);
     const [addressError, setAddressError] = useState("");
+
+    // Auth guard — redirect guests to login
+    useEffect(() => {
+        const supabase = createClient();
+        supabase.auth.getUser().then(({ data }) => {
+            if (!data.user) router.push("/login");
+        });
+    }, [router]);
 
     useEffect(() => {
         fetch("/api/addresses")
@@ -206,7 +215,7 @@ export default function CheckoutPage() {
 
                         <button
                             onClick={handlePlaceOrder}
-                            disabled={loading || (addresses.length > 0 && !selectedAddress) || items.some(i => !i.isActive)}
+                            disabled={loading || !selectedAddress || items.some(i => !i.isActive)}
                             className="relative overflow-hidden flex items-center justify-center gap-2 w-full bg-gold-500 text-forest-950 rounded-2xl py-4 font-semibold hover:bg-gold-400 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             <div className="absolute inset-0 w-full h-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)] bg-[length:200%_100%] animate-shimmer-slow pointer-events-none" />

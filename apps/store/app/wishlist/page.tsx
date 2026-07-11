@@ -3,13 +3,21 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useWishlist } from "../../components/WishlistContext";
-import { useCart } from "../../components/CartContext";
-import { useState } from "react";
+import { useEffect } from "react";
+import { createClient } from "../lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 export default function WishlistPage() {
     const { items, loading, toggle } = useWishlist();
-    const { addToCart } = useCart();
-    const [addingId, setAddingId] = useState<string | null>(null);
+    const router = useRouter();
+
+    // Auth guard — redirect guests to login
+    useEffect(() => {
+        const supabase = createClient();
+        supabase.auth.getUser().then(({ data }) => {
+            if (!data.user) router.push("/login");
+        });
+    }, [router]);
 
     return (
         <div className="max-w-[1200px] mx-auto px-6 py-12 md:py-20 w-full">
