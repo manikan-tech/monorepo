@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
 import { updateProduct } from "../../../../actions/product";
 
 export default function EditProductForm({ product }: { product: any }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [variantRows, setVariantRows] = useState(
+    product.variants?.length > 0 ? product.variants : [{ id: "", sizeLabel: "", sku: "", stock: 10, priceOverride: "" }]
+  );
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -14,182 +16,145 @@ export default function EditProductForm({ product }: { product: any }) {
     setError("");
 
     const formData = new FormData(event.currentTarget);
+    formData.append("productId", product.id);
 
     try {
-      await updateProduct(product.id, formData);
+      await updateProduct(formData);
     } catch (err: any) {
-      if (err.message === "NEXT_REDIRECT") {
-        throw err;
-      }
-      setError(err.message || "Something went wrong.");
+      setError(err.message || "Failed to update product");
       setIsSubmitting(false);
     }
   }
 
   return (
-    <>
+    <form onSubmit={handleSubmit} className="bg-manikan-bg p-8 rounded-2xl shadow-card border border-manikan-border/50 max-w-4xl mx-auto space-y-8 animate-fade-in-up">
       {error && (
-        <div className="bg-manikan-error/10 border border-manikan-error text-manikan-error px-4 py-3 rounded-lg text-sm mb-6">
+        <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm border border-red-100 flex items-center gap-3">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-card border border-manikan-border p-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-forest-900" htmlFor="name">Product Name *</label>
-            <input
-              required
-              type="text"
-              id="name"
-              name="name"
-              defaultValue={product.name}
-              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-forest-900" htmlFor="productCode">Product Code / SKU *</label>
-            <input
-              required
-              type="text"
-              id="productCode"
-              name="productCode"
-              defaultValue={product.productCode}
-              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
-            />
-          </div>
-
-          <div className="space-y-1 md:col-span-2">
-            <label className="text-sm font-medium text-forest-900" htmlFor="description">Description</label>
-            <textarea
-              id="description"
-              name="description"
-              rows={3}
-              defaultValue={product.description || ""}
-              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow resize-none"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-forest-900" htmlFor="category">Category *</label>
-            <select
-              required
-              id="category"
-              name="category"
-              defaultValue={product.category}
-              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow appearance-none"
-            >
-              <option value="">Select a category</option>
-              <option value="tops">Tops (Shirts, Blouses, T-Shirts)</option>
-              <option value="bottoms">Bottoms (Pants, Jeans, Shorts)</option>
-              <option value="dresses">Dresses & Jumpsuits</option>
-              <option value="outerwear">Outerwear (Jackets, Coats)</option>
-            </select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-forest-900" htmlFor="gender">Gender *</label>
-            <select
-              required
-              id="gender"
-              name="gender"
-              defaultValue={product.gender || "women"}
-              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow appearance-none"
-            >
-              <option value="women">Women</option>
-              <option value="men">Men</option>
-              <option value="unisex">Unisex</option>
-            </select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-forest-900" htmlFor="brand">Brand</label>
-            <input
-              type="text"
-              id="brand"
-              name="brand"
-              defaultValue={product.brand || ""}
-              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-forest-900" htmlFor="fabric">Fabric Type</label>
-            <input
-              type="text"
-              id="fabric"
-              name="fabric"
-              defaultValue={product.fabric || ""}
-              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-forest-900" htmlFor="priceEgp">Price (EGP) *</label>
-            <input
-              required
-              type="number"
-              id="priceEgp"
-              name="priceEgp"
-              min="0"
-              step="0.01"
-              defaultValue={product.priceEgp}
-              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-forest-900" htmlFor="stock">Initial Stock</label>
-            <input
-              type="number"
-              id="stock"
-              name="stock"
-              min="0"
-              defaultValue={product.stock}
-              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
-            />
-          </div>
-
-          <div className="space-y-1 md:col-span-2">
-            <label className="text-sm font-medium text-forest-900" htmlFor="imageUrl">Product Image URL *</label>
-            <input
-              required
-              type="url"
-              id="imageUrl"
-              name="imageUrl"
-              defaultValue={product.imageUrl}
-              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
-            />
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-forest-900">Product Name *</label>
+          <input required type="text" name="name" defaultValue={product.name} className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400" />
         </div>
 
-        <div className="mt-8 flex justify-end space-x-4 pt-6 border-t border-manikan-border">
-          <Link
-            href="/dashboard/products"
-            className="px-6 py-2.5 rounded-lg font-medium text-manikan-text-secondary hover:text-forest-900 transition-colors"
-          >
-            Cancel
-          </Link>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="bg-manikan-teal hover:bg-manikan-teal-hover text-white px-8 py-2.5 rounded-lg font-medium transition-colors shadow-soft disabled:opacity-70 disabled:cursor-not-allowed flex items-center"
-          >
-            {isSubmitting ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Saving...
-              </>
-            ) : (
-              "Save Changes"
-            )}
-          </button>
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-forest-900">Product Code / SKU *</label>
+          <input required type="text" name="productCode" defaultValue={product.productCode} className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400" />
         </div>
-      </form>
-    </>
+
+        <div className="space-y-1 md:col-span-2">
+          <label className="text-sm font-medium text-forest-900">Description</label>
+          <textarea name="description" rows={4} defaultValue={product.description} className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 resize-none" />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-forest-900">Category *</label>
+          <select required name="category" defaultValue={product.category} className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400">
+            <option value="tshirt">T-Shirt</option>
+            <option value="hoodie">Hoodie</option>
+            <option value="pants">Pants</option>
+          </select>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-forest-900">Gender</label>
+          <select name="gender" defaultValue={product.gender} className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400">
+            <option value="unisex">Unisex</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-forest-900">Brand</label>
+          <input type="text" name="brand" defaultValue={product.brand} className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400" />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-forest-900">Fabric</label>
+          <input type="text" name="fabric" defaultValue={product.fabric} className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400" />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-forest-900">Price (EGP) *</label>
+          <input required type="number" step="0.01" name="priceEgp" defaultValue={product.priceEgp} className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400" />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-forest-900">Image URL *</label>
+          <input required type="url" name="imageUrl" defaultValue={product.imageUrl} placeholder="https://..." className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400" />
+        </div>
+
+        <div className="space-y-1 md:col-span-2 pt-6 border-t border-manikan-border mt-4">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-medium text-forest-900">Product Variants</h3>
+              <p className="text-sm text-manikan-text-secondary">Manage sizes, unique SKUs, and stock limits.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setVariantRows([...variantRows, { id: "", sizeLabel: "", sku: "", stock: 10, priceOverride: "" }])}
+              className="px-4 py-2 bg-cream-50 text-forest-800 text-sm font-medium rounded-lg border border-manikan-border hover:bg-cream-100 transition-colors"
+            >
+              + Add Variant
+            </button>
+          </div>
+          
+          <div className="space-y-4">
+            {variantRows.map((variant: any, index: number) => (
+              <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end bg-manikan-bg p-4 rounded-xl border border-manikan-border">
+                <input type="hidden" name="variant_id[]" value={variant.id || ""} />
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-forest-900">Size *</label>
+                  <input required type="text" name="variant_size[]" defaultValue={variant.sizeLabel} className="w-full px-3 py-2 bg-white border border-manikan-border rounded-lg text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-forest-900">SKU</label>
+                  <input type="text" name="variant_sku[]" defaultValue={variant.sku} className="w-full px-3 py-2 bg-white border border-manikan-border rounded-lg text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-forest-900">Stock *</label>
+                  <input required type="number" name="variant_stock[]" defaultValue={variant.stock} className="w-full px-3 py-2 bg-white border border-manikan-border rounded-lg text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-forest-900">Price Override</label>
+                  <input type="number" step="0.01" name="variant_price[]" defaultValue={variant.priceOverride || ""} className="w-full px-3 py-2 bg-white border border-manikan-border rounded-lg text-sm" />
+                </div>
+                <div className="pb-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newRows = [...variantRows];
+                      newRows.splice(index, 1);
+                      setVariantRows(newRows);
+                    }}
+                    className="text-red-500 hover:text-red-700 text-sm font-medium px-2 py-1 rounded hover:bg-red-50 w-full"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-6 border-t border-manikan-border flex justify-end gap-4">
+        <a href="/dashboard/products" className="px-6 py-2.5 text-forest-700 hover:bg-forest-50 rounded-xl font-medium transition-colors">
+          Cancel
+        </a>
+        <button type="submit" disabled={isSubmitting} className="px-8 py-2.5 bg-forest-900 hover:bg-forest-800 text-white rounded-xl font-medium transition-all duration-300 shadow-soft hover:shadow-card hover:-translate-y-0.5 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">
+          {isSubmitting ? "Updating..." : "Update Product"}
+        </button>
+      </div>
+    </form>
   );
 }

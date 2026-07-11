@@ -15,6 +15,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
 
   const product = await prisma.product.findUnique({
     where: { id },
+    include: { variants: true },
   });
 
   if (!product || product.retailerId !== user.sub) {
@@ -39,7 +40,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         </Link>
         <div>
           <h2 className="text-2xl font-display text-forest-900">Edit Product</h2>
-          <p className="text-manikan-text-secondary">Update the details of your garment.</p>
+          <p className="text-manikan-text-secondary">Update product details and variants.</p>
         </div>
       </div>
 

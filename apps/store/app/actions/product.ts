@@ -149,11 +149,14 @@ export async function updateProduct(formData: FormData) {
 
     for (let i = 0; i < variantSizes.length; i++) {
       const id = variantIds[i];
+      const sizeLabel = variantSizes[i];
+      if (!sizeLabel) continue;
+
       const data = {
-        sizeLabel: variantSizes[i],
-        sku: variantSkus[i] || `${productCode}-${variantSizes[i]}`,
+        sizeLabel: sizeLabel,
+        sku: variantSkus[i] || `${productCode}-${sizeLabel}`,
         stock: parseInt(variantStocks[i] || "0", 10),
-        priceOverride: variantPrices[i] ? parseFloat(variantPrices[i]) : null,
+        priceOverride: variantPrices[i] ? parseFloat(variantPrices[i] as string) : null,
       };
 
       if (id) {

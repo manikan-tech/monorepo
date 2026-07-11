@@ -224,7 +224,7 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
           </tbody>
         </table>
       </div>
-
+      
       {/* Pagination Controls */}
       <div className="p-4 border-t border-manikan-border bg-cream-50/30 flex items-center justify-between text-sm text-manikan-text-secondary">
         <div>
