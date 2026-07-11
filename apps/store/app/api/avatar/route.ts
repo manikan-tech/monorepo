@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { authorizeWidgetRequest } from "../../lib/widget-auth";
 
 // ─── POST /api/avatar ───
 // Thin proxy for the bare 3D body avatar (no garment). Enforces the
 // "widget never calls the Python Body Service directly" rule for the
-// body-model playground too. This flow has no product context, so it does
-// NOT write a MeasurementSession (that happens in /api/tryon). The widget
-// may include `shopper_ref` in the payload for uniformity; it is ignored here.
+// body-model playground too, and — like /api/tryon — is protected by the
+// same Phase 3b security gate (key + fail-closed Origin + allowlist + rate
+// limit). It is an equally open door to the FastAPI engine, so it MUST be
+// gated. This flow has no product context, so it writes no MeasurementSession.
+// The widget may include `shopper_ref` in the payload for uniformity; ignored.
 
 const BODY_SERVICE_URL = process.env.BODY_SERVICE_URL || "http://localhost:8001";
 
-// ─── TODO(Phase 3b — Security): NOT YET IMPLEMENTED ───
-//   Same auth gate as /api/tryon (retailer-key + Origin allowlist + rate
-//   limiting) must be added here before launch. See docs/enterprise-roadmap.md.
 const CORS_HEADERS: Record<string, string> = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, X-Manikan-Key",
 };
 
 export async function OPTIONS() {
@@ -23,6 +23,12 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest) {
+    // ── Security gate (key + fail-closed Origin + allowlist + rate limit) ──
+    const auth = await authorizeWidgetRequest(request, CORS_HEADERS);
+    if (!auth.ok) {
+        return auth.response;
+    }
+
     let body: {
         sex?: string;
         height_cm?: number;
