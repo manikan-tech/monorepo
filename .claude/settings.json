@@ -39,7 +39,10 @@
       "Bash(git check-ignore *)",
       "Bash(openssl rand *)",
       "Bash(cd /home/hashim/Coding/manikan-tech/monorepo/apps/store 2>/dev/null || cd /home/hashim/Documents/Coding/manikan-tech/monorepo/apps/store *)",
-      "Read(//home/hashim/Coding/manikan-tech/monorepo/apps/**)"
+      "Read(//home/hashim/Coding/manikan-tech/monorepo/apps/**)",
+      "Bash(grep -rln \"NEXT_PUBLIC_SUPABASE\\\\|SUPABASE_SERVICE_KEY\" app --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -rln \"@supabase/supabase-js\\\\|@supabase/ssr\" app --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -n \"supabase\\\\|Supabase\" app/api/auth/login/route.ts app/api/auth/signup/route.ts app/lib/auth.ts)"
     ]
   }
 }

@@ -7,6 +7,8 @@
    (validation, MeasurementSession persistence, rate limiting, hidden URLs).
    ───────────────────────────────────────────────────────────────────────── */
 
+import { getVisitorId } from './visitor'
+
 const STORE_API_URL = import.meta.env.VITE_STORE_API_URL || 'http://localhost:3000'
 
 async function postForGlb(path, payload, { timeoutMs = 120_000 } = {}) {
@@ -18,7 +20,9 @@ async function postForGlb(path, payload, { timeoutMs = 120_000 } = {}) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
-      body: JSON.stringify(payload),
+      // shopper_ref (anonymous visitor token) is attached transparently to
+      // every call, so components never need to know about identity. See visitor.js.
+      body: JSON.stringify({ ...payload, shopper_ref: getVisitorId() }),
     })
 
     if (!response.ok) {
