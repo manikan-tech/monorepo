@@ -32,7 +32,9 @@ const LockIcon = (
 
 export default function SignupPage() {
   const router = useRouter();
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -42,8 +44,12 @@ export default function SignupPage() {
   function validate(): boolean {
     const errors: Record<string, string> = {};
 
-    if (!name.trim() || name.trim().length < 2) {
-      errors.name = "Name must be at least 2 characters";
+    if (!firstName.trim() || firstName.trim().length < 2) {
+      errors.firstName = "Min 2 chars";
+    }
+
+    if (!lastName.trim() || lastName.trim().length < 2) {
+      errors.lastName = "Min 2 chars";
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -59,12 +65,9 @@ export default function SignupPage() {
     return Object.keys(errors).length === 0;
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function handleAsyncSubmit() {
     setError("");
-
     if (!validate()) return;
-
     setIsLoading(true);
 
     try {
@@ -72,7 +75,9 @@ export default function SignupPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: name.trim(),
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          phone: phone.trim() || undefined,
           email: email.toLowerCase().trim(),
           password,
         }),
@@ -85,13 +90,22 @@ export default function SignupPage() {
         return;
       }
 
-      // Success — redirect to dashboard
-      router.push("/");
+      // Success — redirect to activation page for OTP verification
+      if (data.requiresActivation) {
+        router.push(`/activation?email=${encodeURIComponent(data.email)}`);
+      } else {
+        router.push("/");
+      }
     } catch {
       setError("Network error. Please check your connection and try again.");
     } finally {
       setIsLoading(false);
     }
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    void handleAsyncSubmit();
   }
 
   return (
@@ -100,7 +114,6 @@ export default function SignupPage() {
       <div className="flex flex-col gap-2">
         <h1 className="font-display text-4xl font-semibold text-forest-950 tracking-tight leading-tight">Create an <span className="gold-shimmer bg-clip-text text-transparent">Account</span></h1>
         <p className="font-sans text-sm font-light text-forest-700/80 leading-relaxed max-w-[340px]">
-          Join Manikan to generate high-fidelity 3D human avatars.
         </p>
       </div>
 
@@ -119,18 +132,32 @@ export default function SignupPage() {
       {/* ── Fields ─────────────────────────────────────── */}
       <div className="flex flex-col gap-4">
         <AuthInput
-          id="signup-name"
-          label="Full Name"
+          id="signup-first-name"
+          label="First Name"
           type="text"
-          placeholder="Jane Doe"
-          value={name}
+          placeholder="Jane"
+          value={firstName}
           onChange={(v) => {
-            setName(v);
-            if (fieldErrors.name) setFieldErrors((p) => ({ ...p, name: "" }));
+            setFirstName(v);
+            if (fieldErrors.firstName) setFieldErrors((p) => ({ ...p, firstName: "" }));
           }}
           icon={UserIcon}
-          error={fieldErrors.name}
-          autoComplete="name"
+          error={fieldErrors.firstName}
+          autoComplete="given-name"
+        />
+        <AuthInput
+          id="signup-last-name"
+          label="Last Name"
+          type="text"
+          placeholder="Doe"
+          value={lastName}
+          onChange={(v) => {
+            setLastName(v);
+            if (fieldErrors.lastName) setFieldErrors((p) => ({ ...p, lastName: "" }));
+          }}
+          icon={UserIcon}
+          error={fieldErrors.lastName}
+          autoComplete="family-name"
         />
         <AuthInput
           id="signup-email"
@@ -145,6 +172,16 @@ export default function SignupPage() {
           icon={MailIcon}
           error={fieldErrors.email}
           autoComplete="email"
+        />
+        <AuthInput
+          id="signup-phone"
+          label="Phone Number (Optional)"
+          type="tel"
+          placeholder="+20 100 123 4567"
+          value={phone}
+          onChange={(v) => setPhone(v)}
+          icon={UserIcon} // Reusing UserIcon or could use a phone icon
+          autoComplete="tel"
         />
         <AuthInput
           id="signup-password"
@@ -172,7 +209,7 @@ export default function SignupPage() {
       >
         {/* Infinite Shimmer Sweep */}
         <div className="absolute inset-0 w-full h-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent)] bg-[length:200%_100%] animate-shimmer-slow pointer-events-none" />
-        
+
         <span className="relative z-10 flex items-center justify-center gap-2">
           {isLoading ? (
             <span className="inline-block w-5 h-5 border-[2.5px] border-white/30 border-t-white rounded-full animate-spin" />
