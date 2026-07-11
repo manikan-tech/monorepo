@@ -40,6 +40,7 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   function validate(): boolean {
     const errors: Record<string, string> = {};
@@ -90,9 +91,9 @@ export default function SignupPage() {
         return;
       }
 
-      // Success — redirect to activation page for OTP verification
+      // Success — show success message instead of redirecting to activation
       if (data.requiresActivation) {
-        router.push(`/activation?email=${encodeURIComponent(data.email)}`);
+        setIsSuccess(true);
       } else {
         router.push("/");
       }
@@ -106,6 +107,31 @@ export default function SignupPage() {
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     void handleAsyncSubmit();
+  }
+
+  if (isSuccess) {
+    return (
+      <div className="flex flex-col items-center justify-center text-center gap-6 animate-fade-up max-w-sm mx-auto">
+        <div className="w-16 h-16 bg-forest-50 text-forest-700 rounded-full flex items-center justify-center mb-2">
+          {MailIcon}
+        </div>
+        <h1 className="font-display text-3xl font-semibold text-forest-950 tracking-tight leading-tight">
+          Check your email
+        </h1>
+        <p className="font-sans text-sm font-light text-forest-700/80 leading-relaxed">
+          We've sent an activation link to <span className="font-medium text-forest-900">{email}</span>. 
+          Please check your inbox and click the link to activate your account.
+        </p>
+        <div className="pt-4 w-full">
+          <Link
+            href="/login"
+            className="w-full flex items-center justify-center h-12 bg-manikan-teal text-white rounded-lg text-sm font-medium tracking-wide hover:bg-manikan-teal-hover transition-colors shadow-soft"
+          >
+            Return to Login
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (

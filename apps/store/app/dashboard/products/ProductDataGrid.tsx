@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-
+import Link from "next/link";
 type Product = {
   id: string;
   name: string;
@@ -100,10 +100,10 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end gap-2">
-                    <button className="text-sm px-3 py-1.5 rounded bg-cream-50 text-forest-700 hover:bg-cream-100 transition-colors" onClick={() => alert("Edit product feature coming soon!")}>
+                    <Link href={`/dashboard/products/${product.id}/edit`} className="text-sm px-3 py-1.5 rounded bg-cream-50 text-forest-700 hover:bg-cream-100 transition-colors">
                       Edit
-                    </button>
-                    <button 
+                    </Link>
+                    <button
                       className="text-sm px-3 py-1.5 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
                       onClick={async () => {
                         if (confirm('Are you sure you want to delete this product?')) {
@@ -136,7 +136,7 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
           </tbody>
         </table>
       </div>
-      
+
       {/* Pagination Controls */}
       <div className="p-4 border-t border-manikan-border bg-cream-50/30 flex items-center justify-between text-sm text-manikan-text-secondary">
         <div>
