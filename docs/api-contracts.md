@@ -7,7 +7,7 @@ This document outlines the API contracts (endpoints, request payloads, and respo
 ## 0. Store Orchestration Proxy (Next.js)
 * **Base URL**: `http://localhost:3000`
 * **Purpose**: The single entry point for the embeddable widget. The widget calls **only** these routes; the Store proxies to the Python Body Service, persists the `MeasurementSession`, and never exposes internal service URLs. CORS is open (`*`) so the widget can run embedded on any retailer origin.
-* ⚠️ **Security status (Phase 3a)**: these routes are currently **unauthenticated** — retailer-key validation, Origin allowlist, and rate limiting are Phase 3b. See `docs/enterprise-roadmap.md § Security`.
+* 🔐 **Auth (Phase 3b)**: every request must send `X-Manikan-Key: <retailer public key>` and originate from an allowed `Origin`. Failure codes (generic `403` body, no leak of which check failed): `401` (missing key), `403` (missing/disallowed `Origin`, or unknown/inactive key), `429` (rate limit — 30 req/60s per retailer, `Retry-After` header), `404` (product not owned by the authenticated retailer). See `docs/enterprise-roadmap.md § Security`.
 
 ### **POST** `/api/tryon`
 Generates a 3D garment try-on. The Store reads the garment colour/measurements for `product_id` + `size` from the database (source of truth), proxies to the Body Service, persists a `MeasurementSession`, and streams back the `.glb`.

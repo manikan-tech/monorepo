@@ -8,6 +8,7 @@
    ───────────────────────────────────────────────────────────────────────── */
 
 import { getVisitorId } from './visitor'
+import { getRetailerKey } from './config'
 
 const STORE_API_URL = import.meta.env.VITE_STORE_API_URL || 'http://localhost:3000'
 
@@ -18,7 +19,11 @@ async function postForGlb(path, payload, { timeoutMs = 120_000 } = {}) {
   try {
     const response = await fetch(`${STORE_API_URL}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // Public retailer key — the Store verifies it + the request Origin (Phase 3b).
+        'X-Manikan-Key': getRetailerKey() ?? '',
+      },
       signal: controller.signal,
       // shopper_ref (anonymous visitor token) is attached transparently to
       // every call, so components never need to know about identity. See visitor.js.

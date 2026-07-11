@@ -7,7 +7,7 @@ import { mount } from './mount.jsx'
    that a retailer embeds with one script tag:
 
      <script src="https://cdn.manikan.io/widget.js"
-             data-retailer-id="RETAILER_ID"
+             data-retailer-key="RETAILER_PUBLIC_KEY"
              data-product-id="PRODUCT_ID"></script>
 
    On load it auto-mounts a floating trigger bubble (see EmbedWidget.jsx).
@@ -19,12 +19,12 @@ function autoInit() {
   if (!script) {
     console.warn(
       'Manikan widget: could not detect the embed <script> tag for auto-init; ' +
-      'use window.Manikan.mount(target, { productId, retailerId }) instead.'
+      'use window.Manikan.mount(target, { productId, retailerKey }) instead.'
     )
     return
   }
 
-  const { productId, retailerId } = script.dataset
+  const { productId, retailerKey } = script.dataset
   if (!productId) {
     console.warn('Manikan widget: missing data-product-id on the embed <script> tag.')
     return
@@ -33,7 +33,7 @@ function autoInit() {
   const host = document.createElement('div')
   document.body.appendChild(host)
 
-  mount(host, { productId, retailerId })
+  mount(host, { productId, retailerKey })
 }
 
 if (typeof document !== 'undefined') {
