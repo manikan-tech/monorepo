@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createClient } from "../../../lib/supabase/server";
 import { prisma } from "../../../lib/prisma";
 
@@ -45,6 +46,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Login failed. Please try again." }, { status: 500 });
     }
 
+    const cookieStore = await cookies();
+
     // ── Check Role in Database ─────────────────────────────
     // To know where to redirect, we check if they are a Customer or Retailer
     const customer = await prisma.customer.findUnique({
@@ -55,6 +58,7 @@ export async function POST(request: NextRequest) {
       if (role === "retailer") {
         return NextResponse.json({ error: "This email belongs to a customer, please select Login as Customer." }, { status: 403 });
       }
+      cookieStore.set("manikan_role", "customer", { httpOnly: true, secure: true, sameSite: "lax", path: "/" });
       return NextResponse.json({
         success: true,
         redirect: "/",
@@ -79,6 +83,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      cookieStore.set("manikan_role", "retailer", { httpOnly: true, secure: true, sameSite: "lax", path: "/" });
       return NextResponse.json({
         success: true,
         redirect: "/dashboard",
@@ -87,6 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     // If they exist in Supabase but not in our DB, default to customer redirect
+    cookieStore.set("manikan_role", "customer", { httpOnly: true, secure: true, sameSite: "lax", path: "/" });
     return NextResponse.json({
       success: true,
       redirect: "/",

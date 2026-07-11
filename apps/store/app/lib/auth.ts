@@ -70,6 +70,10 @@ export function setCustomerAuthCookie(response: any, token: string): void {
 
 export async function getAuthFromCookies(): Promise<TokenPayload | null> {
   try {
+    const { cookies } = await import("next/headers");
+    const role = (await cookies()).get("manikan_role")?.value;
+    if (role !== "retailer") return null;
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -96,6 +100,10 @@ export async function getAuthFromCookies(): Promise<TokenPayload | null> {
 
 export async function getCustomerFromCookies(): Promise<CustomerTokenPayload | null> {
   try {
+    const { cookies } = await import("next/headers");
+    const role = (await cookies()).get("manikan_role")?.value;
+    if (role !== "customer") return null;
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
