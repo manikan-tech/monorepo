@@ -4,10 +4,14 @@ import { NextRequest, NextResponse } from "next/server";
 // Thin proxy for the bare 3D body avatar (no garment). Enforces the
 // "widget never calls the Python Body Service directly" rule for the
 // body-model playground too. This flow has no product context, so it does
-// NOT write a MeasurementSession (that happens in /api/tryon).
+// NOT write a MeasurementSession (that happens in /api/tryon). The widget
+// may include `shopper_ref` in the payload for uniformity; it is ignored here.
 
 const BODY_SERVICE_URL = process.env.BODY_SERVICE_URL || "http://localhost:8001";
 
+// ─── TODO(Phase 3b — Security): NOT YET IMPLEMENTED ───
+//   Same auth gate as /api/tryon (retailer-key + Origin allowlist + rate
+//   limiting) must be added here before launch. See docs/enterprise-roadmap.md.
 const CORS_HEADERS: Record<string, string> = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",

@@ -12,12 +12,15 @@ import { getCustomerFromCookies } from "../../lib/auth";
 //      truth for garment colour/measurements (not trusted from the client).
 //   3. Proxy to the Body Service /generate-dressed-avatar (returns a .glb).
 //   4. Persist a MeasurementSession (retailerId derived server-side from the
-//      product; customerId best-effort from the cookie).
+//      product; customerId best-effort from the cookie; shopperRef = the
+//      widget's anonymous visitor token).
 //   5. Stream the .glb back to the widget with CORS headers.
 
 const BODY_SERVICE_URL = process.env.BODY_SERVICE_URL || "http://localhost:8001";
 
 // Embeddable widget runs cross-origin on retailer sites → permissive CORS.
+// ─── TODO(Phase 3b — Security): CORS is wide-open for MVP. Tighten to the
+//     retailer's registered origins once the allowlist exists. ───
 const CORS_HEADERS: Record<string, string> = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -41,6 +44,7 @@ export async function POST(request: NextRequest) {
         waist_cm?: number;
         hips_cm?: number;
         recommended_size?: string;
+        shopper_ref?: string;
     };
     try {
         body = await request.json();
@@ -61,7 +65,26 @@ export async function POST(request: NextRequest) {
         waist_cm,
         hips_cm,
         recommended_size,
+        shopper_ref,
     } = body;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  TODO(Phase 3b — Security): NOT YET IMPLEMENTED
+    // ═══════════════════════════════════════════════════════════════════════
+    //  This endpoint is currently UNAUTHENTICATED. Before public launch, add
+    //  here (fail-closed → 403):
+    //    1. Retailer key validation — read the public `data-retailer-key`
+    //       (Retailer.apiKey) the widget sends; reject if unknown/inactive.
+    //    2. Origin allowlist — compare request.headers.get("origin") against
+    //       Retailer.widgetSettings.allowedOrigins. NOTE: Origin is only
+    //       trustworthy for real browser requests; it is trivially forged by
+    //       server-side callers, so it must be paired with (3).
+    //    3. Rate limiting per key (a basic in-memory / Upstash stub for MVP).
+    //    4. Plan/subscription enforcement via Retailer.plan.
+    //  Enterprise: migrate to a Two-Key (Backend-to-Frontend short-lived token)
+    //  system + FastAPI VPC network isolation so the Body Service is never a
+    //  public door. See docs/enterprise-roadmap.md § Security.
+    // ═══════════════════════════════════════════════════════════════════════
 
     // ── 2. Validate required inputs ──
     if (!product_id || !size) {
@@ -154,7 +177,18 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    // ── 5. Persist MeasurementSession (customerId best-effort) ──
+    // ── 5. Persist MeasurementSession ──
+    // Identity, in precedence order:
+    //   customerId  → our own storefront Customer (best-effort, from cookie;
+    //                 usually null for cross-origin embeds).
+    //   shopperRef  → anonymous visitor token from the widget's localStorage
+    //                 (MVP Tier 2). Lets a returning shopper's sessions link
+    //                 without any login.
+    // ─── TODO(Enterprise — Tier 3 Identity): NOT YET IMPLEMENTED ───
+    //   When a retailer passes a signed `customerRef` (HMAC over their own
+    //   logged-in customer id, verified with a per-retailer shared secret),
+    //   it should TAKE PRECEDENCE over the anonymous shopperRef and enable
+    //   cross-device continuity. See docs/enterprise-roadmap.md § Identity.
     let sessionId = "none";
     try {
         const customer = await getCustomerFromCookies();
@@ -162,6 +196,7 @@ export async function POST(request: NextRequest) {
             data: {
                 retailerId: product.retailerId,
                 customerId: customer?.sub ?? null,
+                shopperRef: shopper_ref ?? null,
                 productId: product.id,
                 heightCm: height_cm!,
                 weightKg: weight_kg!,

@@ -8,6 +8,17 @@ import { PrismaClient } from "@prisma/client";
 //
 // Stable string ids (tshirt-001…006) match the widget fixture so the widget
 // can pass a real product id straight through to the proxy.
+//
+// ─── CATALOG STRATEGY ───────────────────────────────────────────────────
+// MVP (now): Option A — catalog is populated manually (CSV seed + this demo
+//   seed). The /api/tryon proxy strictly reads garment data from Prisma as the
+//   single source of truth.
+// Enterprise (future): Option C — Shopify/WooCommerce webhook sync keeps the
+//   catalog fresh automatically; Option D — lazy pull-and-cache for custom
+//   stores. Both must solve the "Garment Gap": flat garment tech-pack
+//   measurements (sleeve/shoulder/length) usually aren't exposed on a
+//   storefront, so they need a spec-sheet importer or a size-chart-derived
+//   estimator. See docs/enterprise-roadmap.md § Catalog.
 
 interface DemoTshirtSize {
     chest: number;    // flat garment chest width (cm)

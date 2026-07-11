@@ -7,6 +7,7 @@ This document outlines the API contracts (endpoints, request payloads, and respo
 ## 0. Store Orchestration Proxy (Next.js)
 * **Base URL**: `http://localhost:3000`
 * **Purpose**: The single entry point for the embeddable widget. The widget calls **only** these routes; the Store proxies to the Python Body Service, persists the `MeasurementSession`, and never exposes internal service URLs. CORS is open (`*`) so the widget can run embedded on any retailer origin.
+* ⚠️ **Security status (Phase 3a)**: these routes are currently **unauthenticated** — retailer-key validation, Origin allowlist, and rate limiting are Phase 3b. See `docs/enterprise-roadmap.md § Security`.
 
 ### **POST** `/api/tryon`
 Generates a 3D garment try-on. The Store reads the garment colour/measurements for `product_id` + `size` from the database (source of truth), proxies to the Body Service, persists a `MeasurementSession`, and streams back the `.glb`.
@@ -22,9 +23,11 @@ Generates a 3D garment try-on. The Store reads the garment colour/measurements f
   "chest_cm": 96,
   "waist_cm": 82,
   "hips_cm": 98,
-  "recommended_size": "M"
+  "recommended_size": "M",
+  "shopper_ref": "b1f2…"
 }
 ```
+`shopper_ref` is the widget's anonymous visitor token (MVP Tier 2 identity); optional, saved to `MeasurementSession.shopperRef`.
 
 #### **Response (200 OK)**
 Binary `.glb` (`Content-Type: model/gltf-binary`). The `X-Manikan-Session-Id` response header carries the persisted `MeasurementSession` id (`none` if persistence was skipped). Errors: `400` (missing fields), `404` (unknown product), `422` (product not try-on enabled), `502` (body service unreachable).
