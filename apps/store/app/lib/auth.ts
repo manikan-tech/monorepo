@@ -102,11 +102,30 @@ export async function getCustomerFromCookies(): Promise<CustomerTokenPayload | n
     if (!user || !user.email) return null;
 
     // Look up the Customer in Prisma
-    const customer = await prisma.customer.findUnique({
+    let customer = await prisma.customer.findUnique({
       where: { email: user.email },
     });
 
-    if (!customer) return null;
+    // If authenticated in Supabase but missing in DB, create them
+    if (!customer) {
+      // Prevent creating a Customer if this is actually a Retailer
+      const retailer = await prisma.retailer.findUnique({
+        where: { email: user.email },
+      });
+      
+      if (retailer) {
+        return null;
+      }
+
+      customer = await prisma.customer.create({
+        data: {
+          authId: user.id,
+          email: user.email,
+          firstName: user.user_metadata?.full_name?.split(' ')[0] || "Test",
+          lastName: user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || "Account",
+        },
+      });
+    }
 
     // Return the payload shape expected by the rest of the app
     return {

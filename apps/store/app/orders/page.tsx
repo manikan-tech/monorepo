@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { createClient } from "../lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 type OrderItem = { id: string; quantity: number; unitPriceEgp: number; sizeLabel: string; product: { name: string; slug: string; imageUrl: string } };
 type Order = { id: string; status: string; totalEgp: number; createdAt: string; items: OrderItem[] };
@@ -18,14 +20,23 @@ const STATUS_COLORS: Record<string, string> = {
 export default function OrdersPage() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
+    const router = useRouter();
 
+    // Auth guard — redirect guests to login
     useEffect(() => {
-        fetch("/api/orders")
-            .then((r) => r.json())
-            .then((d) => setOrders(d.orders ?? []))
-            .catch(() => { })
-            .finally(() => setLoading(false));
-    }, []);
+        const supabase = createClient();
+        supabase.auth.getUser().then(({ data }) => {
+            if (!data.user) {
+                router.push("/login");
+            } else {
+                fetch("/api/orders")
+                    .then((r) => r.json())
+                    .then((d) => setOrders(d.orders ?? []))
+                    .catch(() => {})
+                    .finally(() => setLoading(false));
+            }
+        });
+    }, [router]);
 
     return (
         <div className="max-w-[900px] mx-auto px-6 py-12 md:py-20 w-full">

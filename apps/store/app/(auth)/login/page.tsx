@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthInput from "../components/AuthInput";
+import { createClient } from "../../lib/supabase/client";
 
 /* ── SVG Icons ──────────────────────────────────────────── */
 
@@ -75,6 +76,12 @@ export default function LoginPage() {
         setError(data.error || "Something went wrong. Please try again.");
         return;
       }
+
+      const supabase = createClient();
+      await supabase.auth.signInWithPassword({
+        email: email.toLowerCase().trim(),
+        password,
+      });
 
       // Success — redirect based on role provided by backend
       router.push(data.redirect || "/");

@@ -4,10 +4,19 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCart } from "../../components/CartContext";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { createClient } from "../lib/supabase/client";
 
 export default function CartPage() {
   const { items, removeFromCart, updateQuantity, clearCart, cartTotal, loading } = useCart();
   const router = useRouter();
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) router.push("/login");
+    });
+  }, [router]);
 
   if (loading) {
     return (
