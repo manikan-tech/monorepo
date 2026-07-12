@@ -45,6 +45,40 @@ Binary `.glb` (`Content-Type: model/gltf-binary`).
 
 ---
 
+## 0.5 Retailer Dashboard API — Widget Key (Next.js)
+* **Base URL**: `http://localhost:3000`
+* **Auth**: retailer **session cookie** (dashboard login) — *not* the widget `X-Manikan-Key`. All routes act on the logged-in retailer's own account; there are no ids in the path. `401` if not logged in.
+* **For the frontend team**: this is the backend for the dashboard's "Widget" settings page.
+
+### **GET** `/api/retailer/widget-key`
+Returns the retailer's current embed key + widget credentials (for display).
+```json
+{
+  "apiKey": "pk_live_9f3c…",
+  "isActivated": true,
+  "allowedOrigins": ["https://store.com"]
+}
+```
+
+### **POST** `/api/retailer/widget-key`
+Rotates (regenerates) the public key. No request body. **Immediately invalidates the old key** — the retailer must update their `<script>` tag. Returns `{ "apiKey": "pk_live_…new…" }`.
+
+### **PATCH** `/api/retailer/widget-key`
+Updates widget credentials. Either field is optional; send one or both.
+```json
+{ "allowedOrigins": ["https://store.com", "https://www.store.com"], "isActivated": true }
+```
+`allowedOrigins` are validated + normalized to `scheme://host[:port]` (invalid entries → `400`). Returns the updated `{ isActivated, allowedOrigins }`.
+
+> **Embed snippet** the retailer pastes into their product page:
+> ```html
+> <script src="https://cdn.manikan.io/widget.js"
+>         data-retailer-key="pk_live_…"
+>         data-product-id="PRODUCT_ID"></script>
+> ```
+
+---
+
 ## 1. 3D Body Service
 * **Base URL**: `http://localhost:8001`
 * **Purpose**: Performs estimations of SMPL shape parameters, volume calculations, and mesh parameters based on input physical metrics.
