@@ -1,7 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import EmbedWidget from './EmbedWidget.jsx'
 import widgetCss from '../index.css?inline'
-import { getProductById } from '../data/products'
 import { setRetailerKey } from '../lib/config'
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -57,12 +56,6 @@ export function mount(target, { productId, retailerKey } = {}) {
   // The public retailer key is set once here so api.js can attach it as a header.
   setRetailerKey(retailerKey)
 
-  const product = getProductById(productId)
-  if (!product) {
-    console.error(`Manikan widget: unknown productId "${productId}"`)
-    return null
-  }
-
   const shadowRoot = host.shadowRoot ?? host.attachShadow({ mode: 'open' })
   shadowRoot.innerHTML = ''
   injectStyles(shadowRoot)
@@ -71,7 +64,7 @@ export function mount(target, { productId, retailerKey } = {}) {
   shadowRoot.appendChild(container)
 
   const root = createRoot(container)
-  root.render(<EmbedWidget product={product} retailerKey={retailerKey} />)
+  root.render(<EmbedWidget productId={productId} retailerKey={retailerKey} />)
 
   return { unmount: () => root.unmount() }
 }
