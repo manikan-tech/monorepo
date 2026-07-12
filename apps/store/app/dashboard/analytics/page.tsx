@@ -17,7 +17,7 @@ export default async function AnalyticsPage() {
 
   const retailerId = user.sub;
 
-  // 1. Fetch products for this retailer to use as a dictionary
+  // Fetch products
   const products = await prisma.product.findMany({
     where: { retailerId },
     select: { id: true, name: true, category: true, brand: true, fabric: true, stock: true },
@@ -35,7 +35,7 @@ export default async function AnalyticsPage() {
     );
   }
 
-  // A. Try-on → Purchase Conversion
+  //  Try-on vs Purchase Conversion
   const sessionsTotal = await prisma.measurementSession.groupBy({
     by: ['productId'],
     where: { retailerId },
@@ -58,7 +58,7 @@ export default async function AnalyticsPage() {
     const productName = productDict[s.productId]?.name || "Unknown Product";
     const conversion = total > 0 ? (purchased / total) * 100 : 0;
     return {
-      productId: s.productId, // kept for the rating chart
+      productId: s.productId, 
       productName,
       total,
       purchased,
@@ -66,7 +66,7 @@ export default async function AnalyticsPage() {
     };
   }).sort((a, b) => b.conversion - a.conversion);
 
-  // B. Funnel by Product: Wishlist → Cart → Order
+  // Funnel by Product
   const [wishlistCounts, cartCounts, orderCounts] = await Promise.all([
     prisma.wishlist.groupBy({
       by: ['productId'],
@@ -97,9 +97,9 @@ export default async function AnalyticsPage() {
     wishlist: funnelMap[id]!.wishlist,
     cart: funnelMap[id]!.cart,
     order: funnelMap[id]!.order,
-  })).sort((a, b) => b.wishlist - a.wishlist).slice(0, 10); // top 10 for readability
+  })).sort((a, b) => b.wishlist - a.wishlist).slice(0, 10); 
 
-  // C. Revenue & Units Sold by Category / Brand / Fabric
+  // Revenue & Units Sold by Category / Brand / Fabric
   const orderItems = await prisma.orderItem.findMany({
     where: { productId: { in: productIds } },
     select: { productId: true, quantity: true, unitPriceEgp: true },
@@ -140,7 +140,7 @@ export default async function AnalyticsPage() {
     fabric: toChartData(fabricAgg),
   };
 
-  // D. Stock Health by Category
+  // Stock Health by Category
   const stockHealthAgg: Record<string, { outOfStock: number; lowStock: number; healthy: number }> = {};
   products.forEach(p => {
     if (!stockHealthAgg[p.category]) stockHealthAgg[p.category] = { outOfStock: 0, lowStock: 0, healthy: 0 };
@@ -154,7 +154,7 @@ export default async function AnalyticsPage() {
     ...data,
   }));
 
-  // E. Rating vs. Conversion
+  // Rating vs Conversion
   const reviewAgg = await prisma.review.groupBy({
     by: ['productId'],
     where: { productId: { in: productIds } },
