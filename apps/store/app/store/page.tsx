@@ -133,6 +133,28 @@ export default function StorePage() {
             <option value="Nour Atelier">Nour Atelier</option>
             <option value="Cairo Thread Co.">Cairo Thread Co.</option>
           </select>
+
+          {(category || gender || brand || sort !== "newest" || search) && (
+            <button
+              onClick={() => {
+                setCategory("");
+                setGender("");
+                setBrand("");
+                setSort("newest");
+                setCurrentPage(1);
+                if (search) {
+                  // Remove ?search= query string without a page reload
+                  window.history.pushState({}, '', window.location.pathname);
+                }
+              }}
+              className="px-4 py-2.5 rounded-xl text-forest-700 text-sm font-medium hover:text-forest-950 hover:bg-forest-100 transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Clear Filters
+            </button>
+          )}
         </div>
 
         <select

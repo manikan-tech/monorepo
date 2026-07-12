@@ -37,6 +37,20 @@ export default function SidebarNav() {
       </Link>
 
       <Link
+        href="/dashboard/orders"
+        className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors duration-200 ${
+          pathname.startsWith("/dashboard/orders")
+            ? "bg-forest-800 text-white shadow-soft"
+            : "text-forest-50 hover:bg-forest-800 hover:text-white"
+        }`}
+      >
+        <svg className={`w-5 h-5 ${pathname.startsWith("/dashboard/orders") ? "text-gold-400" : "opacity-70"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+        </svg>
+        <span className="font-medium">Orders</span>
+      </Link>
+
+      <Link
         href="/dashboard/analytics"
         className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors duration-200 ${
           pathname.startsWith("/dashboard/analytics")
