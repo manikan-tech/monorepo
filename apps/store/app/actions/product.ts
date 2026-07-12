@@ -61,3 +61,55 @@ export async function createProduct(formData: FormData) {
   revalidatePath("/dashboard/products");
   redirect("/dashboard/products");
 }
+
+export async function updateProduct(id: string, formData: FormData) {
+  const user = await getAuthFromCookies();
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
+  const name = formData.get("name") as string;
+  const productCode = formData.get("productCode") as string;
+  const description = formData.get("description") as string;
+  const category = formData.get("category") as string;
+  const gender = formData.get("gender") as string;
+  const brand = formData.get("brand") as string;
+  const fabric = formData.get("fabric") as string;
+  const priceEgp = parseFloat(formData.get("priceEgp") as string);
+  const stock = parseInt(formData.get("stock") as string, 10);
+  const imageUrl = formData.get("imageUrl") as string;
+
+  if (!name || !productCode || !category || isNaN(priceEgp) || !imageUrl) {
+    throw new Error("Missing required fields");
+  }
+
+  try {
+    const existing = await prisma.product.findUnique({ where: { id } });
+    if (!existing || existing.retailerId !== user.sub) {
+      throw new Error("Product not found or unauthorized");
+    }
+
+    await prisma.product.update({
+      where: { id },
+      data: {
+        name,
+        productCode,
+        description,
+        category,
+        gender,
+        brand,
+        fabric,
+        priceEgp,
+        stock,
+        imageUrl,
+        images: [imageUrl],
+      },
+    });
+  } catch (error: any) {
+    console.error("Error updating product:", error);
+    throw new Error(error.message || "Failed to update product.");
+  }
+
+  revalidatePath("/dashboard/products");
+  redirect("/dashboard/products");
+}

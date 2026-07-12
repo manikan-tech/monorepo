@@ -162,6 +162,18 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // Mark measurement sessions as purchased (for analytics)
+        for (const item of cartItems) {
+            await tx.measurementSession.updateMany({
+                where: {
+                    customerId: customer.sub,
+                    productId: item.productId,
+                    isPurchased: false,
+                },
+                data: { isPurchased: true },
+            });
+        }
+
         // Clear the cart
         await tx.cartItem.deleteMany({
             where: { customerId: customer.sub },

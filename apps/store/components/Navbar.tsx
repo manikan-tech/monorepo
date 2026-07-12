@@ -30,6 +30,13 @@ const CartIcon = () => (
   </svg>
 );
 
+const UserIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
 const DashboardIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -191,6 +198,11 @@ export default function Navbar() {
                 </span>
               )}
             </Link>
+            {user && !isRetailer && (
+              <Link href="/orders" title="My Orders" className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform relative cursor-pointer block">
+                <UserIcon />
+              </Link>
+            )}
           </div>
 
           <div className="flex items-center gap-3">

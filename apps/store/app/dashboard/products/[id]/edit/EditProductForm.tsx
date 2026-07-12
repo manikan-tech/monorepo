@@ -2,9 +2,9 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { createProduct } from "../../../actions/product";
+import { updateProduct } from "../../../../actions/product";
 
-export default function AddProductPage() {
+export default function EditProductForm({ product }: { product: any }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -16,7 +16,7 @@ export default function AddProductPage() {
     const formData = new FormData(event.currentTarget);
 
     try {
-      await createProduct(formData);
+      await updateProduct(product.id, formData);
     } catch (err: any) {
       if (err.message === "NEXT_REDIRECT") {
         throw err;
@@ -27,29 +27,14 @@ export default function AddProductPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center space-x-4 animate-fade-up" style={{ animationDelay: "100ms" }}>
-        <Link
-          href="/dashboard/products"
-          className="w-10 h-10 rounded-full bg-white border border-manikan-border flex items-center justify-center text-forest-700 hover:bg-forest-50 transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-          </svg>
-        </Link>
-        <div>
-          <h2 className="text-2xl font-display text-forest-900">Add New Product</h2>
-          <p className="text-manikan-text-secondary">Fill in the details to add a new garment to your catalog.</p>
-        </div>
-      </div>
-
+    <>
       {error && (
-        <div className="bg-manikan-error/10 border border-manikan-error text-manikan-error px-4 py-3 rounded-lg text-sm">
+        <div className="bg-manikan-error/10 border border-manikan-error text-manikan-error px-4 py-3 rounded-lg text-sm mb-6">
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-card border border-manikan-border p-8 animate-fade-up" style={{ animationDelay: "200ms" }}>
+      <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-card border border-manikan-border p-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-1">
             <label className="text-sm font-medium text-forest-900" htmlFor="name">Product Name *</label>
@@ -58,7 +43,7 @@ export default function AddProductPage() {
               type="text"
               id="name"
               name="name"
-              placeholder="e.g. Classic Oxford Shirt"
+              defaultValue={product.name}
               className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
             />
           </div>
@@ -70,7 +55,7 @@ export default function AddProductPage() {
               type="text"
               id="productCode"
               name="productCode"
-              placeholder="e.g. OXF-BLU-M"
+              defaultValue={product.productCode}
               className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
             />
           </div>
@@ -81,7 +66,7 @@ export default function AddProductPage() {
               id="description"
               name="description"
               rows={3}
-              placeholder="Tell shoppers about this garment..."
+              defaultValue={product.description || ""}
               className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow resize-none"
             />
           </div>
@@ -92,6 +77,7 @@ export default function AddProductPage() {
               required
               id="category"
               name="category"
+              defaultValue={product.category}
               className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow appearance-none"
             >
               <option value="">Select a category</option>
@@ -108,6 +94,7 @@ export default function AddProductPage() {
               required
               id="gender"
               name="gender"
+              defaultValue={product.gender || "women"}
               className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow appearance-none"
             >
               <option value="women">Women</option>
@@ -122,7 +109,7 @@ export default function AddProductPage() {
               type="text"
               id="brand"
               name="brand"
-              placeholder="Your brand name"
+              defaultValue={product.brand || ""}
               className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
             />
           </div>
@@ -133,7 +120,7 @@ export default function AddProductPage() {
               type="text"
               id="fabric"
               name="fabric"
-              placeholder="e.g. 100% Cotton"
+              defaultValue={product.fabric || ""}
               className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
             />
           </div>
@@ -147,7 +134,7 @@ export default function AddProductPage() {
               name="priceEgp"
               min="0"
               step="0.01"
-              placeholder="0.00"
+              defaultValue={product.priceEgp}
               className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
             />
           </div>
@@ -159,20 +146,19 @@ export default function AddProductPage() {
               id="stock"
               name="stock"
               min="0"
-              defaultValue="0"
+              defaultValue={product.stock}
               className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
             />
           </div>
 
           <div className="space-y-1 md:col-span-2">
             <label className="text-sm font-medium text-forest-900" htmlFor="imageUrl">Product Image URL *</label>
-            <p className="text-xs text-manikan-text-secondary mb-2">For this version, please paste a direct link to the product image (e.g. https://example.com/shirt.jpg)</p>
             <input
               required
               type="url"
               id="imageUrl"
               name="imageUrl"
-              placeholder="https://..."
+              defaultValue={product.imageUrl}
               className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
             />
           </div>
@@ -199,11 +185,11 @@ export default function AddProductPage() {
                 Saving...
               </>
             ) : (
-              "Save Product"
+              "Save Changes"
             )}
           </button>
         </div>
       </form>
-    </div>
+    </>
   );
 }
