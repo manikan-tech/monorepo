@@ -28,10 +28,15 @@ export default async function OrdersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between animate-fade-up" style={{ animationDelay: "100ms" }}>
-        <div>
-          <h2 className="text-2xl font-display text-forest-900">Order Management</h2>
-          <p className="text-manikan-text-secondary">Track and update the status of your customers' orders.</p>
+      <div className="flex items-center justify-between animate-fade-up transition-all duration-500 hover:translate-x-1" style={{ animationDelay: "100ms" }}>
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-gold-400/90 animate-pulse">
+            Order Tracking
+          </p>
+          <h2 className="text-3xl font-display font-semibold text-forest-950 leading-tight">
+            Order <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 to-gold-600">Management</span>
+          </h2>
+          <p className="text-forest-700/60 text-sm mt-1 max-w-2xl">Track and update the status of your customers' orders.</p>
         </div>
       </div>
 

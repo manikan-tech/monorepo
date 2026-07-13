@@ -80,7 +80,10 @@ export default async function AnalyticsPage() {
     }),
     prisma.orderItem.groupBy({
       by: ['productId'],
-      where: { productId: { in: productIds } },
+      where: { 
+        productId: { in: productIds },
+        order: { status: { notIn: ["CANCELLED", "RETURNED"] } }
+      },
       _count: true,
     }),
   ]);
@@ -101,7 +104,10 @@ export default async function AnalyticsPage() {
 
   // Revenue & Units Sold by Category / Brand / Fabric
   const orderItems = await prisma.orderItem.findMany({
-    where: { productId: { in: productIds } },
+    where: { 
+      productId: { in: productIds },
+      order: { status: { notIn: ["CANCELLED", "RETURNED"] } }
+    },
     select: { productId: true, quantity: true, unitPriceEgp: true },
   });
 
@@ -173,12 +179,12 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-2 mb-6">
-        <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-gold-400/80">
+      <div className="flex flex-col gap-2 mb-6 animate-fade-up transition-all duration-500 hover:translate-x-1" style={{ animationDelay: "50ms" }}>
+        <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-gold-400/90 animate-pulse">
           Retailer Insights
         </p>
         <h1 className="font-display text-3xl font-semibold text-forest-950 leading-tight">
-          Analytics & Performance
+          Analytics & <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 to-gold-600">Performance</span>
         </h1>
         <p className="text-forest-700/60 text-sm mt-1 max-w-2xl">
           Track try-on conversions, product funnels, and revenue metrics. Data is aggregated from real customer interactions.
