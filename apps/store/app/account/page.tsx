@@ -80,9 +80,12 @@ export default async function AccountPage() {
               </div>
             </div>
 
-            <button className="w-full mt-8 py-3 px-4 bg-cream-50 text-forest-800 rounded-xl font-medium text-sm border border-forest-900/10 hover:bg-cream-100 transition-colors">
+            <Link 
+              href="/account/edit"
+              className="block w-full mt-8 py-3 px-4 bg-cream-50 text-forest-800 rounded-xl font-medium text-sm text-center border border-forest-900/10 hover:bg-cream-100 transition-colors"
+            >
               Edit Profile
-            </button>
+            </Link>
           </div>
 
           {/* Quick Links */}
