@@ -98,6 +98,11 @@ is delegated / anonymous. Precedence: `customerRef` (enterprise) → `shopperRef
   from Prisma** as the single source of truth.
 - Limitation: retailers won't re-upload a CSV as their catalog changes → data
   goes stale. Fine for pilot/demo, not for scale.
+- ✅ **Garment Gap — manual entry (Stream B):** a retailer makes a real product
+  3D-try-on-ready via `PUT /api/retailer/products/[id]/tryon-config` (dashboard,
+  session-cookie auth, tenant-isolated). They supply the garment colour +
+  per-size flat garment measurements the CSV import doesn't carry. This is the
+  MVP fill for the Garment Gap described below.
 
 **Enterprise (future):** 🔴
 - **Option C — Platform webhook sync:** a Shopify app / WooCommerce plugin
@@ -106,14 +111,16 @@ is delegated / anonymous. Precedence: `customerRef` (enterprise) → `shopperRef
 - **Option D — Lazy pull + cache:** on an unknown/stale `product_id`, fetch that
   one product on-demand from the retailer's platform API / feed URL, cache with
   a TTL. Self-healing, no full-catalog upload.
-- 🔴 **The "Garment Gap" (the real hard problem):** flat garment tech-pack
+- **The "Garment Gap" (the real hard problem):** flat garment tech-pack
   measurements (`garmentSleeveCm`, `garmentShoulderCm`, `garmentLengthCm`,
   flat chest) are *manufacturing* data and are almost never present on a
   storefront/product page or in a standard product feed. Sync solves freshness
-  but **not** this gap. Needs one of: (a) a tech-pack / size-spec importer,
-  (b) a model that derives garment measurements from the retailer's size chart
-  + a per-category garment template, or (c) retailer-supplied spec sheets at
-  onboarding.
+  but **not** this gap.
+  - 🟡 **MVP fill (done):** manual entry via the `tryon-config` route above.
+  - 🔴 **Enterprise (automate the manual step):** (a) a tech-pack / size-spec
+    importer, (b) an ML model that **infers** the flat garment measurements from
+    the retailer's body-fit size chart (`chestCm`/`waistCm`/…) + a per-category
+    garment template, or (c) retailer-supplied spec sheets at onboarding.
 
 ---
 
