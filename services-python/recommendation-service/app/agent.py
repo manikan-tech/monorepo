@@ -1,113 +1,68 @@
-from typing import Any, Optional, TypedDict
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-from langgraph.graph import END, START, StateGraph
+from typing import typing_extensions, Optional, Literal
 from pydantic import BaseModel, Field
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langgraph.graph import StateGraph, END
 from .config import get_settings
 
-class RecommendationOutput(BaseModel):
-    recommended_size: str = Field(
-        description="Best-fit size label exactly as it appears in the size chart (e.g. 'S', 'M', 'L')."
-    )
-    confidence_score: float = Field(
-        description="Confidence between 0.0 (low) and 1.0 (high).",
-        ge=0.0,
-        le=1.0,
-    )
-    explanation: str = Field(
-        description="Warm, specific natural-language explanation of why this size fits and how it feels."
-    )
-    alternative_size: Optional[str] = Field(
-        default=None,
-        description="A second size the shopper could try if primary fit is borderline. Omit when confidence is high."
-    )
+class SizeRecommendationResult(BaseModel):
+    recommended_size: str = Field(..., description="The finalized recommended size, e.g., 'M', 'L'.")
+    confidence_score: float = Field(..., description="Confidence score between 0.0 and 1.0.")
+    explanation: str = Field(..., description="Detailed explanation for choosing this size based on the metrics.")
+    alternative_size: Optional[str] = Field(None, description="An alternative size if applicable.")
 
-class FitState(TypedDict):
+class FitState(typing_extensions.TypedDict):
     session_id: str
-    product_id: str
-    retailer_id: str
-    betas: list[float]
-    size_chart: list[dict]
-    result: Optional[RecommendationOutput]
+    messages: list[dict]
+    product_id: Optional[str]
+    retailer_id: Optional[str]
+    betas: Optional[list[float]]
+    size_chart: Optional[str]
+    result: Optional[SizeRecommendationResult]
 
-_SYSTEM_PROMPT = """
-You are Manikan's AI Fit Advisor — an expert in 3D body shape analysis and precise clothing size recommendation.
-
-## Understanding the shopper's body (SMPL betas)
-You receive 10 SMPL shape parameters (betas), which are PCA components of a 3D body scan:
-  β₀  — overall body size (smaller / larger frame)
-  β₁  — body fullness / weight (positive → heavier / fuller)
-  β₂  — muscularity vs. slimness
-  β₃  — torso length
-  β₄  — shoulder breadth
-  β₅  — leg length proportions
-  β₆₋₉ — subtler shape variations (posture, limb proportions, etc.)
-
-## Size chart fields
-Each size row contains:
-  sizeLabel  — the label to recommend (e.g. "XS", "S", "M", "L", "XL")
-  chestCm    — garment chest measurement in centimetres
-  waistCm    — garment waist measurement in centimetres
-  hipCm      — garment hip measurement in centimetres
-  lengthCm   — total garment length in centimetres
-  inseamCm   — inseam length in centimetres
-
-## Your reasoning process
-1. Infer approximate body measurements from the beta profile.
-2. Match those measurements to the size chart in priority order: chest → waist → hip → length → inseam.
-3. Choose the size where the most critical measurements fit without pulling.
-4. Assign confidence: 0.90–1.0 = excellent, 0.70–0.89 = good, <0.70 = borderline.
-5. Recommend an alternative size only when confidence < 0.85.
-
-## Tone
-Write the explanation in a warm, confident, body-neutral voice. Describe the *fit feel* — never use negative body language.
-""".strip()
-
-def _format_size_chart(rows: list[dict]) -> str:
-    if not rows:
-        return "(no size chart data provided)"
-    header = "| sizeLabel | chestCm | waistCm | hipCm | lengthCm | inseamCm |"
-    sep = "|-----------|---------|---------|-------|----------|----------|"
-    lines = [header, sep]
-    for r in rows:
-        lines.append(
-            f"| {r.get('sizeLabel', '?')} | {r.get('chestCm', '?')} | {r.get('waistCm', '?')} | {r.get('hipCm', '?')} | {r.get('lengthCm', '?')} | {r.get('inseamCm', '?')} |"
-        )
-    return "\n".join(lines)
-
-def _build_human_message(state: FitState) -> str:
-    betas_str = ", ".join(f"{b:.4f}" for b in state["betas"])
-    chart_str = _format_size_chart(state["size_chart"])
-    return (
-        f"**Product ID**: {state['product_id']}\n\n"
-        f"**Shopper SMPL betas**:\n[{betas_str}]\n\n"
-        f"**Official Size Chart**:\n{chart_str}\n\n"
-        f"Please analyse the fit and return your structured recommendation."
-    )
-
-def build_recommendation_graph():
+def call_conversational_agent(state: FitState) -> FitState:
     settings = get_settings()
+    
     llm = ChatOpenAI(
         model="gpt-4o",
-        api_key=settings.openai_api_key,
-        temperature=0,
-        max_retries=2,
+        temperature=0.0,
+        openai_api_key=settings.openai_api_key
     )
-    structured_llm = llm.with_structured_output(RecommendationOutput)
+    
+    system_prompt = (
+        "You are the Manikan AI Size Recommendation Assistant, an expert fashion co-pilot.\n"
+        "Your task is to interact with the user to determine their best clothing size.\n\n"
+        "CRITICAL RULES:\n"
+        "1. If the user provides their 10 body shape parameters (betas) AND a product size chart (passed as a CSV string below), "
+        "you MUST trigger the size calculation and respond using the structured 'SizeRecommendationResult' format.\n"
+        "2. If the 10 betas or the size chart are missing, interact politely in a minimal, premium tone (like Zara or COS style). "
+        "Ask the user to provide their body parameters or state what they need, and do NOT fill out the structured size parameters yet.\n"
+        "3. When a size chart is provided, use it as your ground-truth context to map the user's body parameters (betas) to the closest matching size.\n\n"
+        f"CURRENT CONTEXT SIZE CHART (CSV):\n{state.get('size_chart') or 'No size chart provided yet.'}\n\n"
+        f"USER BODY PARAMETERS (BETAS):\n{state.get('betas') or 'No betas provided yet.'}"
+    )
+    
+    formatted_messages = [("system", system_prompt)]
+    for msg in state["messages"]:
+        formatted_messages.append((msg["role"], msg["content"]))
+        
+    if state.get("betas") and state.get("size_chart"):
+        structured_llm = llm.with_structured_output(SizeRecommendationResult)
+        response = structured_llm.invoke(formatted_messages)
+        state["result"] = response
+    else:
+        response = llm.invoke(formatted_messages)
+        state["messages"].append({"role": "assistant", "content": str(response.content)})
+        state["result"] = None
+        
+    return state
 
-    async def analyze_fit(state: FitState) -> dict[str, Any]:
-        output = await structured_llm.ainvoke(
-            [
-                SystemMessage(content=_SYSTEM_PROMPT),
-                HumanMessage(content=_build_human_message(state)),
-            ]
-        )
-        return {"result": output}
+def route_next_step(state: FitState) -> Literal["agent_node", "__end__"]:
+    return END
 
-    graph = StateGraph(FitState)
-    graph.add_node("analyze_fit", analyze_fit)
-    graph.add_edge(START, "analyze_fit")
-    graph.add_edge("analyze_fit", END)
-    return graph.compile()
+workflow = StateGraph(FitState)
+workflow.add_node("agent_node", call_conversational_agent)
+workflow.set_entry_point("agent_node")
+workflow.add_conditional_edges("agent_node", route_next_step)
 
-recommendation_graph = build_recommendation_graph()
+recommendation_graph = workflow.compile()
