@@ -40,7 +40,13 @@ export default function WidgetSettingsForm({ initialSettings }: { initialSetting
   };
 
   return (
-    <form onSubmit={handleSave} className="bg-white rounded-2xl shadow-card border border-manikan-border p-8 max-w-2xl">
+    <form onSubmit={handleSave} className="bg-white rounded-2xl shadow-card border border-manikan-border p-8 h-full transition-all duration-300 hover:shadow-lg">
+      <div className="border-b border-manikan-border pb-6 mb-6">
+        <h3 className="text-xl font-display font-semibold text-forest-900">Visual Configuration</h3>
+        <p className="text-sm text-manikan-text-secondary mt-1">
+          Customize the colors and language for your widget.
+        </p>
+      </div>
       <div className="space-y-6">
         <div>
           <label className="block text-sm font-medium text-forest-900 mb-2">Primary Color</label>

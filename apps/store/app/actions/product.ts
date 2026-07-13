@@ -139,6 +139,12 @@ export async function updateProduct(formData: FormData) {
     });
 
     // 3. Upsert variants
+    const currentVariants = await prisma.productVariant.findMany({
+      where: { productId },
+      select: { id: true }
+    });
+    const validVariantIds = new Set(currentVariants.map(v => v.id));
+
     const existingVariantIds = variantIds.filter(id => id); // non-empty
     await prisma.productVariant.deleteMany({
       where: {
@@ -160,10 +166,12 @@ export async function updateProduct(formData: FormData) {
       };
 
       if (id) {
-        await prisma.productVariant.update({
-          where: { id },
-          data,
-        });
+        if (validVariantIds.has(id)) {
+          await prisma.productVariant.update({
+            where: { id },
+            data,
+          });
+        }
       } else {
         await prisma.productVariant.create({
           data: {
