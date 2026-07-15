@@ -135,6 +135,12 @@ export default function ManikanWidget({ product, onClose }) {
     }
   }, [isReturningUser, step, tryOnUrl, isGenerating, generateTryOn, recommendedSize])
 
+  // Products without garment data can't be rendered in 3D yet — show a graceful
+  // "coming soon" state instead of walking the shopper into a failed try-on.
+  if (!product.isTryOnEnabled) {
+    return <ComingSoon product={product} onClose={onClose} />
+  }
+
   return (
     <div className="mw-overlay" onClick={onClose}>
       <div className="mw-container" onClick={e => e.stopPropagation()}>
@@ -450,6 +456,53 @@ function GeneratingOverlay() {
 
       <div className="mw-gen-progress">
         <div className="mw-gen-progress-bar" />
+      </div>
+    </div>
+  )
+}
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Coming Soon — shown for products that don't have 3D garment data yet
+   (isTryOnEnabled === false). Keeps the shopper informed instead of erroring.
+   ───────────────────────────────────────────────────────────────────────── */
+function ComingSoon({ product, onClose }) {
+  return (
+    <div className="mw-overlay" onClick={onClose}>
+      <div className="mw-container" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
+        <div className="mw-header">
+          <div className="mw-header-brand">
+            <div>
+              <h2 className="mw-brand-name">Manikan</h2>
+              <p className="mw-brand-sub">Virtual Try-On</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="mw-close" id="close-widget">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="mw-body" style={{ textAlign: 'center' }}>
+          {product.image && (
+            <img
+              src={product.image}
+              alt={product.name}
+              style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 12, margin: '8px auto 20px' }}
+            />
+          )}
+          <h3 className="mw-welcome-title">{product.name}</h3>
+          <p className="mw-section-desc" style={{ marginTop: 8 }}>
+            3D virtual try-on isn’t available for this product yet — we’re adding
+            it soon. In the meantime, check the size guide on the product page.
+          </p>
+        </div>
+
+        <div className="mw-footer">
+          <span className="mw-footer-text">Powered by</span>
+          <div className="mw-footer-logo"><span>Manikan</span></div>
+        </div>
       </div>
     </div>
   )

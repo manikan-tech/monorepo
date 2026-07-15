@@ -7,6 +7,7 @@ import { createProduct } from "../../../actions/product";
 export default function AddProductPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [variantRows, setVariantRows] = useState([Date.now()]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -18,6 +19,9 @@ export default function AddProductPage() {
     try {
       await createProduct(formData);
     } catch (err: any) {
+      if (err.message === "NEXT_REDIRECT") {
+        throw err;
+      }
       setError(err.message || "Something went wrong.");
       setIsSubmitting(false);
     }
@@ -25,7 +29,7 @@ export default function AddProductPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-4 animate-fade-up" style={{ animationDelay: "100ms" }}>
         <Link
           href="/dashboard/products"
           className="w-10 h-10 rounded-full bg-white border border-manikan-border flex items-center justify-center text-forest-700 hover:bg-forest-50 transition-colors"
@@ -46,7 +50,7 @@ export default function AddProductPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-card border border-manikan-border p-8">
+      <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-card border border-manikan-border p-8 animate-fade-up" style={{ animationDelay: "200ms" }}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-1">
             <label className="text-sm font-medium text-forest-900" htmlFor="name">Product Name *</label>
@@ -149,16 +153,79 @@ export default function AddProductPage() {
             />
           </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-forest-900" htmlFor="stock">Initial Stock</label>
-            <input
-              type="number"
-              id="stock"
-              name="stock"
-              min="0"
-              defaultValue="0"
-              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
-            />
+          <div className="space-y-1 md:col-span-2 pt-6 border-t border-manikan-border mt-4">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-medium text-forest-900">Product Variants</h3>
+                <p className="text-sm text-manikan-text-secondary">Add sizes, unique SKUs, and stock limits.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVariantRows([...variantRows, Date.now()])}
+                className="px-4 py-2 bg-cream-50 text-forest-800 text-sm font-medium rounded-lg border border-manikan-border hover:bg-cream-100 transition-colors"
+              >
+                + Add Size/Variant
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {variantRows.map((rowId, index) => (
+                <div key={rowId} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end bg-manikan-bg p-4 rounded-xl border border-manikan-border">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-forest-900">Size (e.g. M) *</label>
+                    <input
+                      required
+                      type="text"
+                      name="variant_size[]"
+                      placeholder="M"
+                      className="w-full px-3 py-2 bg-white border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-forest-900">SKU</label>
+                    <input
+                      type="text"
+                      name="variant_sku[]"
+                      placeholder="Variant SKU"
+                      className="w-full px-3 py-2 bg-white border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-forest-900">Stock *</label>
+                    <input
+                      required
+                      type="number"
+                      name="variant_stock[]"
+                      min="0"
+                      defaultValue="10"
+                      className="w-full px-3 py-2 bg-white border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-forest-900">Price Override (EGP)</label>
+                    <input
+                      type="number"
+                      name="variant_price[]"
+                      min="0"
+                      step="0.01"
+                      placeholder="Optional"
+                      className="w-full px-3 py-2 bg-white border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 text-sm"
+                    />
+                  </div>
+                  <div className="pb-1">
+                    {variantRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setVariantRows(variantRows.filter(id => id !== rowId))}
+                        className="text-red-500 hover:text-red-700 text-sm font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors w-full md:w-auto"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-1 md:col-span-2">

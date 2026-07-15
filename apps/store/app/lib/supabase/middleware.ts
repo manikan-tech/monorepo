@@ -49,11 +49,22 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  const role = request.cookies.get("manikan_role")?.value;
+
   // Account and Dashboard protection
-  const isProtectedPath = request.nextUrl.pathname.startsWith("/account") || request.nextUrl.pathname.startsWith("/dashboard");
-  if (!user && isProtectedPath) {
+  const isDashboard = request.nextUrl.pathname.startsWith("/dashboard");
+  const isAccount = request.nextUrl.pathname.startsWith("/account");
+
+  if (!user && (isDashboard || isAccount)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  // Prevent Customers from accessing Retailer dashboard
+  if (user && isDashboard && role !== "retailer") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 

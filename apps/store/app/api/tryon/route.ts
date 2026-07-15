@@ -79,7 +79,6 @@ export async function POST(request: NextRequest) {
         shopper_ref,
     } = body;
 
-
     // ── 2. Validate required inputs ──
     if (!product_id || !size) {
         return NextResponse.json(

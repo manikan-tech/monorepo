@@ -72,6 +72,7 @@ export default function Navbar() {
   useEffect(() => {
     const supabase = createClient();
 
+
     // Initial fetch
     supabase.auth.getUser().then(({ data }) => {
       const u = data?.user || null;
@@ -90,7 +91,7 @@ export default function Navbar() {
     });
 
     return () => subscription.unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -175,35 +176,47 @@ export default function Navbar() {
                 <SearchIcon />
               </button>
             )}
-            <Link href="/wishlist" className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform relative cursor-pointer block">
-              <WishlistIcon />
-              {wishlistCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-gold-500 text-forest-950 text-[10px] font-bold w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-sm animate-fade-in-up">
-                  {wishlistCount}
-                </span>
-              )}
-            </Link>
-            <Link href="/cart" className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform relative cursor-pointer block">
-              <CartIcon />
-              {cartCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-gold-500 text-forest-950 text-[10px] font-bold w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-sm animate-fade-in-up">
-                  {cartCount}
-                </span>
-              )}
-            </Link>
+            {!isRetailer && (
+              <>
+                <Link href="/wishlist" className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform relative cursor-pointer block">
+                  <WishlistIcon />
+                  {wishlistCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-gold-500 text-forest-950 text-[10px] font-bold w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-sm animate-fade-in-up">
+                      {wishlistCount}
+                    </span>
+                  )}
+                </Link>
+                <Link href="/cart" className="text-forest-900/60 hover:text-gold-600 transition-colors duration-300 hover:-translate-y-0.5 transform relative cursor-pointer block">
+                  <CartIcon />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-gold-500 text-forest-950 text-[10px] font-bold w-[18px] h-[18px] flex items-center justify-center rounded-full shadow-sm animate-fade-in-up">
+                      {cartCount}
+                    </span>
+                  )}
+                </Link>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
             {user ? (
               <>
                 {/* Dashboard button — only shown to Retailers */}
-                {isRetailer && (
+                {isRetailer ? (
                   <Link
                     href="/dashboard"
                     className="hidden md:flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gold-700 bg-gold-50 border border-gold-200 rounded-xl hover:bg-gold-100 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
                   >
                     <DashboardIcon />
                     Dashboard
+                  </Link>
+                ) : (
+                  <Link
+                    href="/account"
+                    className="hidden md:flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-forest-700 bg-forest-50 border border-forest-200 rounded-xl hover:bg-forest-100 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                    Profile
                   </Link>
                 )}
                 <button

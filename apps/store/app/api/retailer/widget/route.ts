@@ -30,10 +30,29 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
+    // ─── NOTE for the UI/dashboard team ─────────────────────────────────
+    // This is a SHALLOW MERGE, not an overwrite — ON PURPOSE. widgetSettings
+    // also stores `allowedOrigins`, the security allowlist the embeddable
+    // widget's auth gate depends on (see app/lib/widget-auth.ts). If this
+    // route overwrote widgetSettings with only your colour/language fields,
+    // it would silently WIPE allowedOrigins and lock every retailer out of
+    // their own widget. Please keep this as a merge. Manage the origins list
+    // via PATCH /api/retailer/widget-key, not here. ─────────────────────
+    const existing = await prisma.retailer.findUnique({
+      where: { id: user.sub },
+      select: { widgetSettings: true },
+    });
+    const existingSettings =
+      existing?.widgetSettings &&
+      typeof existing.widgetSettings === "object" &&
+      !Array.isArray(existing.widgetSettings)
+        ? (existing.widgetSettings as Record<string, unknown>)
+        : {};
+
     const updated = await prisma.retailer.update({
       where: { id: user.sub },
       data: {
-        widgetSettings: body.settings,
+        widgetSettings: { ...existingSettings, ...(body.settings ?? {}) },
       },
     });
 

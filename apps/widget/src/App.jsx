@@ -4,6 +4,7 @@ import AvatarViewer from './components/AvatarViewer'
 import ManikanWidget from './components/ManikanWidget'
 import { generateAvatar } from './lib/api'
 import { getProducts } from './data/products'
+import { fetchProduct } from './lib/products'
 
 const PRODUCTS = getProducts()
 
@@ -63,32 +64,51 @@ function PlaygroundTab() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Try-On Tab — pick a product from the static catalog, open the widget
-   modal (/generate-dressed-avatar). Swap ./data/products.js for a Store
-   API call later — this tab doesn't need to change.
+   Try-On Tab — the grid is a demo PICKER (static list of ids); clicking a
+   product fetches the REAL product from the Store API and opens the widget.
    ───────────────────────────────────────────────────────────────────────── */
 function TryOnTab() {
   const [activeProduct, setActiveProduct] = useState(null)
+  const [loadingId, setLoadingId] = useState(null)
+  const [error, setError] = useState(null)
+
+  const openProduct = async (id) => {
+    setLoadingId(id)
+    setError(null)
+    try {
+      setActiveProduct(await fetchProduct(id))
+    } catch (e) {
+      setError(e.message || 'Failed to load product. Is the Store running on :3000, and is VITE_MANIKAN_KEY set?')
+    } finally {
+      setLoadingId(null)
+    }
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-10">
       <div className="max-w-5xl mx-auto">
         <h2 className="text-xl font-bold text-text-primary mb-2">Pick a product to try on</h2>
         <p className="text-sm text-text-muted mb-8">
-          Static demo catalog (src/data/products.js) — swap for a Store API call later.
+          The grid is a demo picker; clicking fetches the real product from the Store API (/api/widget/products/[id]).
         </p>
+        {error && (
+          <div className="mb-6 px-4 py-3 rounded-lg bg-danger/10 border border-danger/20 text-sm text-danger">
+            {error}
+          </div>
+        )}
         <div className="product-grid">
           {PRODUCTS.map(product => (
             <button
               key={product.id}
-              onClick={() => setActiveProduct(product)}
+              onClick={() => openProduct(product.id)}
+              disabled={loadingId !== null}
               className="product-card text-left cursor-pointer"
               id={`try-on-${product.id}`}
             >
               <div className="product-card-image-wrap">
                 <img src={product.image} alt={product.name} className="product-card-image" />
                 <div className="product-card-overlay">
-                  <span className="product-card-cta">Try It On</span>
+                  <span className="product-card-cta">{loadingId === product.id ? 'Loading…' : 'Try It On'}</span>
                 </div>
               </div>
               <div className="product-card-info">

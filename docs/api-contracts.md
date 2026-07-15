@@ -45,6 +45,89 @@ Binary `.glb` (`Content-Type: model/gltf-binary`).
 
 ---
 
+## 0.5 Retailer Dashboard API — Widget Key (Next.js)
+* **Base URL**: `http://localhost:3000`
+* **Auth**: retailer **session cookie** (dashboard login) — *not* the widget `X-Manikan-Key`. All routes act on the logged-in retailer's own account; there are no ids in the path. `401` if not logged in.
+* **For the frontend team**: this is the backend for the dashboard's "Widget" settings page.
+
+### **GET** `/api/retailer/widget-key`
+Returns the retailer's current embed key + widget credentials (for display).
+```json
+{
+  "apiKey": "pk_live_9f3c…",
+  "isActivated": true,
+  "allowedOrigins": ["https://store.com"]
+}
+```
+
+### **POST** `/api/retailer/widget-key`
+Rotates (regenerates) the public key. No request body. **Immediately invalidates the old key** — the retailer must update their `<script>` tag. Returns `{ "apiKey": "pk_live_…new…" }`.
+
+### **PATCH** `/api/retailer/widget-key`
+Updates widget credentials. Either field is optional; send one or both.
+```json
+{ "allowedOrigins": ["https://store.com", "https://www.store.com"], "isActivated": true }
+```
+`allowedOrigins` are validated + normalized to `scheme://host[:port]` (invalid entries → `400`). Returns the updated `{ isActivated, allowedOrigins }`.
+
+### **GET** `/api/retailer/products/[id]/tryon-config`
+Returns a product's current 3D-try-on config (garment colour + per-size garment measurements) + a computed `isTryOnEnabled`. `404` if the product isn't the caller's.
+```json
+{
+  "productId": "…",
+  "tshirtColorHex": "#1a1a2e",
+  "isTryOnEnabled": true,
+  "variants": [
+    { "id": "…", "sizeLabel": "M", "garmentChestCm": 50, "garmentLengthCm": 70, "garmentSleeveCm": 20, "garmentShoulderCm": 44 }
+  ]
+}
+```
+
+### **PUT** `/api/retailer/products/[id]/tryon-config`
+Makes a product 3D-try-on-ready: sets the garment colour + the flat garment measurements per size (the "garment gap" data a CSV import doesn't carry). Atomic. `sizeLabel`s must already exist on the product.
+```json
+{
+  "tshirtColorHex": "#1a1a2e",
+  "variants": [
+    { "sizeLabel": "M", "garmentChestCm": 50, "garmentLengthCm": 70, "garmentSleeveCm": 20, "garmentShoulderCm": 44 }
+  ]
+}
+```
+Validation → `400` (bad hex, missing/non-positive measurements, or unknown `sizeLabel`). Returns the same shape as `GET`.
+
+### **GET** `/api/retailer/products`
+Lists the retailer's **own** products (paginated). Query: `?page=1&limit=20`.
+```json
+{
+  "products": [
+    { "id": "…", "productCode": "SKU1", "name": "…", "category": "shirt", "priceEgp": 500,
+      "imageUrl": "…", "stock": 40, "isActive": true, "variantCount": 4, "isTryOnEnabled": false, "createdAt": "…" }
+  ],
+  "pagination": { "total": 12, "page": 1, "limit": 20, "totalPages": 1 }
+}
+```
+
+### **POST** `/api/retailer/products`
+Creates a product + its variants (atomic). Slug is auto-generated. Required: `productCode, name, category, gender, brand, fabric, imageUrl, priceEgp (>0)`. Optional: `description, images[], stock, discountPct, isActive, variants[]` (each variant needs a unique `sizeLabel`; garment/try-on fields are NOT set here — use `tryon-config`). `201` on success; `409` if `productCode` already exists for this retailer; `400` on validation.
+
+### **GET** `/api/retailer/products/[id]`
+Full product detail (with variants + `isTryOnEnabled`). `404` if not the caller's.
+
+### **PATCH** `/api/retailer/products/[id]`
+Edits product **scalar** fields (`name, description, category, gender, brand, fabric, imageUrl, images, priceEgp, discountPct, stock, isActive`) — send only what changes. Does **not** touch variants or garment data. `404` if not the caller's; `400` on validation.
+
+### **DELETE** `/api/retailer/products/[id]`
+Hard-deletes a product (cascades variants/cart/wishlist/reviews/sessions). **`409` if the product has order history** — deactivate instead (`PATCH { isActive: false }`) to preserve order records. `404` if not the caller's.
+
+> **Embed snippet** the retailer pastes into their product page:
+> ```html
+> <script src="https://cdn.manikan.io/widget.js"
+>         data-retailer-key="pk_live_…"
+>         data-product-id="PRODUCT_ID"></script>
+> ```
+
+---
+
 ## 1. 3D Body Service
 * **Base URL**: `http://localhost:8001`
 * **Purpose**: Performs estimations of SMPL shape parameters, volume calculations, and mesh parameters based on input physical metrics.

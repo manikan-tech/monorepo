@@ -32,8 +32,24 @@ caller, so someone holding BOTH a leaked valid key AND a known allowed origin
 can still reach the engine — the rate limit only caps the blast radius. Still
 🔴 (future): **plan/quota enforcement** via `Retailer.plan`; a **shared-store
 (Redis/Upstash)** limiter with cross-instance coordination; an **IP/global
-pre-limit** to shield the DB from bogus-key floods; a **`pk_live_` key format**
-distinct from any secret key.
+pre-limit** to shield the DB from bogus-key floods.
+
+### Retailer key management (Stream A) 🟡
+
+Retailers manage their own widget credentials via `/api/retailer/widget-key`
+(session-cookie auth): read/rotate the public key, set `allowedOrigins`, and
+toggle `isActivated`.
+- ✅ **Recognizable key format** — rotated keys now use `pk_live_<hex>` (was a
+  bare `cuid`). 🔴 signup still mints a `cuid` default (schema `@default(cuid())`,
+  owned by the auth/UI team) — should be switched to `pk_live_` for consistency.
+- 🔴 **`isActivated` is retailer-self-toggleable (MVP)** so the flow can be
+  tested without an admin dashboard. Must become **admin-only + paywall-gated**
+  — a retailer must not be able to self-activate a paid feature.
+- 🔴 **`allowedOrigins` lives inside the `widgetSettings` JSON blob.** Promote to
+  a dedicated `Retailer.allowedOrigins String[]` column — a security-critical
+  array inside a shared JSON blob is fragile (any non-merging write wipes it;
+  the dashboard's widget-settings `POST` was already patched to a shallow merge
+  to prevent exactly that).
 
 **Enterprise (future):** 🔴
 - **Two-Key (Backend-to-Frontend Token) system:** the public key only mints a
@@ -82,6 +98,11 @@ is delegated / anonymous. Precedence: `customerRef` (enterprise) → `shopperRef
   from Prisma** as the single source of truth.
 - Limitation: retailers won't re-upload a CSV as their catalog changes → data
   goes stale. Fine for pilot/demo, not for scale.
+- ✅ **Garment Gap — manual entry (Stream B):** a retailer makes a real product
+  3D-try-on-ready via `PUT /api/retailer/products/[id]/tryon-config` (dashboard,
+  session-cookie auth, tenant-isolated). They supply the garment colour +
+  per-size flat garment measurements the CSV import doesn't carry. This is the
+  MVP fill for the Garment Gap described below.
 
 **Enterprise (future):** 🔴
 - **Option C — Platform webhook sync:** a Shopify app / WooCommerce plugin
@@ -90,14 +111,16 @@ is delegated / anonymous. Precedence: `customerRef` (enterprise) → `shopperRef
 - **Option D — Lazy pull + cache:** on an unknown/stale `product_id`, fetch that
   one product on-demand from the retailer's platform API / feed URL, cache with
   a TTL. Self-healing, no full-catalog upload.
-- 🔴 **The "Garment Gap" (the real hard problem):** flat garment tech-pack
+- **The "Garment Gap" (the real hard problem):** flat garment tech-pack
   measurements (`garmentSleeveCm`, `garmentShoulderCm`, `garmentLengthCm`,
   flat chest) are *manufacturing* data and are almost never present on a
   storefront/product page or in a standard product feed. Sync solves freshness
-  but **not** this gap. Needs one of: (a) a tech-pack / size-spec importer,
-  (b) a model that derives garment measurements from the retailer's size chart
-  + a per-category garment template, or (c) retailer-supplied spec sheets at
-  onboarding.
+  but **not** this gap.
+  - 🟡 **MVP fill (done):** manual entry via the `tryon-config` route above.
+  - 🔴 **Enterprise (automate the manual step):** (a) a tech-pack / size-spec
+    importer, (b) an ML model that **infers** the flat garment measurements from
+    the retailer's body-fit size chart (`chestCm`/`waistCm`/…) + a per-category
+    garment template, or (c) retailer-supplied spec sheets at onboarding.
 
 ---
 

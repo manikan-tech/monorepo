@@ -1,0 +1,1294 @@
+[33mcommit 1ba8f9f8beaa30af5d2dea360fa27c7bcc630188[m
+Author: Your Name <mmhamdyyy@gmail.com>
+Date:   Thu Jul 9 12:19:49 2026 +0300
+
+    feat/retailer dashboard and otp via email
+
+[1mdiff --git a/apps/store/app/(auth)/activation/ActivationForm.tsx b/apps/store/app/(auth)/activation/ActivationForm.tsx[m
+[1mnew file mode 100644[m
+[1mindex 0000000..aec0ee1[m
+[1m--- /dev/null[m
+[1m+++ b/apps/store/app/(auth)/activation/ActivationForm.tsx[m
+[36m@@ -0,0 +1,342 @@[m
+[32m+[m[32m"use client";[m
+[32m+[m
+[32m+[m[32mimport { useState, useRef, useEffect, FormEvent, KeyboardEvent, ClipboardEvent } from "react";[m
+[32m+[m[32mimport { useRouter, useSearchParams } from "next/navigation";[m
+[32m+[m[32mimport Link from "next/link";[m
+[32m+[m
+[32m+[m[32mconst OTP_LENGTH = 6;[m
+[32m+[m[32mconst COOLDOWN_SECONDS = 60;[m
+[32m+[m
+[32m+[m[32m/* ── SVG Icons ──────────────────────────────────────────── */[m
+[32m+[m
+[32m+[m[32mconst ShieldIcon = ([m
+[32m+[m[32m  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">[m
+[32m+[m[32m    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />[m
+[32m+[m[32m    <path d="m9 12 2 2 4-4" />[m
+[32m+[m[32m  </svg>[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32mconst MailIcon = ([m
+[32m+[m[32m  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">[m
+[32m+[m[32m    <rect x="2" y="4" width="20" height="16" rx="2" />[m
+[32m+[m[32m    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />[m
+[32m+[m[32m  </svg>[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32m/* ── Activation Form Component ──────────────────────────── */[m
+[32m+[m
+[32m+[m[32mexport default function ActivationForm() {[m
+[32m+[m[32m  const router = useRouter();[m
+[32m+[m[32m  const searchParams = useSearchParams();[m
+[32m+[m[32m  const email = searchParams.get("email") || "";[m
+[32m+[m
+[32m+[m[32m  const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));[m
+[32m+[m[32m  const [error, setError] = useState("");[m
+[32m+[m[32m  const [successMessage, setSuccessMessage] = useState("");[m
+[32m+[m[32m  const [isLoading, setIsLoading] = useState(false);[m
+[32m+[m[32m  const [cooldown, setCooldown] = useState(COOLDOWN_SECONDS);[m
+[32m+[m
+[32m+[m[32m  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);[m
+[32m+[m
+[32m+[m[32m  // ── Cooldown timer ─────────────────────────────────────[m
+[32m+[m[32m  useEffect(() => {[m
+[32m+[m[32m    if (cooldown <= 0) return;[m
+[32m+[m[32m    const timer = setInterval(() => {[m
+[32m+[m[32m      setCooldown((prev) => prev - 1);[m
+[32m+[m[32m    }, 1000);[m
+[32m+[m[32m    return () => clearInterval(timer);[m
+[32m+[m[32m  }, [cooldown]);[m
+[32m+[m
+[32m+[m[32m  // ── Focus first input on mount ─────────────────────────[m
+[32m+[m[32m  useEffect(() => {[m
+[32m+[m[32m    inputRefs.current[0]?.focus();[m
+[32m+[m[32m  }, []);[m
+[32m+[m
+[32m+[m[32m  // ── Redirect if no email ───────────────────────────────[m
+[32m+[m[32m  useEffect(() => {[m
+[32m+[m[32m    if (!email) {[m
+[32m+[m[32m      router.push("/signup");[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }, [email, router]);[m
+[32m+[m
+[32m+[m[32m  // ── Input handlers ─────────────────────────────────────[m
+[32m+[m[32m  function handleChange(index: number, value: string) {[m
+[32m+[m[32m    // Only allow digits[m
+[32m+[m[32m    const digit = value.replace(/\D/g, "").slice(-1);[m
+[32m+[m[32m    const newOtp = [...otp];[m
+[32m+[m[32m    newOtp[index] = digit;[m
+[32m+[m[32m    setOtp(newOtp);[m
+[32m+[m[32m    setError("");[m
+[32m+[m
+[32m+[m[32m    // Auto-focus next input[m
+[32m+[m[32m    if (digit && index < OTP_LENGTH - 1) {[m
+[32m+[m[32m      inputRefs.current[index + 1]?.focus();[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // Auto-submit when all digits are filled[m
+[32m+[m[32m    if (digit && index === OTP_LENGTH - 1) {[m
+[32m+[m[32m      const fullCode = newOtp.join("");[m
+[32m+[m[32m      if (fullCode.length === OTP_LENGTH) {[m
+[32m+[m[32m        handleVerify(fullCode);[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  function handleKeyDown(index: number, e: KeyboardEvent<HTMLInputElement>) {[m
+[32m+[m[32m    if (e.key === "Backspace" && !otp[index] && index > 0) {[m
+[32m+[m[32m      inputRefs.current[index - 1]?.focus();[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  function handlePaste(e: ClipboardEvent<HTMLInputElement>) {[m
+[32m+[m[32m    e.preventDefault();[m
+[32m+[m[32m    const pastedData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, OTP_LENGTH);[m
+[32m+[m[32m    if (!pastedData) return;[m
+[32m+[m
+[32m+[m[32m    const newOtp = [...otp];[m
+[32m+[m[32m    for (let i = 0; i < pastedData.length; i++) {[m
+[32m+[m[32m      newOtp[i] = pastedData.charAt(i);[m
+[32m+[m[32m    }[m
+[32m+[m[32m    setOtp(newOtp);[m
+[32m+[m
+[32m+[m[32m    // Focus the next empty input or the last one[m
+[32m+[m[32m    const nextEmptyIndex = newOtp.findIndex((d) => !d);[m
+[32m+[m[32m    const focusIndex = nextEmptyIndex === -1 ? OTP_LENGTH - 1 : nextEmptyIndex;[m
+[32m+[m[32m    inputRefs.current[focusIndex]?.focus();[m
+[32m+[m
+[32m+[m[32m    // Auto-submit if all digits pasted[m
+[32m+[m[32m    if (pastedData.length === OTP_LENGTH) {[m
+[32m+[m[32m      handleVerify(pastedData);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // ── Verify OTP ─────────────────────────────────────────[m
+[32m+[m[32m  async function handleVerify(code?: string) {[m
+[32m+[m[32m    const otpCode = code || otp.join("");[m
+[32m+[m[32m    if (otpCode.length !== OTP_LENGTH) {[m
+[32m+[m[32m      setError("Please enter the full 6-digit code");[m
+[32m+[m[32m      return;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    setIsLoading(true);[m
+[32m+[m[32m    setError("");[m
+[32m+[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      const res = await fetch("/api/auth/verify-otp", {[m
+[32m+[m[32m        method: "POST",[m
+[32m+[m[32m        headers: { "Content-Type": "application/json" },[m
+[32m+[m[32m        body: JSON.stringify({[m
+[32m+[m[32m          email: email.toLowerCase().trim(),[m
+[32m+[m[32m          code: otpCode,[m
+[32m+[m[32m        }),[m
+[32m+[m[32m      });[m
+[32m+[m
+[32m+[m[32m      const data = await res.json();[m
+[32m+[m
+[32m+[m[32m      if (!res.ok) {[m
+[32m+[m[32m        setError(data.error || "Verification failed. Please try again.");[m
+[32m+[m[32m        setOtp(Array(OTP_LENGTH).fill(""));[m
+[32m+[m[32m        inputRefs.current[0]?.focus();[m
+[32m+[m[32m        return;[m
+[32m+[m[32m      }[m
+[32m+[m
+[32m+[m[32m      // Success — redirect to dashboard[m
+[32m+[m[32m      router.push("/");[m
+[32m+[m[32m    } catch {[m
+[32m+[m[32m      setError("Network error. Please check your connection and try again.");[m
+[32m+[m[32m    } finally {[m
+[32m+[m[32m      setIsLoading(false);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // ── Resend OTP ─────────────────────────────────────────[m
+[32m+[m[32m  async function handleResend() {[m
+[32m+[m[32m    if (cooldown > 0) return;[m
+[32m+[m
+[32m+[m[32m    setError("");[m
+[32m+[m[32m    setSuccessMessage("");[m
+[32m+[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      const res = await fetch("/api/auth/resend-otp", {[m
+[32m+[m[32m        method: "POST",[m
+[32m+[m[32m        headers: { "Content-Type": "application/json" },[m
+[32m+[m[32m        body: JSON.stringify({ email: email.toLowerCase().trim() }),[m
+[32m+[m[32m      });[m
+[32m+[m
+[32m+[m[32m      const data = await res.json();[m
+[32m+[m
+[32m+[m[32m      if (!res.ok) {[m
+[32m+[m[32m        if (data.retryAfterSeconds) {[m
+[32m+[m[32m          setCooldown(data.retryAfterSeconds);[m
+[32m+[m[32m        }[m
+[32m+[m[32m        setError(data.error || "Could not resend code. Please try again.");[m
+[32m+[m[32m        return;[m
+[32m+[m[32m      }[m
+[32m+[m
+[32m+[m[32m      setSuccessMessage("A new code has been sent to your email.");[m
+[32m+[m[32m      setCooldown(COOLDOWN_SECONDS);[m
+[32m+[m[32m      setOtp(Array(OTP_LENGTH).fill(""));[m
+[32m+[m[32m      inputRefs.current[0]?.focus();[m
+[32m+[m
+[32m+[m[32m      // Clear success message after 5 seconds[m
+[32m+[m[32m      setTimeout(() => setSuccessMessage(""), 5000);[m
+[32m+[m[32m    } catch {[m
+[32m+[m[32m      setError("Network error. Please check your connection and try again.");[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // ── Submit handler ─────────────────────────────────────[m
+[32m+[m[32m  function handleSubmit(e: FormEvent) {[m
+[32m+[m[32m    e.preventDefault();[m
+[32m+[m[32m    void handleVerify();[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  function formatCooldown(seconds: number): string {[m
+[32m+[m[32m    const m = Math.floor(seconds / 60);[m
+[32m+[m[32m    const s = seconds % 60;[m
+[32m+[m[32m    return `${m}:${s.toString().padStart(2, "0")}`;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  if (!email) return null;[m
+[32m+[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <form onSubmit={handleSubmit} className="flex flex-col gap-6 animate-fade-up" noValidate>[m
+[32m+[m[32m      {/* ── Heading ────────────────────────────────────── */}[m
+[32m+[m[32m      <div className="flex flex-col gap-3">[m
+[32m+[m[32m        <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-forest-600/10 text-forest-600 mb-1">[m
+[32m+[m[32m          {ShieldIcon}[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m        <h1 className="font-display text-4xl font-semibold text-forest-950 tracking-tight leading-tight">[m
+[32m+[m[32m          Verify your{" "}[m
+[32m+[m[32m          <span className="gold-shimmer bg-clip-text text-transparent">Email</span>[m
+[32m+[m[32m        </h1>[m
+[32m+[m[32m        <div className="flex items-center gap-2 text-forest-700/80">[m
+[32m+[m[32m          <span className="text-forest-700/60">{MailIcon}</span>[m
+[32m+[m[32m          <p className="font-sans text-sm font-light leading-relaxed">[m
+[32m+[m[32m            We sent a 6-digit code to{" "}[m
+[32m+[m[32m            <span className="font-medium text-forest-900">{email}</span>[m
+[32m+[m[32m          </p>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </div>[m
+[32m+[m
+[32m+[m[32m      {/* ── Error Banner ──────────────────────────────── */}[m
+[32m+[m[32m      {error && ([m
+[32m+[m[32m        <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-md text-red-600 text-xs font-normal animate-fade-in" role="alert">[m
+[32m+[m[32m          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">[m
+[32m+[m[32m            <circle cx="12" cy="12" r="10" />[m
+[32m+[m[32m            <line x1="12" y1="8" x2="12" y2="12" />[m
+[32m+[m[32m            <line x1="12" y1="16" x2="12.01" y2="16" />[m
+[32m+[m[32m          </svg>[m
+[32m+[m[32m          <span>{error}</span>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      )}[m
+[32m+[m
+[32m+[m[32m      {/* ── Success Banner ────────────────────────────── */}[m
+[32m+[m[32m      {successMessage && ([m
+[32m+[m[32m        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-md text-emerald-700 text-xs font-normal animate-fade-in" role="status">[m
+[32m+[m[32m          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">[m
+[32m+[m[32m            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />[m
+[32m+[m[32m            <polyline points="22 4 12 14.01 9 11.01" />[m
+[32m+[m[32m          </svg>[m
+[32m+[m[32m          <span>{successMessage}</span>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      )}[m
+[32m+[m
+[32m+[m[32m      {/* ── OTP Input Boxes ───────────────────────────── */}[m
+[32m+[m[32m      <div className="flex flex-col gap-2">[m
+[32m+[m[32m        <label className="font-sans text-xs font-medium text-forest-900 tracking-wide">[m
+[32m+[m[32m          Verification Code[m
+[32m+[m[32m        </label>[m
+[32m+[m[32m        <div className="flex items-center justify-between gap-3">[m
+[32m+[m[32m          {Array.from({ length: OTP_LENGTH }).map((_, index) => ([m
+[32m+[m[32m            <input[m
+[32m+[m[32m              key={index}[m
+[32m+[m[32m              ref={(el) => { inputRefs.current[index] = el; }}[m
+[32m+[m[32m              id={`otp-input-${index}`}[m
+[32m+[m[32m              type="text"[m
+[32m+[m[32m              inputMode="numeric"[m
+[32m+[m[32m              autoComplete="one-time-code"[m
+[32m+[m[32m              maxLength={1}[m
+[32m+[m[32m              value={otp[index]}[m
+[32m+[m[32m              onChange={(e) => handleChange(index, e.target.value)}[m
+[32m+[m[32m              onKeyDown={(e) => handleKeyDown(index, e)}[m
+[32m+[m[32m              onPaste={index === 0 ? handlePaste : undefined}[m
+[32m+[m[32m              className={`[m
+[32m+[m[32m                w-full aspect-square max-w-[56px] text-center font-display text-2xl font-semibold[m
+[32m+[m[32m                bg-manikan-input-bg border-[1.5px] rounded-xl[m
+[32m+[m[32m                outline-none transition-all duration-300 ease-out[m
+[32m+[m[32m                focus:shadow-glow[m
+[32m+[m[32m                ${otp[index][m
+[32m+[m[32m                  ? "border-forest-600 text-forest-900"[m
+[32m+[m[32m                  : "border-manikan-border text-forest-700"[m
+[32m+[m[32m                }[m
+[32m+[m[32m                ${error[m
+[32m+[m[32m                  ? "border-manikan-error focus:ring-[3px] focus:ring-red-500/10"[m
+[32m+[m[32m                  : "focus:border-manikan-border-focus focus:ring-[3px] focus:ring-[#1b3a4b]/15"[m
+[32m+[m[32m                }[m
+[32m+[m[32m                placeholder:text-forest-700/30[m
+[32m+[m[32m              `}[m
+[32m+[m[32m              placeholder="·"[m
+[32m+[m[32m              disabled={isLoading}[m
+[32m+[m[32m              aria-label={`Digit ${index + 1}`}[m
+[32m+[m[32m            />[m
+[32m+[m[32m          ))}[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </div>[m
+[32m+[m
+[32m+[m[32m      {/* ── Submit ─────────────────────────────────────── */}[m
+[32m+[m[32m      <button[m
+[32m+[m[32m        type="submit"[m
+[32m+[m[32m        className="relative overflow-hidden flex items-center justify-center gap-2 w-full bg-forest-600 text-white hover:bg-forest-700 shadow-soft hover:shadow-card btn-glow rounded-xl px-5 py-2.5 font-medium transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:active:scale-100 group"[m
+[32m+[m[32m        disabled={isLoading || otp.join("").length !== OTP_LENGTH}[m
+[32m+[m[32m        id="activation-submit"[m
+[32m+[m[32m      >[m
+[32m+[m[32m        {/* Infinite Shimmer Sweep */}[m
+[32m+[m[32m        <div className="absolute inset-0 w-full h-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent)] bg-[length:200%_100%] animate-shimmer-slow pointer-events-none" />[m
+[32m+[m[41m        [m
+[32m+[m[32m        <span className="relative z-10 flex items-center justify-center gap-2">[m
+[32m+[m[32m          {isLoading ? ([m
+[32m+[m[32m            <span className="inline-block w-5 h-5 border-[2.5px] border-white/30 border-t-white rounded-full animate-spin" />[m
+[32m+[m[32m          ) : ([m
+[32m+[m[32m            <>[m
+[32m+[m[32m              Verify & Continue[m
+[32m+[m[32m              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-300 group-hover:translate-x-1">[m
+[32m+[m[32m                <line x1="5" y1="12" x2="19" y2="12" />[m
+[32m+[m[32m                <polyline points="12 5 19 12 12 19" />[m
+[32m+[m[32m              </svg>[m
+[32m+[m[32m            </>[m
+[32m+[m[32m          )}[m
+[32m+[m[32m        </span>[m
+[32m+[m[32m      </button>[m
+[32m+[m
+[32m+[m[32m      {/* ── Resend & Footer ───────────────────────────── */}[m
+[32m+[m[32m      <div className="flex flex-col items-center gap-3">[m
+[32m+[m[32m        <div className="text-center">[m
+[32m+[m[32m          {cooldown > 0 ? ([m
+[32m+[m[32m            <p className="font-sans text-sm font-light text-forest-700/60">[m
+[32m+[m[32m              Resend code in{" "}[m
+[32m+[m[32m              <span className="font-semibold text-forest-900 tabular-nums">[m
+[32m+[m[32m                {formatCooldown(cooldown)}[m
+[32m+[m[32m              </span>[m
+[32m+[m[32m            </p>[m
+[32m+[m[32m          ) : ([m
+[32m+[m[32m            <button[m
+[32m+[m[32m              type="button"[m
+[32m+[m[32m              onClick={handleResend}[m
+[32m+[m[32m              className="font-sans text-sm font-semibold text-gold-600 underline underline-offset-4 decoration-gold-600/30 transition-colors hover:decoration-gold-600 hover:text-gold-500"[m
+[32m+[m[32m              id="resend-otp-btn"[m
+[32m+[m[32m            >[m
+[32m+[m[32m              Resend verification code[m
+[32m+[m[32m            </button>[m
+[32m+[m[32m          )}[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m        <p className="text-center font-sans text-sm font-light text-forest-700/80">[m
+[32m+[m[32m          Wrong email?{" "}[m
+[32m+[m[32m          <Link href="/signup" className="text-gold-600 font-semibold underline underline-offset-4 decoration-gold-600/30 transition-colors hover:decoration-gold-600 hover:text-gold-500">[m
+[32m+[m[32m            Sign up again[m
+[32m+[m[32m          </Link>[m
+[32m+[m[32m        </p>[m
+[32m+[m[32m      </div>[m
+[32m+[m[32m    </form>[m
+[32m+[m[32m  );[m
+[32m+[m[32m}[m
+[1mdiff --git a/apps/store/app/(auth)/activation/page.tsx b/apps/store/app/(auth)/activation/page.tsx[m
+[1mnew file mode 100644[m
+[1mindex 0000000..5a71295[m
+[1m--- /dev/null[m
+[1m+++ b/apps/store/app/(auth)/activation/page.tsx[m
+[36m@@ -0,0 +1,21 @@[m
+[32m+[m[32m"use client";[m
+[32m+[m
+[32m+[m[32mimport { Suspense } from "react";[m
+[32m+[m[32mimport ActivationForm from "./ActivationForm";[m
+[32m+[m
+[32m+[m[32mfunction LoadingFallback() {[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <div className="flex flex-col items-center justify-center gap-4 py-12 animate-fade-up">[m
+[32m+[m[32m      <span className="inline-block w-8 h-8 border-[3px] border-forest-600/20 border-t-forest-600 rounded-full animate-spin" />[m
+[32m+[m[32m      <p className="font-sans text-sm font-light text-forest-700/60">Loading…</p>[m
+[32m+[m[32m    </div>[m
+[32m+[m[32m  );[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mexport default function ActivationPage() {[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <Suspense fallback={<LoadingFallback />}>[m
+[32m+[m[32m      <ActivationForm />[m
+[32m+[m[32m    </Suspense>[m
+[32m+[m[32m  );[m
+[32m+[m[32m}[m
+[1mdiff --git a/apps/store/app/(auth)/login/page.tsx b/apps/store/app/(auth)/login/page.tsx[m
+[1mindex fe6e1b4..8e4f0c2 100644[m
+[1m--- a/apps/store/app/(auth)/login/page.tsx[m
+[1m+++ b/apps/store/app/(auth)/login/page.tsx[m
+[36m@@ -47,12 +47,9 @@[m [mexport default function LoginPage() {[m
+     return Object.keys(errors).length === 0;[m
+   }[m
+ [m
+[31m-  async function handleSubmit(e: FormEvent) {[m
+[31m-    e.preventDefault();[m
+[32m+[m[32m  async function handleAsyncSubmit() {[m
+     setError("");[m
+[31m-[m
+     if (!validate()) return;[m
+[31m-[m
+     setIsLoading(true);[m
+ [m
+     try {[m
+[36m@@ -68,6 +65,11 @@[m [mexport default function LoginPage() {[m
+       const data = await res.json();[m
+ [m
+       if (!res.ok) {[m
+[32m+[m[32m        // If account exists but not activated, redirect to activation page[m
+[32m+[m[32m        if (data.requiresActivation) {[m
+[32m+[m[32m          router.push(`/activation?email=${encodeURIComponent(data.email)}`);[m
+[32m+[m[32m          return;[m
+[32m+[m[32m        }[m
+         setError(data.error || "Something went wrong. Please try again.");[m
+         return;[m
+       }[m
+[36m@@ -81,6 +83,11 @@[m [mexport default function LoginPage() {[m
+     }[m
+   }[m
+ [m
+[32m+[m[32m  function handleSubmit(e: FormEvent) {[m
+[32m+[m[32m    e.preventDefault();[m
+[32m+[m[32m    void handleAsyncSubmit();[m
+[32m+[m[32m  }[m
+[32m+[m
+   return ([m
+     <form onSubmit={handleSubmit} className="flex flex-col gap-6 animate-fade-up" noValidate>[m
+       {/* ── Heading ────────────────────────────────────── */}[m
+[1mdiff --git a/apps/store/app/(auth)/signup/page.tsx b/apps/store/app/(auth)/signup/page.tsx[m
+[1mindex 8deb429..908b541 100644[m
+[1m--- a/apps/store/app/(auth)/signup/page.tsx[m
+[1m+++ b/apps/store/app/(auth)/signup/page.tsx[m
+[36m@@ -59,12 +59,9 @@[m [mexport default function SignupPage() {[m
+     return Object.keys(errors).length === 0;[m
+   }[m
+ [m
+[31m-  async function handleSubmit(e: FormEvent) {[m
+[31m-    e.preventDefault();[m
+[32m+[m[32m  async function handleAsyncSubmit() {[m
+     setError("");[m
+[31m-[m
+     if (!validate()) return;[m
+[31m-[m
+     setIsLoading(true);[m
+ [m
+     try {[m
+[36m@@ -85,8 +82,12 @@[m [mexport default function SignupPage() {[m
+         return;[m
+       }[m
+ [m
+[31m-      // Success — redirect to dashboard[m
+[31m-      router.push("/");[m
+[32m+[m[32m      // Success — redirect to activation page for OTP verification[m
+[32m+[m[32m      if (data.requiresActivation) {[m
+[32m+[m[32m        router.push(`/activation?email=${encodeURIComponent(data.email)}`);[m
+[32m+[m[32m      } else {[m
+[32m+[m[32m        router.push("/");[m
+[32m+[m[32m      }[m
+     } catch {[m
+       setError("Network error. Please check your connection and try again.");[m
+     } finally {[m
+[36m@@ -94,6 +95,11 @@[m [mexport default function SignupPage() {[m
+     }[m
+   }[m
+ [m
+[32m+[m[32m  function handleSubmit(e: FormEvent) {[m
+[32m+[m[32m    e.preventDefault();[m
+[32m+[m[32m    void handleAsyncSubmit();[m
+[32m+[m[32m  }[m
+[32m+[m
+   return ([m
+     <form onSubmit={handleSubmit} className="flex flex-col gap-6 animate-fade-up" noValidate>[m
+       {/* ── Heading ────────────────────────────────────── */}[m
+[1mdiff --git a/apps/store/app/actions/product.ts b/apps/store/app/actions/product.ts[m
+[1mnew file mode 100644[m
+[1mindex 0000000..8d0f2d0[m
+[1m--- /dev/null[m
+[1m+++ b/apps/store/app/actions/product.ts[m
+[36m@@ -0,0 +1,63 @@[m
+[32m+[m[32m"use server";[m
+[32m+[m
+[32m+[m[32mimport { prisma } from "../lib/prisma";[m
+[32m+[m[32mimport { getAuthFromCookies } from "../lib/auth";[m
+[32m+[m[32mimport { revalidatePath } from "next/cache";[m
+[32m+[m[32mimport { redirect } from "next/navigation";[m
+[32m+[m
+[32m+[m[32mexport async function createProduct(formData: FormData) {[m
+[32m+[m[32m  const user = await getAuthFromCookies();[m
+[32m+[m[32m  if (!user) {[m
+[32m+[m[32m    throw new Error("Unauthorized");[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  const name = formData.get("name") as string;[m
+[32m+[m[32m  const productCode = formData.get("productCode") as string;[m
+[32m+[m[32m  const description = formData.get("description") as string;[m
+[32m+[m[32m  const category = formData.get("category") as string;[m
+[32m+[m[32m  const gender = formData.get("gender") as string;[m
+[32m+[m[32m  const brand = formData.get("brand") as string;[m
+[32m+[m[32m  const fabric = formData.get("fabric") as string;[m
+[32m+[m[32m  const priceEgp = parseFloat(formData.get("priceEgp") as string);[m
+[32m+[m[32m  const stock = parseInt(formData.get("stock") as string, 10);[m
+[32m+[m[32m  const imageUrl = formData.get("imageUrl") as string;[m
+[32m+[m
+[32m+[m[32m  // Basic validation[m
+[32m+[m[32m  if (!name || !productCode || !category || isNaN(priceEgp) || !imageUrl) {[m
+[32m+[m[32m    throw new Error("Missing required fields");[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Generate slug[m
+[32m+[m[32m  const baseSlug = `${brand.toLowerCase()}-${name.toLowerCase()}-${productCode.toLowerCase()}`[m
+[32m+[m[32m    .replace(/[^a-z0-9]+/g, "-")[m
+[32m+[m[32m    .replace(/(^-|-$)+/g, "");[m
+[32m+[m
+[32m+[m[32m  const uniqueSuffix = Math.floor(Math.random() * 1000).toString();[m
+[32m+[m[32m  const slug = `${baseSlug}-${uniqueSuffix}`;[m
+[32m+[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    await prisma.product.create({[m
+[32m+[m[32m      data: {[m
+[32m+[m[32m        retailerId: user.sub,[m
+[32m+[m[32m        name,[m
+[32m+[m[32m        productCode,[m
+[32m+[m[32m        description,[m
+[32m+[m[32m        category,[m
+[32m+[m[32m        gender,[m
+[32m+[m[32m        brand,[m
+[32m+[m[32m        fabric,[m
+[32m+[m[32m        priceEgp,[m
+[32m+[m[32m        stock,[m
+[32m+[m[32m        imageUrl,[m
+[32m+[m[32m        slug,[m
+[32m+[m[32m        images: [imageUrl], // Add as first image in array too[m
+[32m+[m[32m      },[m
+[32m+[m[32m    });[m
+[32m+[m[32m  } catch (error) {[m
+[32m+[m[32m    console.error("Error creating product:", error);[m
+[32m+[m[32m    throw new Error("Failed to create product. Make sure the product code is unique.");[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  revalidatePath("/dashboard/products");[m
+[32m+[m[32m  redirect("/dashboard/products");[m
+[32m+[m[32m}[m
+[1mdiff --git a/apps/store/app/api/auth/login/route.ts b/apps/store/app/api/auth/login/route.ts[m
+[1mindex 0b5807b..7b640b6 100644[m
+[1m--- a/apps/store/app/api/auth/login/route.ts[m
+[1m+++ b/apps/store/app/api/auth/login/route.ts[m
+[36m@@ -50,6 +50,18 @@[m [mexport async function POST(request: NextRequest) {[m
+       );[m
+     }[m
+ [m
+[32m+[m[32m    // ── Check activation status ─────────────────────────────[m
+[32m+[m[32m    if (!retailer.isActivated) {[m
+[32m+[m[32m      return NextResponse.json([m
+[32m+[m[32m        {[m
+[32m+[m[32m          error: "Please verify your email before signing in",[m
+[32m+[m[32m          requiresActivation: true,[m
+[32m+[m[32m          email: retailer.email,[m
+[32m+[m[32m        },[m
+[32m+[m[32m        { status: 403 }[m
+[32m+[m[32m      );[m
+[32m+[m[32m    }[m
+[32m+[m
+     // ── Generate JWT and set cookie ────────────────────────[m
+     const token = await createToken({[m
+       sub: retailer.id,[m
+[1mdiff --git a/apps/store/app/api/auth/resend-otp/route.ts b/apps/store/app/api/auth/resend-otp/route.ts[m
+[1mnew file mode 100644[m
+[1mindex 0000000..a77a51c[m
+[1m--- /dev/null[m
+[1m+++ b/apps/store/app/api/auth/resend-otp/route.ts[m
+[36m@@ -0,0 +1,102 @@[m
+[32m+[m[32mimport { NextRequest, NextResponse } from "next/server";[m
+[32m+[m[32mimport { prisma } from "../../../lib/prisma";[m
+[32m+[m[32mimport { sendOtpEmail } from "../../../lib/email";[m
+[32m+[m[32mimport crypto from "crypto";[m
+[32m+[m
+[32m+[m[32mfunction generateOtp(): string {[m
+[32m+[m[32m  return crypto.randomInt(100000, 999999).toString();[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mexport async function POST(request: NextRequest) {[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    const body = await request.json();[m
+[32m+[m[32m    const { email } = body;[m
+[32m+[m
+[32m+[m[32m    // ── Validation ─────────────────────────────────────────[m
+[32m+[m[32m    if (!email || typeof email !== "string") {[m
+[32m+[m[32m      return NextResponse.json([m
+[32m+[m[32m        { error: "Email is required" },[m
+[32m+[m[32m        { status: 400 }[m
+[32m+[m[32m      );[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // ── Find retailer ──────────────────────────────────────[m
+[32m+[m[32m    const retailer = await prisma.retailer.findUnique({[m
+[32m+[m[32m      where: { email: email.toLowerCase().trim() },[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    if (!retailer) {[m
+[32m+[m[32m      return NextResponse.json([m
+[32m+[m[32m        { error: "Account not found" },[m
+[32m+[m[32m        { status: 404 }[m
+[32m+[m[32m      );[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    if (retailer.isActivated) {[m
+[32m+[m[32m      return NextResponse.json([m
+[32m+[m[32m        { error: "Account is already activated" },[m
+[32m+[m[32m        { status: 400 }[m
+[32m+[m[32m      );[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // ── 1-minute cooldown check ────────────────────────────[m
+[32m+[m[32m    const lastOtp = await prisma.otpToken.findFirst({[m
+[32m+[m[32m      where: { retailerId: retailer.id },[m
+[32m+[m[32m      orderBy: { createdAt: "desc" },[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    if (lastOtp) {[m
+[32m+[m[32m      const secondsSinceLastOtp = Math.floor([m
+[32m+[m[32m        (Date.now() - lastOtp.createdAt.getTime()) / 1000[m
+[32m+[m[32m      );[m
+[32m+[m
+[32m+[m[32m      if (secondsSinceLastOtp < 60) {[m
+[32m+[m[32m        const retryAfterSeconds = 60 - secondsSinceLastOtp;[m
+[32m+[m[32m        return NextResponse.json([m
+[32m+[m[32m          {[m
+[32m+[m[32m            error: "Please wait before requesting a new code",[m
+[32m+[m[32m            retryAfterSeconds,[m
+[32m+[m[32m          },[m
+[32m+[m[32m          { status: 429 }[m
+[32m+[m[32m        );[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // ── Delete old OTPs and create a new one ───────────────[m
+[32m+[m[32m    await prisma.otpToken.deleteMany({[m
+[32m+[m[32m      where: { retailerId: retailer.id },[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    const otpCode = generateOtp();[m
+[32m+[m[32m    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes[m
+[32m+[m
+[32m+[m[32m    await prisma.otpToken.create({[m
+[32m+[m[32m      data: {[m
+[32m+[m[32m        retailerId: retailer.id,[m
+[32m+[m[32m        code: otpCode,[m
+[32m+[m[32m        expiresAt,[m
+[32m+[m[32m      },[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    await sendOtpEmail(retailer.email, otpCode);[m
+[32m+[m
+[32m+[m[32m    return NextResponse.json({[m
+[32m+[m[32m      success: true,[m
+[32m+[m[32m      message: "A new verification code has been sent to your email.",[m
+[32m+[m[32m    });[m
+[32m+[m[32m  } catch (error: any) {[m
+[32m+[m[32m    console.error("Resend OTP error:", error);[m
+[32m+[m
+[32m+[m[32m    if (error instanceof Error && error.message.includes("testing emails")) {[m
+[32m+[m[32m      return NextResponse.json([m
+[32m+[m[32m        { error: "Free tier limitation: You can only send test emails to your registered Resend email address. Please use that email to test the signup flow." },[m
+[32m+[m[32m        { status: 400 }[m
+[32m+[m[32m      );[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    return NextResponse.json([m
+[32m+[m[32m      { error: "Internal server error" },[m
+[32m+[m[32m      { status: 500 }[m
+[32m+[m[32m    );[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[1mdiff --git a/apps/store/app/api/auth/signup/route.ts b/apps/store/app/api/auth/signup/route.ts[m
+[1mindex bb78402..097c7f8 100644[m
+[1m--- a/apps/store/app/api/auth/signup/route.ts[m
+[1m+++ b/apps/store/app/api/auth/signup/route.ts[m
+[36m@@ -1,6 +1,12 @@[m
+ import { NextRequest, NextResponse } from "next/server";[m
+ import { prisma } from "../../../lib/prisma";[m
+[31m-import { hashPassword, createToken, setAuthCookie } from "../../../lib/auth";[m
+[32m+[m[32mimport { hashPassword } from "../../../lib/auth";[m
+[32m+[m[32mimport { sendOtpEmail } from "../../../lib/email";[m
+[32m+[m[32mimport crypto from "crypto";[m
+[32m+[m
+[32m+[m[32mfunction generateOtp(): string {[m
+[32m+[m[32m  return crypto.randomInt(100000, 999999).toString();[m
+[32m+[m[32m}[m
+ [m
+ export async function POST(request: NextRequest) {[m
+   try {[m
+[36m@@ -49,7 +55,7 @@[m [mexport async function POST(request: NextRequest) {[m
+       );[m
+     }[m
+ [m
+[31m-    // ── Create retailer ────────────────────────────────────[m
+[32m+[m[32m    // ── Create retailer (not activated) ─────────────────────[m
+     const hashedPassword = await hashPassword(password);[m
+ [m
+     const retailer = await prisma.retailer.create({[m
+[36m@@ -58,32 +64,50 @@[m [mexport async function POST(request: NextRequest) {[m
+         storeName: name.trim(),[m
+         email: email.toLowerCase().trim(),[m
+         hashedPassword,[m
+[32m+[m[32m        isActivated: false,[m
+       },[m
+     });[m
+ [m
+[31m-    // ── Generate JWT and set cookie ────────────────────────[m
+[31m-    const token = await createToken({[m
+[31m-      sub: retailer.id,[m
+[31m-      email: retailer.email,[m
+[31m-      name: retailer.storeName,[m
+[32m+[m[32m    // ── Generate OTP and send email ─────────────────────────[m
+[32m+[m[32m    const otpCode = generateOtp();[m
+[32m+[m[32m    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes[m
+[32m+[m
+[32m+[m[32m    // Delete any existing OTPs for this retailer (clean slate)[m
+[32m+[m[32m    await prisma.otpToken.deleteMany({[m
+[32m+[m[32m      where: { retailerId: retailer.id },[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    await prisma.otpToken.create({[m
+[32m+[m[32m      data: {[m
+[32m+[m[32m        retailerId: retailer.id,[m
+[32m+[m[32m        code: otpCode,[m
+[32m+[m[32m        expiresAt,[m
+[32m+[m[32m      },[m
+     });[m
+ [m
+[31m-    const response = NextResponse.json([m
+[32m+[m[32m    await sendOtpEmail(retailer.email, otpCode);[m
+[32m+[m
+[32m+[m[32m    // ── Return success (no JWT — requires activation first) ─[m
+[32m+[m[32m    return NextResponse.json([m
+       {[m
+         success: true,[m
+[31m-        retailer: {[m
+[31m-          id: retailer.id,[m
+[31m-          name: retailer.storeName,[m
+[31m-          email: retailer.email,[m
+[31m-        },[m
+[32m+[m[32m        requiresActivation: true,[m
+[32m+[m[32m        email: retailer.email,[m
+[32m+[m[32m        message: "Account created. Please check your email for the verification code.",[m
+       },[m
+       { status: 201 }[m
+     );[m
+[31m-[m
+[31m-    setAuthCookie(response, token);[m
+[31m-    return response;[m
+[31m-  } catch (error) {[m
+[32m+[m[32m  } catch (error: any) {[m
+     console.error("Signup error:", error);[m
+[32m+[m
+[32m+[m[32m    // If it's a specific Resend validation error, return it as a 400 Bad Request[m
+[32m+[m[32m    if (error instanceof Error && error.message.includes("testing emails")) {[m
+[32m+[m[32m      return NextResponse.json([m
+[32m+[m[32m        { error: "Free tier limitation: You can only send test emails to your registered Resend email address. Please use that email to test the signup flow." },[m
+[32m+[m[32m        { status: 400 }[m
+[32m+[m[32m      );[m
+[32m+[m[32m    }[m
+[32m+[m
+     return NextResponse.json([m
+       { error: "Internal server error" },[m
+       { status: 500 }[m
+[1mdiff --git a/apps/store/app/api/auth/verify-otp/route.ts b/apps/store/app/api/auth/verify-otp/route.ts[m
+[1mnew file mode 100644[m
+[1mindex 0000000..0872f3e[m
+[1m--- /dev/null[m
+[1m+++ b/apps/store/app/api/auth/verify-otp/route.ts[m
+[36m@@ -0,0 +1,106 @@[m
+[32m+[m[32mimport { NextRequest, NextResponse } from "next/server";[m
+[32m+[m[32mimport { prisma } from "../../../lib/prisma";[m
+[32m+[m[32mimport { createToken, setAuthCookie } from "../../../lib/auth";[m
+[32m+[m
+[32m+[m[32mexport async function POST(request: NextRequest) {[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    const body = await request.json();[m
+[32m+[m[32m    const { email, code } = body;[m
+[32m+[m
+[32m+[m[32m    // ── Validation ─────────────────────────────────────────[m
+[32m+[m[32m    if (!email || typeof email !== "string") {[m
+[32m+[m[32m      return NextResponse.json([m
+[32m+[m[32m        { error: "Email is required" },[m
+[32m+[m[32m        { status: 400 }[m
+[32m+[m[32m      );[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    if (!code || typeof code !== "string" || code.length !== 6) {[m
+[32m+[m[32m      return NextResponse.json([m
+[32m+[m[32m        { error: "Please enter a valid 6-digit code" },[m
+[32m+[m[32m        { status: 400 }[m
+[32m+[m[32m      );[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // ── Find retailer ──────────────────────────────────────[m
+[32m+[m[32m    const retailer = await prisma.retailer.findUnique({[m
+[32m+[m[32m      where: { email: email.toLowerCase().trim() },[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    if (!retailer) {[m
+[32m+[m[32m      return NextResponse.json([m
+[32m+[m[32m        { error: "Account not found" },[m
+[32m+[m[32m        { status: 404 }[m
+[32m+[m[32m      );[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    if (retailer.isActivated) {[m
+[32m+[m[32m      return NextResponse.json([m
+[32m+[m[32m        { error: "Account is already activated" },[m
+[32m+[m[32m        { status: 400 }[m
+[32m+[m[32m      );[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // ── Find matching OTP ──────────────────────────────────[m
+[32m+[m[32m    const otpToken = await prisma.otpToken.findFirst({[m
+[32m+[m[32m      where: {[m
+[32m+[m[32m        retailerId: retailer.id,[m
+[32m+[m[32m        code,[m
+[32m+[m[32m      },[m
+[32m+[m[32m      orderBy: { createdAt: "desc" },[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    if (!otpToken) {[m
+[32m+[m[32m      return NextResponse.json([m
+[32m+[m[32m        { error: "Invalid verification code" },[m
+[32m+[m[32m        { status: 400 }[m
+[32m+[m[32m      );[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // ── Check expiration ───────────────────────────────────[m
+[32m+[m[32m    if (new Date() > otpToken.expiresAt) {[m
+[32m+[m[32m      // Clean up expired token[m
+[32m+[m[32m      await prisma.otpToken.delete({ where: { id: otpToken.id } });[m
+[32m+[m[32m      return NextResponse.json([m
+[32m+[m[32m        { error: "Verification code has expired. Please request a new one." },[m
+[32m+[m[32m        { status: 400 }[m
+[32m+[m[32m      );[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // ── Activate the retailer ──────────────────────────────[m
+[32m+[m[32m    await prisma.$transaction([[m
+[32m+[m[32m      prisma.retailer.update({[m
+[32m+[m[32m        where: { id: retailer.id },[m
+[32m+[m[32m        data: { isActivated: true },[m
+[32m+[m[32m      }),[m
+[32m+[m[32m      prisma.otpToken.deleteMany({[m
+[32m+[m[32m        where: { retailerId: retailer.id },[m
+[32m+[m[32m      }),[m
+[32m+[m[32m    ]);[m
+[32m+[m
+[32m+[m[32m    // ── Generate JWT and set cookie ────────────────────────[m
+[32m+[m[32m    const token = await createToken({[m
+[32m+[m[32m      sub: retailer.id,[m
+[32m+[m[32m      email: retailer.email,[m
+[32m+[m[32m      name: retailer.storeName,[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    const response = NextResponse.json({[m
+[32m+[m[32m      success: true,[m
+[32m+[m[32m      retailer: {[m
+[32m+[m[32m        id: retailer.id,[m
+[32m+[m[32m        name: retailer.storeName,[m
+[32m+[m[32m        email: retailer.email,[m
+[32m+[m[32m      },[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    setAuthCookie(response, token);[m
+[32m+[m[32m    return response;[m
+[32m+[m[32m  } catch (error) {[m
+[32m+[m[32m    console.error("Verify OTP error:", error);[m
+[32m+[m[32m    return NextResponse.json([m
+[32m+[m[32m      { error: "Internal server error" },[m
+[32m+[m[32m      { status: 500 }[m
+[32m+[m[32m    );[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[1mdiff --git a/apps/store/app/dashboard/layout.tsx b/apps/store/app/dashboard/layout.tsx[m
+[1mnew file mode 100644[m
+[1mindex 0000000..ecdad8f[m
+[1m--- /dev/null[m
+[1m+++ b/apps/store/app/dashboard/layout.tsx[m
+[36m@@ -0,0 +1,92 @@[m
+[32m+[m[32mimport React from "react";[m
+[32m+[m[32mimport Link from "next/link";[m
+[32m+[m[32mimport { getAuthFromCookies } from "../lib/auth";[m
+[32m+[m[32mimport { redirect } from "next/navigation";[m
+[32m+[m
+[32m+[m[32mexport default async function DashboardLayout({[m
+[32m+[m[32m  children,[m
+[32m+[m[32m}: {[m
+[32m+[m[32m  children: React.ReactNode;[m
+[32m+[m[32m}) {[m
+[32m+[m[32m  const user = await getAuthFromCookies();[m
+[32m+[m
+[32m+[m[32m  if (!user) {[m
+[32m+[m[32m    redirect("/login");[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <div className="flex min-h-screen bg-manikan-bg text-manikan-text">[m
+[32m+[m[32m      {/* Sidebar */}[m
+[32m+[m[32m      <aside className="w-64 bg-forest-950 text-white flex flex-col shadow-lift">[m
+[32m+[m[32m        <div className="p-6">[m
+[32m+[m[32m          <h2 className="font-display text-2xl tracking-wide text-gold-300">[m
+[32m+[m[32m            Manikan<span className="text-white">.io</span>[m
+[32m+[m[32m          </h2>[m
+[32m+[m[32m          <p className="text-forest-200 text-sm mt-1 opacity-80">Retailer Dashboard</p>[m
+[32m+[m[32m        </div>[m
+[32m+[m
+[32m+[m[32m        <nav className="flex-1 mt-6 px-4 space-y-2">[m
+[32m+[m[32m          <Link[m
+[32m+[m[32m            href="/dashboard"[m
+[32m+[m[32m            className="flex items-center space-x-3 px-4 py-3 rounded-xl hover:bg-forest-800 transition-colors duration-200 text-forest-50 hover:text-white"[m
+[32m+[m[32m          >[m
+[32m+[m[32m            <svg className="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">[m
+[32m+[m[32m              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />[m
+[32m+[m[32m            </svg>[m
+[32m+[m[32m            <span className="font-medium">Overview</span>[m
+[32m+[m[32m          </Link>[m
+[32m+[m[41m          [m
+[32m+[m[32m          <Link[m
+[32m+[m[32m            href="/dashboard/products"[m
+[32m+[m[32m            className="flex items-center space-x-3 px-4 py-3 rounded-xl bg-forest-800 text-white shadow-soft"[m
+[32m+[m[32m          >[m
+[32m+[m[32m            <svg className="w-5 h-5 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">[m
+[32m+[m[32m              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />[m
+[32m+[m[32m            </svg>[m
+[32m+[m[32m            <span className="font-medium">Products</span>[m
+[32m+[m[32m          </Link>[m
+[32m+[m
+[32m+[m[32m          <Link[m
+[32m+[m[32m            href="/dashboard/analytics"[m
+[32m+[m[32m            className="flex items-center space-x-3 px-4 py-3 rounded-xl hover:bg-forest-800 transition-colors duration-200 text-forest-50 hover:text-white"[m
+[32m+[m[32m          >[m
+[32m+[m[32m            <svg className="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">[m
+[32m+[m[32m              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />[m
+[32m+[m[32m            </svg>[m
+[32m+[m[32m            <span className="font-medium">Analytics</span>[m
+[32m+[m[32m          </Link>[m
+[32m+[m[32m        </nav>[m
+[32m+[m
+[32m+[m[32m        <div className="p-6 border-t border-forest-800">[m
+[32m+[m[32m          <div className="flex items-center space-x-3">[m
+[32m+[m[32m            <div className="w-10 h-10 rounded-full bg-forest-700 flex items-center justify-center border border-forest-600">[m
+[32m+[m[32m              <span className="text-sm font-semibold">{user.name.charAt(0).toUpperCase()}</span>[m
+[32m+[m[32m            </div>[m
+[32m+[m[32m            <div>[m
+[32m+[m[32m              <p className="text-sm font-medium text-white">{user.name}</p>[m
+[32m+[m[32m              <p className="text-xs text-forest-300 truncate w-32">{user.email}</p>[m
+[32m+[m[32m            </div>[m
+[32m+[m[32m          </div>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </aside>[m
+[32m+[m
+[32m+[m[32m      {/* Main Content */}[m
+[32m+[m[32m      <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-cream-50/50">[m
+[32m+[m[32m        <header className="h-20 flex items-center justify-between px-10 border-b border-manikan-border bg-white/60 backdrop-blur-md sticky top-0 z-10">[m
+[32m+[m[32m          <h1 className="text-xl font-display font-medium text-forest-900">Dashboard</h1>[m
+[32m+[m[32m          <div className="flex items-center space-x-4">[m
+[32m+[m[32m             <button className="text-manikan-text-secondary hover:text-manikan-teal transition-colors">[m
+[32m+[m[32m               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">[m
+[32m+[m[32m                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />[m
+[32m+[m[32m               </svg>[m
+[32m+[m[32m             </button>[m
+[32m+[m[32m          </div>[m
+[32m+[m[32m        </header>[m
+[32m+[m
+[32m+[m[32m        <div className="p-10 flex-1 animate-fade-up">[m
+[32m+[m[32m          {children}[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </main>[m
+[32m+[m[32m    </div>[m
+[32m+[m[32m  );[m
+[32m+[m[32m}[m
+[1mdiff --git a/apps/store/app/dashboard/page.tsx b/apps/store/app/dashboard/page.tsx[m
+[1mindex 64ebe98..6adcdcf 100644[m
+[1m--- a/apps/store/app/dashboard/page.tsx[m
+[1m+++ b/apps/store/app/dashboard/page.tsx[m
+[36m@@ -1,13 +1,25 @@[m
+ export default function DashboardPage() {[m
+   return ([m
+[31m-    <div style={{ padding: "40px", fontFamily: "sans-serif" }}>[m
+[31m-      <h1 style={{ color: "#1B3A4B", marginBottom: "16px" }}>Dashboard</h1>[m
+[31m-      <div style={{ padding: "20px", background: "#E6FFFA", border: "1px solid #38A169", borderRadius: "8px", color: "#276749" }}>[m
+[31m-        <strong>✅ Success!</strong> You have successfully logged in / signed up and have been redirected to the dashboard.[m
+[31m-      </div>[m
+[31m-      <p style={{ marginTop: "20px", color: "#4A5568" }}>[m
+[31m-        Your authentication token is securely stored in an HTTP-only cookie.[m
+[32m+[m[32m    <div className="bg-white rounded-2xl shadow-card border border-manikan-border p-8">[m
+[32m+[m[32m      <h2 className="text-2xl font-display text-forest-900 mb-2">Welcome to Manikan.io</h2>[m
+[32m+[m[32m      <p className="text-manikan-text-secondary mb-6">[m
+[32m+[m[32m        Here you can manage your fashion catalog and view widget performance.[m
+       </p>[m
+[32m+[m
+[32m+[m[32m      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">[m
+[32m+[m[32m        <div className="bg-forest-50 p-6 rounded-xl border border-forest-100">[m
+[32m+[m[32m          <h3 className="text-forest-800 font-medium mb-1">Total Products</h3>[m
+[32m+[m[32m          <p className="text-3xl font-display font-semibold text-forest-950">0</p>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m        <div className="bg-cream-50 p-6 rounded-xl border border-cream-100">[m
+[32m+[m[32m          <h3 className="text-forest-800 font-medium mb-1">Widget Views (30d)</h3>[m
+[32m+[m[32m          <p className="text-3xl font-display font-semibold text-forest-950">0</p>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m        <div className="bg-gold-50 p-6 rounded-xl border border-gold-100">[m
+[32m+[m[32m          <h3 className="text-gold-800 font-medium mb-1">Try-on Conversions</h3>[m
+[32m+[m[32m          <p className="text-3xl font-display font-semibold text-gold-900">0%</p>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </div>[m
+     </div>[m
+   );[m
+ }[m
+[1mdiff --git a/apps/store/app/dashboard/products/ProductDataGrid.tsx b/apps/store/app/dashboard/products/ProductDataGrid.tsx[m
+[1mnew file mode 100644[m
+[1mindex 0000000..5d64e75[m
+[1m--- /dev/null[m
+[1m+++ b/apps/store/app/dashboard/products/ProductDataGrid.tsx[m
+[36m@@ -0,0 +1,101 @@[m
+[32m+[m[32m"use client";[m
+[32m+[m
+[32m+[m[32mimport React, { useState } from "react";[m
+[32m+[m
+[32m+[m[32mtype Product = {[m
+[32m+[m[32m  id: string;[m
+[32m+[m[32m  name: string;[m
+[32m+[m[32m  productCode: string;[m
+[32m+[m[32m  category: string;[m
+[32m+[m[32m  priceEgp: number;[m
+[32m+[m[32m  stock: number;[m
+[32m+[m[32m  imageUrl: string;[m
+[32m+[m[32m};[m
+[32m+[m
+[32m+[m[32mexport default function ProductDataGrid({ products }: { products: Product[] }) {[m
+[32m+[m[32m  const [search, setSearch] = useState("");[m
+[32m+[m
+[32m+[m[32m  const filteredProducts = products.filter((p) =>[m
+[32m+[m[32m    p.name.toLowerCase().includes(search.toLowerCase()) ||[m
+[32m+[m[32m    p.productCode.toLowerCase().includes(search.toLowerCase())[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32m  if (products.length === 0) {[m
+[32m+[m[32m    return ([m
+[32m+[m[32m      <div className="bg-white rounded-2xl shadow-card border border-manikan-border p-12 text-center">[m
+[32m+[m[32m        <div className="w-16 h-16 bg-forest-50 text-forest-500 rounded-full flex items-center justify-center mx-auto mb-4">[m
+[32m+[m[32m          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">[m
+[32m+[m[32m            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />[m
+[32m+[m[32m          </svg>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m        <h3 className="text-xl font-display font-semibold text-forest-900 mb-2">No products found</h3>[m
+[32m+[m[32m        <p className="text-manikan-text-secondary max-w-sm mx-auto">[m
+[32m+[m[32m          You haven't added any products to your catalog yet. Click "Add New Product" to get started.[m
+[32m+[m[32m        </p>[m
+[32m+[m[32m      </div>[m
+[32m+[m[32m    );[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <div className="bg-white rounded-2xl shadow-card border border-manikan-border overflow-hidden">[m
+[32m+[m[32m      <div className="p-4 border-b border-manikan-border bg-cream-50/30">[m
+[32m+[m[32m        <input[m
+[32m+[m[32m          type="text"[m
+[32m+[m[32m          placeholder="Search by name or code..."[m
+[32m+[m[32m          value={search}[m
+[32m+[m[32m          onChange={(e) => setSearch(e.target.value)}[m
+[32m+[m[32m          className="w-full max-w-md px-4 py-2 bg-white border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"[m
+[32m+[m[32m        />[m
+[32m+[m[32m      </div>[m
+[32m+[m[32m      <div className="overflow-x-auto">[m
+[32m+[m[32m        <table className="w-full text-left border-collapse">[m
+[32m+[m[32m          <thead>[m
+[32m+[m[32m            <tr className="bg-forest-50/50 text-forest-800 text-sm font-medium border-b border-manikan-border">[m
+[32m+[m[32m              <th className="px-6 py-4">Product</th>[m
+[32m+[m[32m              <th className="px-6 py-4">Code / SKU</th>[m
+[32m+[m[32m              <th className="px-6 py-4">Category</th>[m
+[32m+[m[32m              <th className="px-6 py-4">Price</th>[m
+[32m+[m[32m              <th className="px-6 py-4">Stock</th>[m
+[32m+[m[32m            </tr>[m
+[32m+[m[32m          </thead>[m
+[32m+[m[32m          <tbody className="divide-y divide-manikan-border">[m
+[32m+[m[32m            {filteredProducts.map((product) => ([m
+[32m+[m[32m              <tr key={product.id} className="hover:bg-cream-50/30 transition-colors group">[m
+[32m+[m[32m                <td className="px-6 py-4 flex items-center space-x-4">[m
+[32m+[m[32m                  <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-manikan-border group-hover:border-forest-200 transition-colors">[m
+[32m+[m[32m                    {/* eslint-disable-next-line @next/next/no-img-element */}[m
+[32m+[m[32m                    <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />[m
+[32m+[m[32m                  </div>[m
+[32m+[m[32m                  <div>[m
+[32m+[m[32m                    <p className="font-medium text-forest-900">{product.name}</p>[m
+[32m+[m[32m                  </div>[m
+[32m+[m[32m                </td>[m
+[32m+[m[32m                <td className="px-6 py-4 text-manikan-text-secondary">{product.productCode}</td>[m
+[32m+[m[32m                <td className="px-6 py-4">[m
+[32m+[m[32m                  <span className="px-3 py-1 bg-forest-50 text-forest-700 rounded-full text-xs font-medium border border-forest-100">[m
+[32m+[m[32m                    {product.category}[m
+[32m+[m[32m                  </span>[m
+[32m+[m[32m                </td>[m
+[32m+[m[32m                <td className="px-6 py-4 font-medium text-manikan-text">EGP {product.priceEgp.toFixed(2)}</td>[m
+[32m+[m[32m                <td className="px-6 py-4">[m
+[32m+[m[32m                  {product.stock > 0 ? ([m
+[32m+[m[32m                    <span className="text-green-600 font-medium">{product.stock} in stock</span>[m
+[32m+[m[32m                  ) : ([m
+[32m+[m[32m                    <span className="text-red-500 font-medium">Out of stock</span>[m
+[32m+[m[32m                  )}[m
+[32m+[m[32m                </td>[m
+[32m+[m[32m              </tr>[m
+[32m+[m[32m            ))}[m
+[32m+[m[32m            {filteredProducts.length === 0 && ([m
+[32m+[m[32m              <tr>[m
+[32m+[m[32m                <td colSpan={5} className="px-6 py-12 text-center text-manikan-text-secondary">[m
+[32m+[m[32m                  No products match your search.[m
+[32m+[m[32m                </td>[m
+[32m+[m[32m              </tr>[m
+[32m+[m[32m            )}[m
+[32m+[m[32m          </tbody>[m
+[32m+[m[32m        </table>[m
+[32m+[m[32m      </div>[m
+[32m+[m[32m    </div>[m
+[32m+[m[32m  );[m
+[32m+[m[32m}[m
+[1mdiff --git a/apps/store/app/dashboard/products/new/page.tsx b/apps/store/app/dashboard/products/new/page.tsx[m
+[1mnew file mode 100644[m
+[1mindex 0000000..b0cc770[m
+[1m--- /dev/null[m
+[1m+++ b/apps/store/app/dashboard/products/new/page.tsx[m
+[36m@@ -0,0 +1,206 @@[m
+[32m+[m[32m"use client";[m
+[32m+[m
+[32m+[m[32mimport React, { useState } from "react";[m
+[32m+[m[32mimport Link from "next/link";[m
+[32m+[m[32mimport { createProduct } from "../../../actions/product";[m
+[32m+[m
+[32m+[m[32mexport default function AddProductPage() {[m
+[32m+[m[32m  const [isSubmitting, setIsSubmitting] = useState(false);[m
+[32m+[m[32m  const [error, setError] = useState("");[m
+[32m+[m
+[32m+[m[32m  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {[m
+[32m+[m[32m    event.preventDefault();[m
+[32m+[m[32m    setIsSubmitting(true);[m
+[32m+[m[32m    setError("");[m
+[32m+[m
+[32m+[m[32m    const formData = new FormData(event.currentTarget);[m
+[32m+[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      await createProduct(formData);[m
+[32m+[m[32m    } catch (err: any) {[m
+[32m+[m[32m      setError(err.message || "Something went wrong.");[m
+[32m+[m[32m      setIsSubmitting(false);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <div className="max-w-4xl mx-auto space-y-6">[m
+[32m+[m[32m      <div className="flex items-center space-x-4">[m
+[32m+[m[32m        <Link[m
+[32m+[m[32m          href="/dashboard/products"[m
+[32m+[m[32m          className="w-10 h-10 rounded-full bg-white border border-manikan-border flex items-center justify-center text-forest-700 hover:bg-forest-50 transition-colors"[m
+[32m+[m[32m        >[m
+[32m+[m[32m          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">[m
+[32m+[m[32m            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />[m
+[32m+[m[32m          </svg>[m
+[32m+[m[32m        </Link>[m
+[32m+[m[32m        <div>[m
+[32m+[m[32m          <h2 className="text-2xl font-display text-forest-900">Add New Product</h2>[m
+[32m+[m[32m          <p className="text-manikan-text-secondary">Fill in the details to add a new garment to your catalog.</p>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </div>[m
+[32m+[m
+[32m+[m[32m      {error && ([m
+[32m+[m[32m        <div className="bg-manikan-error/10 border border-manikan-error text-manikan-error px-4 py-3 rounded-lg text-sm">[m
+[32m+[m[32m          {error}[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      )}[m
+[32m+[m
+[32m+[m[32m      <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-card border border-manikan-border p-8">[m
+[32m+[m[32m        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">[m
+[32m+[m[32m          <div className="space-y-1">[m
+[32m+[m[32m            <label className="text-sm font-medium text-forest-900" htmlFor="name">Product Name *</label>[m
+[32m+[m[32m            <input[m
+[32m+[m[32m              required[m
+[32m+[m[32m              type="text"[m
+[32m+[m[32m              id="name"[m
+[32m+[m[32m              name="name"[m
+[32m+[m[32m              placeholder="e.g. Classic Oxford Shirt"[m
+[32m+[m[32m              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"[m
+[32m+[m[32m            />[m
+[32m+[m[32m          </div>[m
+[32m+[m
+[32m+[m[32m          <div className="space-y-1">[m
+[32m+[m[32m            <label className="text-sm font-medium text-forest-900" htmlFor="productCode">Product Code / SKU *</label>[m
+[32m+[m[32m            <input[m
+[32m+[m[32m              required[m
+[32m+[m[32m              type="text"[m
+[32m+[m[32m              id="productCode"[m
+[32m+[m[32m              name="productCode"[m
+[32m+[m[32m              placeholder="e.g. OXF-BLU-M"[m
+[32m+[m[32m              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"[m
+[32m+[m[32m            />[m
+[32m+[m[32m          </div>[m
+[32m+[m
+[32m+[m[32m          <div className="space-y-1 md:col-span-2">[m
+[32m+[m[32m            <label className="text-sm font-medium text-forest-900" htmlFor="description">Description</label>[m
+[32m+[m[32m            <textarea[m
+[32m+[m[32m              id="description"[m
+[32m+[m[32m              name="description"[m
+[32m+[m[32m              rows={3}[m
+[32m+[m[32m              placeholder="Tell shoppers about this garment..."[m
+[32m+[m[32m              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow resize-none"[m
+[32m+[m[32m            />[m
+[32m+[m[32m          </div>[m
+[32m+[m
+[32m+[m[32m          <div className="space-y-1">[m
+[32m+[m[32m            <label className="text-sm font-medium text-forest-900" htmlFor="category">Category *</label>[m
+[32m+[m[32m            <select[m
+[32m+[m[32m              required[m
+[32m+[m[32m              id="category"[m
+[32m+[m[32m              name="category"[m
+[32m+[m[32m              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow appearance-none"[m
+[32m+[m[32m            >[m
+[32m+[m[32m              <option value="">Select a category</option>[m
+[32m+[m[32m              <option value="tops">Tops (Shirts, Blouses, T-Shirts)</option>[m
+[32m+[m[32m              <option value="bottoms">Bottoms (Pants, Jeans, Shorts)</option>[m
+[32m+[m[32m              <option value="dresses">Dresses & Jumpsuits</option>[m
+[32m+[m[32m              <option value="outerwear">Outerwear (Jackets, Coats)</option>[m
+[32m+[m[32m            </select>[m
+[32m+[m[32m          </div>[m
+[32m+[m
+[32m+[m[32m          <div className="space-y-1">[m
+[32m+[m[32m            <label className="text-sm font-medium text-forest-900" htmlFor="gender">Gender *</label>[m
+[32m+[m[32m            <select[m
+[32m+[m[32m              required[m
+[32m+[m[32m              id="gender"[m
+[32m+[m[32m              name="gender"[m
+[32m+[m[32m              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow appearance-none"[m
+[32m+[m[32m            >[m
+[32m+[m[32m              <option value="women">Women</option>[m
+[32m+[m[32m              <option value="men">Men</option>[m
+[32m+[m[32m              <option value="unisex">Unisex</option>[m
+[32m+[m[32m            </select>[m
+[32m+[m[32m          </div>[m
+[32m+[m
+[32m+[m[32m          <div className="space-y-1">[m
+[32m+[m[32m            <label className="text-sm font-medium text-forest-900" htmlFor="brand">Brand</label>[m
+[32m+[m[32m            <input[m
+[32m+[m[32m              type="text"[m
+[32m+[m[32m              id="brand"[m
+[32m+[m[32m              name="brand"[m
+[32m+[m[32m              placeholder="Your brand name"[m
+[32m+[m[32m              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"[m
+[32m+[m[32m            />[m
+[32m+[m[32m          </div>[m
+[32m+[m
+[32m+[m[32m          <div className="space-y-1">[m
+[32m+[m[32m            <label className="text-sm font-medium text-forest-900" htmlFor="fabric">Fabric Type</label>[m
+[32m+[m[32m            <input[m
+[32m+[m[32m              type="text"[m
+[32m+[m[32m              id="fabric"[m
+[32m+[m[32m              name="fabric"[m
+[32m+[m[32m              placeholder="e.g. 100% Cotton"[m
+[32m+[m[32m              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"[m
+[32m+[m[32m            />[m
+[32m+[m[32m          </div>[m
+[32m+[m
+[32m+[m[32m          <div className="space-y-1">[m
+[32m+[m[32m            <label className="text-sm font-medium text-forest-900" htmlFor="priceEgp">Price (EGP) *</label>[m
+[32m+[m[32m            <input[m
+[32m+[m[32m              required[m
+[32m+[m[32m              type="number"[m
+[32m+[m[32m              id="priceEgp"[m
+[32m+[m[32m              name="priceEgp"[m
+[32m+[m[32m              min="0"[m
+[32m+[m[32m              step="0.01"[m
+[32m+[m[32m              placeholder="0.00"[m
+[32m+[m[32m              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"[m
+[32m+[m[32m            />[m
+[32m+[m[32m          </div>[m
+[32m+[m
+[32m+[m[32m          <div className="space-y-1">[m
+[32m+[m[32m            <label className="text-sm font-medium text-forest-900" htmlFor="stock">Initial Stock</label>[m
+[32m+[m[32m            <input[m
+[32m+[m[32m              type="number"[m
+[32m+[m[32m              id="stock"[m
+[32m+[m[32m              name="stock"[m
+[32m+[m[32m              min="0"[m
+[32m+[m[32m              defaultValue="0"[m
+[32m+[m[32m              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"[m
+[32m+[m[32m            />[m
+[32m+[m[32m          </div>[m
+[32m+[m
+[32m+[m[32m          <div className="space-y-1 md:col-span-2">[m
+[32m+[m[32m            <label className="text-sm font-medium text-forest-900" htmlFor="imageUrl">Product Image URL *</label>[m
+[32m+[m[32m            <p className="text-xs text-manikan-text-secondary mb-2">For this version, please paste a direct link to the product image (e.g. https://example.com/shirt.jpg)</p>[m
+[32m+[m[32m            <input[m
+[32m+[m[32m              required[m
+[32m+[m[32m              type="url"[m
+[32m+[m[32m              id="imageUrl"[m
+[32m+[m[32m              name="imageUrl"[m
+[32m+[m[32m              placeholder="https://..."[m
+[32m+[m[32m              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-40

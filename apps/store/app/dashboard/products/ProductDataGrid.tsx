@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
-
+import React, { useState, useMemo } from "react";
+import Link from "next/link";
 type Product = {
   id: string;
   name: string;
   productCode: string;
   category: string;
+  gender?: string;
+  brand?: string;
   priceEgp: number;
   stock: number;
   imageUrl: string;
@@ -14,6 +16,10 @@ type Product = {
 
 export default function ProductDataGrid({ products }: { products: Product[] }) {
   const [search, setSearch] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterGender, setFilterGender] = useState("");
+  const [filterBrand, setFilterBrand] = useState("");
+  const [filterStock, setFilterStock] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
@@ -22,10 +28,23 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
     setCurrentPage(1);
   };
 
-  const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.productCode.toLowerCase().includes(search.toLowerCase())
-  );
+  const categories = useMemo(() => Array.from(new Set(products.map(p => p.category).filter(Boolean))), [products]);
+  const genders = useMemo(() => Array.from(new Set(products.map(p => p.gender).filter(Boolean))), [products]);
+  const brands = useMemo(() => Array.from(new Set(products.map(p => p.brand).filter(Boolean))), [products]);
+
+  const filteredProducts = products.filter((p) => {
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.productCode.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = filterCategory ? p.category === filterCategory : true;
+    const matchesGender = filterGender ? p.gender === filterGender : true;
+    const matchesBrand = filterBrand ? p.brand === filterBrand : true;
+    
+    let matchesStock = true;
+    if (filterStock === "in-stock") matchesStock = p.stock >= 10;
+    if (filterStock === "low-stock") matchesStock = p.stock > 0 && p.stock < 10;
+    if (filterStock === "out-of-stock") matchesStock = p.stock === 0;
+
+    return matchesSearch && matchesCategory && matchesGender && matchesBrand && matchesStock;
+  });
 
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE) || 1;
   const paginatedProducts = filteredProducts.slice(
@@ -51,14 +70,76 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
 
   return (
     <div className="bg-white rounded-2xl shadow-card border border-manikan-border overflow-hidden flex flex-col">
-      <div className="p-4 border-b border-manikan-border bg-cream-50/30">
-        <input
-          type="text"
-          placeholder="Search by name or code..."
-          value={search}
-          onChange={handleSearchChange}
-          className="w-full max-w-md px-4 py-2 bg-white border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
-        />
+      <div className="p-4 border-b border-manikan-border bg-cream-50/30 flex flex-wrap items-center gap-3">
+        <div className="relative w-full max-w-sm">
+          <input
+            type="text"
+            placeholder="Search by name or code..."
+            value={search}
+            onChange={handleSearchChange}
+            className="w-full px-4 py-2 pl-10 bg-white border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow text-sm"
+          />
+          <svg className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-forest-700/40 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+
+        <select
+          value={filterCategory}
+          onChange={(e) => { setFilterCategory(e.target.value); setCurrentPage(1); }}
+          className="px-3 py-2 bg-white border border-manikan-border rounded-lg text-sm text-forest-900 focus:outline-none focus:border-forest-400"
+        >
+          <option value="">All Categories</option>
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+
+        <select
+          value={filterGender}
+          onChange={(e) => { setFilterGender(e.target.value); setCurrentPage(1); }}
+          className="px-3 py-2 bg-white border border-manikan-border rounded-lg text-sm text-forest-900 focus:outline-none focus:border-forest-400"
+        >
+          <option value="">All Genders</option>
+          {genders.map(g => <option key={g} value={g}>{g}</option>)}
+        </select>
+
+        <select
+          value={filterBrand}
+          onChange={(e) => { setFilterBrand(e.target.value); setCurrentPage(1); }}
+          className="px-3 py-2 bg-white border border-manikan-border rounded-lg text-sm text-forest-900 focus:outline-none focus:border-forest-400"
+        >
+          <option value="">All Brands</option>
+          {brands.map(b => <option key={b} value={b}>{b}</option>)}
+        </select>
+
+        <select
+          value={filterStock}
+          onChange={(e) => { setFilterStock(e.target.value); setCurrentPage(1); }}
+          className="px-3 py-2 bg-white border border-manikan-border rounded-lg text-sm text-forest-900 focus:outline-none focus:border-forest-400"
+        >
+          <option value="">All Stock</option>
+          <option value="in-stock">In Stock (10+)</option>
+          <option value="low-stock">Low Stock (&lt;10)</option>
+          <option value="out-of-stock">Out of Stock (0)</option>
+        </select>
+
+        {(search || filterCategory || filterGender || filterBrand || filterStock) && (
+          <button
+            onClick={() => {
+              setSearch("");
+              setFilterCategory("");
+              setFilterGender("");
+              setFilterBrand("");
+              setFilterStock("");
+              setCurrentPage(1);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-manikan-border rounded-lg text-sm font-medium text-forest-700 hover:text-forest-950 hover:bg-forest-50 transition-colors shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Clear Filters
+          </button>
+        )}
       </div>
       <div className="overflow-x-auto flex-1">
         <table className="w-full text-left border-collapse">
@@ -73,8 +154,12 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-manikan-border">
-            {paginatedProducts.map((product) => (
-              <tr key={product.id} className="hover:bg-cream-50/30 transition-colors group">
+            {paginatedProducts.map((product, idx) => (
+              <tr 
+                key={product.id} 
+                className="hover:bg-cream-50/30 transition-colors group animate-fade-up"
+                style={{ animationDelay: `${100 + idx * 50}ms`, animationFillMode: "both" }}
+              >
                 <td className="px-6 py-4 flex items-center space-x-4">
                   <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-manikan-border group-hover:border-forest-200 transition-colors">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -100,9 +185,12 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end gap-2">
-                    <button className="text-sm px-3 py-1.5 rounded bg-cream-50 text-forest-700 hover:bg-cream-100 transition-colors" onClick={() => alert("Edit product feature coming soon!")}>
+                    <Link 
+                      href={`/dashboard/products/${product.id}/edit`}
+                      className="text-sm px-3 py-1.5 rounded bg-cream-50 text-forest-700 hover:bg-cream-100 transition-colors"
+                    >
                       Edit
-                    </button>
+                    </Link>
                     <button 
                       className="text-sm px-3 py-1.5 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
                       onClick={async () => {

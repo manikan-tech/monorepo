@@ -23,6 +23,7 @@
     "pg": "^8.22.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "recharts": "^3.9.2",
     "resend": "^6.17.2"
   },
   "devDependencies": {

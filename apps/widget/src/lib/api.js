@@ -9,6 +9,7 @@
 
 import { getVisitorId } from './visitor'
 import { getRetailerKey } from './config'
+
 const STORE_API_URL = import.meta.env.VITE_STORE_API_URL || 'http://localhost:3000'
 
 async function postForGlb(path, payload, { timeoutMs = 120_000 } = {}) {
