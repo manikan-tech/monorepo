@@ -5,6 +5,10 @@ export const metadata = {
     description: "Mix and match clothing items using AI-powered 2D try-on synthesis.",
 };
 
-export default function VisualizePage() {
-    return <Vton2D />;
+export default function VisualizePage({
+    searchParams,
+}: {
+    searchParams?: { productId?: string };
+}) {
+    return <Vton2D initialSelectedGarmentId={searchParams?.productId} />;
 }

@@ -6,24 +6,39 @@ import HumanUploader from "./human-uploader";
 import GarmentCatalog from "./garment-catalog";
 import { Garment } from "./product-card";
 
-export default function Vton2D() {
+type Vton2DProps = {
+    initialSelectedGarmentId?: string;
+};
+
+export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
     const [humanFile, setHumanFile] = useState<File | null>(null);
     const [selectedGarment, setSelectedGarment] = useState<Garment | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [loadingStep, setLoadingStep] = useState<string>("");
     const [resultUrl, setResultUrl] = useState<string | null>(null);
+    const [resultSource, setResultSource] = useState<"live" | "cached" | null>(null);
     const [apiError, setApiError] = useState<string | null>(null);
 
     const handleSelectFile = (file: File | null) => {
         setHumanFile(file);
         setResultUrl(null);
+        setResultSource(null);
         setApiError(null);
     };
 
     const handleSelectGarment = (garment: Garment) => {
         setSelectedGarment(garment);
         setResultUrl(null);
+        setResultSource(null);
         setApiError(null);
+    };
+
+    const getCachedFallbackResultUrl = (garment: Garment) => {
+        const category = garment.category;
+        if (category === "pants") return "/products/tshirt-black.png";
+        if (category === "skirt") return "/products/tshirt-cream.png";
+        if (category === "dress") return "/products/tshirt-navy.png";
+        return "/products/tshirt-gray.png";
     };
 
     const triggerVirtualTryOn = async () => {
@@ -62,10 +77,6 @@ export default function Vton2D() {
                 : `${window.location.origin}${selectedGarment.imageUrl}`;
             formData.append("garment_image_url", absoluteGarmentUrl);
             formData.append("category", selectedGarment.category);
-            if (selectedGarment.name) {
-                formData.append("description", selectedGarment.name);
-            }
-
             // Hit our fastapi microservice
             const response = await fetch("http://localhost:8003/api/vton/2d", {
                 method: "POST",
@@ -90,10 +101,17 @@ export default function Vton2D() {
             const imageBlob = await response.blob();
             const imageObjectURL = URL.createObjectURL(imageBlob);
             setResultUrl(imageObjectURL);
+            setResultSource("live");
         } catch (err: any) {
             clearInterval(stepInterval);
             console.error("VTON 2D Error:", err);
-            setApiError(err?.message || "Something went wrong during try-on synthesis. Please try again.");
+            if (selectedGarment) {
+                setResultUrl(getCachedFallbackResultUrl(selectedGarment));
+                setResultSource("cached");
+                setApiError(null);
+            } else {
+                setApiError(err?.message || "Something went wrong during try-on synthesis. Please try again.");
+            }
         } finally {
             setIsLoading(false);
             setLoadingStep("");
@@ -170,7 +188,11 @@ export default function Vton2D() {
 
                 {/* Right Side: Catalog Panel */}
                 <div className="flex-1 h-full">
-                    <GarmentCatalog selectedGarment={selectedGarment} onSelectGarment={handleSelectGarment} />
+                    <GarmentCatalog
+                        selectedGarment={selectedGarment}
+                        onSelectGarment={handleSelectGarment}
+                        initialSelectedGarmentId={initialSelectedGarmentId}
+                    />
                 </div>
             </div>
 
@@ -239,10 +261,12 @@ export default function Vton2D() {
                         <div>
                             <h3 className="font-display text-lg font-bold text-forest-950 flex items-center gap-2">
                                 <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                                Virtual Look Generated!
+                                {resultSource === "cached" ? "Cached Preview Loaded" : "Virtual Look Generated!"}
                             </h3>
                             <p className="text-xs text-forest-500 mt-0.5">
-                                Successfully synthesized {selectedGarment?.brand} {selectedGarment?.name} on your model photo.
+                                {resultSource === "cached"
+                                    ? "Showing a local demo preview while the live model is unavailable."
+                                    : `Successfully synthesized ${selectedGarment?.brand} ${selectedGarment?.name} on your model photo.`}
                             </p>
                         </div>
                         <button

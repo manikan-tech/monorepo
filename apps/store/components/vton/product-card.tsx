@@ -8,7 +8,7 @@ export interface Garment {
     brand: string;
     imageUrl: string;
     priceEgp: number;
-    category: "upper_body" | "lower_body" | "dress";
+    category: "blouse" | "shirt" | "jacket" | "pants" | "skirt" | "dress";
     gender: string;
     discountPct?: number;
 }
@@ -21,8 +21,11 @@ interface ProductCardProps {
 
 export default function ProductCard({ product, isSelected, onSelect }: ProductCardProps) {
     const categoryLabels: Record<string, string> = {
-        upper_body: "Top",
-        lower_body: "Bottom",
+        blouse: "Blouse",
+        shirt: "Top",
+        jacket: "Jacket",
+        pants: "Pants",
+        skirt: "Skirt",
         dress: "Full Dress",
     };
 

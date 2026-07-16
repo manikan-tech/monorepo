@@ -6,6 +6,7 @@ import ProductCard, { Garment } from "./product-card";
 interface GarmentCatalogProps {
     selectedGarment: Garment | null;
     onSelectGarment: (garment: Garment) => void;
+    initialSelectedGarmentId?: string;
 }
 
 // Complete mock database to use as robust fallback if the network or local database is empty/issues
@@ -16,7 +17,7 @@ const FALLBACK_GARMENTS: Garment[] = [
         brand: "Manikan",
         imageUrl: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=600&auto=format&fit=crop",
         priceEgp: 950,
-        category: "upper_body",
+        category: "shirt",
         gender: "Men",
         discountPct: 15
     },
@@ -26,7 +27,7 @@ const FALLBACK_GARMENTS: Garment[] = [
         brand: "Basics",
         imageUrl: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop",
         priceEgp: 450,
-        category: "upper_body",
+        category: "shirt",
         gender: "Women"
     },
     {
@@ -45,7 +46,7 @@ const FALLBACK_GARMENTS: Garment[] = [
         brand: "Atelier",
         imageUrl: "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?q=80&w=600&auto=format&fit=crop",
         priceEgp: 1200,
-        category: "lower_body",
+        category: "pants",
         gender: "Men"
     },
     {
@@ -54,7 +55,7 @@ const FALLBACK_GARMENTS: Garment[] = [
         brand: "Denim & Co",
         imageUrl: "https://images.unsplash.com/photo-1582142306909-195724d33ab9?q=80&w=600&auto=format&fit=crop",
         priceEgp: 850,
-        category: "lower_body",
+        category: "skirt",
         gender: "Women",
         discountPct: 10
     },
@@ -64,12 +65,12 @@ const FALLBACK_GARMENTS: Garment[] = [
         brand: "Manikan",
         imageUrl: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=600&auto=format&fit=crop",
         priceEgp: 2900,
-        category: "upper_body",
+        category: "jacket",
         gender: "Women"
     }
 ];
 
-export default function GarmentCatalog({ selectedGarment, onSelectGarment }: GarmentCatalogProps) {
+export default function GarmentCatalog({ selectedGarment, onSelectGarment, initialSelectedGarmentId }: GarmentCatalogProps) {
     const [garments, setGarments] = useState<Garment[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [search, setSearch] = useState<string>("");
@@ -90,13 +91,19 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment }: Gar
                 if (data?.products && Array.isArray(data.products) && data.products.length > 0) {
                     // Map DB structure to garment structures in state
                     const mapped: Garment[] = data.products.map((p: any) => {
-                        // Map category database value to matches expected by virtual try-on model parameters
-                        let dbCat = String(p.categoryRef?.slug || p.category || "").toLowerCase();
-                        let matchedCategory: "upper_body" | "lower_body" | "dress" = "upper_body";
-                        if (dbCat.includes("pants") || dbCat.includes("skirt") || dbCat.includes("bottom") || dbCat.includes("lower")) {
-                            matchedCategory = "lower_body";
+                        // Map store categories to the values accepted by CatVTON.
+                        const dbCat = String(p.categoryRef?.slug || p.category || "").toLowerCase();
+                        let matchedCategory: Garment["category"] = "shirt";
+                        if (dbCat.includes("skirt")) {
+                            matchedCategory = "skirt";
+                        } else if (dbCat.includes("pants") || dbCat.includes("trouser") || dbCat.includes("bottom") || dbCat.includes("lower")) {
+                            matchedCategory = "pants";
                         } else if (dbCat.includes("dress") || dbCat.includes("suit")) {
                             matchedCategory = "dress";
+                        } else if (dbCat.includes("jacket") || dbCat.includes("coat")) {
+                            matchedCategory = "jacket";
+                        } else if (dbCat.includes("blouse")) {
+                            matchedCategory = "blouse";
                         }
 
                         return {
@@ -124,6 +131,14 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment }: Gar
 
         loadGarments();
     }, []);
+
+    useEffect(() => {
+        if (!initialSelectedGarmentId || garments.length === 0) return;
+        const matched = garments.find((garment) => garment.id === initialSelectedGarmentId);
+        if (matched && selectedGarment?.id !== matched.id) {
+            onSelectGarment(matched);
+        }
+    }, [garments, initialSelectedGarmentId, onSelectGarment, selectedGarment?.id]);
 
     // Filtering Logic
     const filteredGarments = garments.filter((g) => {
@@ -179,8 +194,10 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment }: Gar
                     <div className="flex items-center gap-1 bg-forest-50/50 p-1 rounded-xl">
                         {[
                             { id: "all", label: "All" },
-                            { id: "upper_body", label: "Tops" },
-                            { id: "lower_body", label: "Bottoms" },
+                            { id: "shirt", label: "Tops" },
+                            { id: "jacket", label: "Jackets" },
+                            { id: "pants", label: "Pants" },
+                            { id: "skirt", label: "Skirts" },
                             { id: "dress", label: "Dresses" },
                         ].map((cat) => (
                             <button

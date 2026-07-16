@@ -1,6 +1,7 @@
-# Tryon Service
+# Manikan Try-On Service
 
-FastAPI microservice for virtual try-on models and Replicate API integration.
+FastAPI microservice for OOTDiffusion virtual try-on processing. Uploaded and downloaded
+images are kept only in `tmp` during processing and are deleted after the response.
 
 ## Getting Started
 
@@ -15,5 +16,5 @@ FastAPI microservice for virtual try-on models and Replicate API integration.
    ```
 3. Run the development server:
    ```bash
-   uvicorn app.main:app --reload --port 8003
+   uvicorn main:app --reload --port 8003
    ```

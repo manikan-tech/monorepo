@@ -245,12 +245,15 @@ export default function ProductDetailPage() {
                 </svg>
                 {wishlisted ? "Wishlisted" : "Save"}
               </button>
-              <button className="flex-1 flex items-center justify-center gap-3 py-3 px-6 border-2 border-gold-400 text-gold-600 rounded-2xl font-medium text-sm hover:bg-gold-50 hover:text-gold-700 transition-all duration-300 hover:-translate-y-0.5 animate-pulse-glow hover:animate-none">
+              <Link
+                href={`/visualize?productId=${product.id}`}
+                className="flex-1 flex items-center justify-center gap-3 py-3 px-6 border-2 border-gold-400 text-gold-600 rounded-2xl font-medium text-sm hover:bg-gold-50 hover:text-gold-700 transition-all duration-300 hover:-translate-y-0.5 animate-pulse-glow hover:animate-none"
+              >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
                 </svg>
                 Virtual Try-On
-              </button>
+              </Link>
             </div>
           </div>
 
