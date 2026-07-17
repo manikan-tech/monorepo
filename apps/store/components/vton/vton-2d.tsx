@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import HumanUploader from "./human-uploader";
 import GarmentCatalog from "./garment-catalog";
@@ -20,6 +20,7 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
     const [resultUrl, setResultUrl] = useState<string | null>(null);
     const [resultSource, setResultSource] = useState<"live" | "cached" | null>(null);
     const [apiError, setApiError] = useState<string | null>(null);
+    const resultSectionRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (!humanFile) {
@@ -34,6 +35,15 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
             URL.revokeObjectURL(previewUrl);
         };
     }, [humanFile]);
+
+    useEffect(() => {
+        if (!resultUrl) return;
+
+        resultSectionRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
+    }, [resultUrl]);
 
     const handleSelectFile = (file: File | null) => {
         setHumanFile(file);
@@ -134,14 +144,31 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
         }
     };
 
-    const downloadResult = () => {
+    const downloadResult = async () => {
         if (!resultUrl) return;
-        const link = document.createElement("a");
-        link.href = resultUrl;
-        link.download = `manikan_tryon_${selectedGarment?.id || "result"}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+
+        try {
+            // Turn the displayed result into a same-origin Blob URL first. This
+            // keeps downloads working for both live Blob results and cached images.
+            const response = await fetch(resultUrl);
+            if (!response.ok) {
+                throw new Error("Could not prepare the result for download.");
+            }
+
+            const imageBlob = await response.blob();
+            const downloadUrl = URL.createObjectURL(imageBlob);
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = `manikan_tryon_${selectedGarment?.id || "result"}.png`;
+            link.style.display = "none";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1_000);
+        } catch (error) {
+            console.error("Try-on result download failed:", error);
+            setApiError("Unable to download the result. Please try again.");
+        }
     };
 
     const resetResult = () => {
@@ -287,7 +314,7 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
 
             {/* Try-on Result Presentation Section */}
             {resultUrl && (
-                <div className="border border-gold-200/80 rounded-3xl bg-white p-6 md:p-7 mt-6 shadow-soft flex flex-col gap-6 animate-slide-up">
+                <div ref={resultSectionRef} className="border border-gold-200/80 rounded-3xl bg-white p-6 md:p-7 mt-6 shadow-soft flex flex-col gap-6 animate-slide-up">
                     <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5 pb-5 border-b border-forest-50">
                         <div className="flex flex-col gap-3">
                             <div className="flex flex-wrap items-center gap-2">
@@ -367,11 +394,11 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
                     </div>
 
                     {/* Image Display Comparer (Local model vs Tryon result) */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-center">
+                    <div className="grid grid-cols-1 md:grid-cols-[0.85fr_1.15fr] gap-6 justify-center">
                         {/* Initial model */}
                         <div className="flex flex-col items-center gap-2.5">
                             <span className="text-xs font-bold text-forest-550 uppercase tracking-wider">Original Photo</span>
-                            <div className="relative aspect-[3/4] w-full max-w-[340px] overflow-hidden rounded-2xl bg-gradient-to-br from-forest-50 to-forest-100/40 border border-forest-100/70 shadow-sm">
+                            <div className="relative aspect-[3/4] w-full max-w-[300px] overflow-hidden rounded-2xl bg-gradient-to-br from-forest-50 to-forest-100/40 border border-forest-100/70 shadow-sm">
                                 {humanPreviewUrl && (
                                     <Image
                                         src={humanPreviewUrl}
@@ -386,7 +413,7 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
                         {/* Generated Tryon block */}
                         <div className="flex flex-col items-center gap-2.5 border-t md:border-t-0 md:border-l border-forest-100 pt-5 md:pt-0 md:pl-6">
                             <span className="text-xs font-bold text-gold-600 uppercase tracking-wider">Try-On Output</span>
-                            <div className="relative aspect-[3/4] w-full max-w-[340px] overflow-hidden rounded-2xl bg-gradient-to-br from-gold-50 to-white border-2 border-gold-300 shadow-md">
+                            <div className="relative aspect-[3/4] w-full max-w-[400px] overflow-hidden rounded-2xl bg-gradient-to-br from-gold-50 to-white border-2 border-gold-300 shadow-md">
                                 <Image
                                     src={resultUrl}
                                     alt="Virtual Try-On Result photo"
