@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import HumanUploader from "./human-uploader";
 import GarmentCatalog from "./garment-catalog";
+import GuidedTour from "./guided-tour";
 import { Garment } from "./product-card";
 
 type Vton2DProps = {
@@ -12,12 +13,27 @@ type Vton2DProps = {
 
 export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
     const [humanFile, setHumanFile] = useState<File | null>(null);
+    const [humanPreviewUrl, setHumanPreviewUrl] = useState<string | null>(null);
     const [selectedGarment, setSelectedGarment] = useState<Garment | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [loadingStep, setLoadingStep] = useState<string>("");
     const [resultUrl, setResultUrl] = useState<string | null>(null);
     const [resultSource, setResultSource] = useState<"live" | "cached" | null>(null);
     const [apiError, setApiError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!humanFile) {
+            setHumanPreviewUrl(null);
+            return;
+        }
+
+        const previewUrl = URL.createObjectURL(humanFile);
+        setHumanPreviewUrl(previewUrl);
+
+        return () => {
+            URL.revokeObjectURL(previewUrl);
+        };
+    }, [humanFile]);
 
     const handleSelectFile = (file: File | null) => {
         setHumanFile(file);
@@ -128,8 +144,22 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
         document.body.removeChild(link);
     };
 
+    const resetResult = () => {
+        setResultUrl(null);
+        setResultSource(null);
+        setApiError(null);
+    };
+
+    const resultBadge = resultSource === "cached" ? "Cached Preview" : "Live Result";
+    const resultTone =
+        resultSource === "cached"
+            ? "bg-amber-100 text-amber-800 border-amber-200"
+            : "bg-emerald-100 text-emerald-800 border-emerald-200";
+
     return (
         <div className="flex flex-col gap-8 max-w-7xl mx-auto px-4 py-8 bg-forest-50/20 min-h-screen">
+            <GuidedTour />
+
             {/* Top Banner */}
             <div className="flex flex-col gap-2 border-b border-forest-100 pb-5">
                 <div className="flex items-center gap-2">
@@ -157,6 +187,7 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
 
                     {/* Action trigger button */}
                     <button
+                        id="tryon-trigger"
                         onClick={triggerVirtualTryOn}
                         disabled={!humanFile || !selectedGarment || isLoading}
                         className="w-full flex items-center justify-center gap-2.5 bg-forest-900 hover:bg-forest-950 text-white font-semibold py-4 px-6 rounded-2xl shadow-soft disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.99] transition-all duration-350"
@@ -256,50 +287,94 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
 
             {/* Try-on Result Presentation Section */}
             {resultUrl && (
-                <div className="border border-gold-200/80 rounded-2xl bg-white p-6 mt-6 shadow-soft flex flex-col gap-5 animate-slide-up">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-forest-50">
-                        <div>
-                            <h3 className="font-display text-lg font-bold text-forest-950 flex items-center gap-2">
-                                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                                {resultSource === "cached" ? "Cached Preview Loaded" : "Virtual Look Generated!"}
-                            </h3>
-                            <p className="text-xs text-forest-500 mt-0.5">
-                                {resultSource === "cached"
-                                    ? "Showing a local demo preview while the live model is unavailable."
-                                    : `Successfully synthesized ${selectedGarment?.brand} ${selectedGarment?.name} on your model photo.`}
-                            </p>
+                <div className="border border-gold-200/80 rounded-3xl bg-white p-6 md:p-7 mt-6 shadow-soft flex flex-col gap-6 animate-slide-up">
+                    <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5 pb-5 border-b border-forest-50">
+                        <div className="flex flex-col gap-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-[0.2em] ${resultTone}`}>
+                                    <span className={`h-1.5 w-1.5 rounded-full ${resultSource === "cached" ? "bg-amber-500" : "bg-emerald-500"}`} />
+                                    {resultBadge}
+                                </span>
+                                {selectedGarment && (
+                                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-forest-100 bg-forest-50 text-[10px] font-bold uppercase tracking-[0.2em] text-forest-700">
+                                        {selectedGarment.category}
+                                    </span>
+                                )}
+                            </div>
+                            <div>
+                                <h3 className="font-display text-2xl font-bold text-forest-950 leading-tight">
+                                    {resultSource === "cached" ? "Preview ready for your product" : "Virtual look generated"}
+                                </h3>
+                                <p className="text-sm text-forest-600 mt-1 max-w-2xl">
+                                    {selectedGarment
+                                        ? `${selectedGarment.brand} ${selectedGarment.name} is now paired with your photo.`
+                                        : "Your try-on result is ready to review."}
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-2xl bg-forest-50 text-forest-700 text-xs font-medium border border-forest-100">
+                                    <span className="font-semibold text-forest-950">Model</span>
+                                    <span>{humanFile ? "Uploaded photo" : "No photo"}</span>
+                                </span>
+                                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-2xl bg-forest-50 text-forest-700 text-xs font-medium border border-forest-100">
+                                    <span className="font-semibold text-forest-950">Garment</span>
+                                    <span>{selectedGarment?.name || "Selected item"}</span>
+                                </span>
+                            </div>
                         </div>
-                        <button
-                            onClick={downloadResult}
-                            className="flex items-center justify-center gap-2 py-2 px-4 border border-forest-200 hover:border-forest-350 text-forest-900 font-semibold text-xs rounded-xl shadow-sm bg-white hover:bg-forest-50/20 active:scale-[0.98] transition-all"
-                        >
-                            <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
+
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <button
+                                onClick={downloadResult}
+                                className="flex items-center justify-center gap-2 py-3 px-4 border border-forest-200 hover:border-forest-350 text-forest-900 font-semibold text-xs rounded-2xl shadow-sm bg-white hover:bg-forest-50/20 active:scale-[0.98] transition-all"
                             >
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
-                            <span>Download Image</span>
-                        </button>
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                <span>Download</span>
+                            </button>
+                            <button
+                                onClick={resetResult}
+                                className="flex items-center justify-center gap-2 py-3 px-4 border border-gold-300 text-gold-700 font-semibold text-xs rounded-2xl bg-gold-50/40 hover:bg-gold-50 active:scale-[0.98] transition-all"
+                            >
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <path d="M3 12a9 9 0 1 0 3-6.7" />
+                                    <path d="M3 4v5h5" />
+                                </svg>
+                                <span>Try Another Look</span>
+                            </button>
+                        </div>
                     </div>
 
                     {/* Image Display Comparer (Local model vs Tryon result) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-center">
                         {/* Initial model */}
                         <div className="flex flex-col items-center gap-2.5">
-                            <span className="text-xs font-bold text-forest-550 uppercase tracking-wider">Before</span>
-                            <div className="relative aspect-[3/4] w-full max-w-[340px] items-center overflow-hidden rounded-xl bg-forest-50/40 border border-forest-100/70 shadow-sm">
-                                {humanFile && (
+                            <span className="text-xs font-bold text-forest-550 uppercase tracking-wider">Original Photo</span>
+                            <div className="relative aspect-[3/4] w-full max-w-[340px] overflow-hidden rounded-2xl bg-gradient-to-br from-forest-50 to-forest-100/40 border border-forest-100/70 shadow-sm">
+                                {humanPreviewUrl && (
                                     <Image
-                                        src={URL.createObjectURL(humanFile)}
+                                        src={humanPreviewUrl}
                                         alt="Original user photo"
                                         fill
                                         className="object-cover"
@@ -310,8 +385,8 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
 
                         {/* Generated Tryon block */}
                         <div className="flex flex-col items-center gap-2.5 border-t md:border-t-0 md:border-l border-forest-100 pt-5 md:pt-0 md:pl-6">
-                            <span className="text-xs font-bold text-gold-600 uppercase tracking-wider">Virtual Try-On Result</span>
-                            <div className="relative aspect-[3/4] w-full max-w-[340px] items-center overflow-hidden rounded-xl bg-forest-50/40 border-2 border-gold-300 shadow-md">
+                            <span className="text-xs font-bold text-gold-600 uppercase tracking-wider">Try-On Output</span>
+                            <div className="relative aspect-[3/4] w-full max-w-[340px] overflow-hidden rounded-2xl bg-gradient-to-br from-gold-50 to-white border-2 border-gold-300 shadow-md">
                                 <Image
                                     src={resultUrl}
                                     alt="Virtual Try-On Result photo"
@@ -319,6 +394,11 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
                                     className="object-cover"
                                 />
                             </div>
+                            <p className="text-[11px] text-forest-500 text-center max-w-[300px]">
+                                {resultSource === "cached"
+                                    ? "This is a cached demo preview used when live inference is unavailable."
+                                    : "This is the live generated try-on result."}
+                            </p>
                         </div>
                     </div>
                 </div>

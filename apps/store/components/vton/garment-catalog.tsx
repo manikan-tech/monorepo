@@ -152,7 +152,7 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment, initi
     });
 
     return (
-        <div className="flex flex-col h-full bg-white rounded-2xl border border-forest-100/80 p-5 shadow-soft">
+        <div id="garment-catalog" className="flex flex-col h-full bg-white rounded-2xl border border-forest-100/80 p-5 shadow-soft">
             {/* Header Info */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-forest-50">
                 <div>
@@ -204,8 +204,8 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment, initi
                                 key={cat.id}
                                 onClick={() => setSelectedCategory(cat.id)}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${selectedCategory === cat.id
-                                        ? "bg-forest-900 text-white shadow-sm"
-                                        : "text-forest-700 hover:text-forest-900 hover:bg-forest-100/55"
+                                    ? "bg-forest-900 text-white shadow-sm"
+                                    : "text-forest-700 hover:text-forest-900 hover:bg-forest-100/55"
                                     }`}
                             >
                                 {cat.label}
@@ -224,8 +224,8 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment, initi
                                 key={gen.id}
                                 onClick={() => setSelectedGender(gen.id)}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${selectedGender === gen.id
-                                        ? "bg-forest-900 text-white shadow-sm"
-                                        : "text-forest-700 hover:text-forest-900 hover:bg-forest-100/55"
+                                    ? "bg-forest-900 text-white shadow-sm"
+                                    : "text-forest-700 hover:text-forest-900 hover:bg-forest-100/55"
                                     }`}
                             >
                                 {gen.label}

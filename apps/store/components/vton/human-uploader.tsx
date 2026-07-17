@@ -77,7 +77,7 @@ export default function HumanUploader({ selectedFile, onSelectFile }: HumanUploa
     };
 
     return (
-        <div className="flex flex-col h-full bg-white rounded-2xl border border-forest-100/80 p-5 shadow-soft">
+        <div id="upload-zone" className="flex flex-col h-full bg-white rounded-2xl border border-forest-100/80 p-5 shadow-soft">
             <div>
                 <h3 className="font-display text-lg font-bold text-forest-950">Upload Your Photo</h3>
                 <p className="text-xs text-forest-500 mt-0.5">Provide a clear, well-lit full body or upper body portrait.</p>
@@ -92,8 +92,8 @@ export default function HumanUploader({ selectedFile, onSelectFile }: HumanUploa
                         onDrop={handleDrop}
                         onClick={triggerUploadClick}
                         className={`relative flex flex-col items-center justify-center border-2 border-dashed rounded-xl py-14 px-4 cursor-pointer transition-all duration-300 min-h-[300px] ${isDragActive
-                                ? "border-gold-500 bg-gold-50/20 scale-[0.99]"
-                                : "border-forest-200 hover:border-forest-450 hover:bg-forest-50/15"
+                            ? "border-gold-500 bg-gold-50/20 scale-[0.99]"
+                            : "border-forest-200 hover:border-forest-450 hover:bg-forest-50/15"
                             }`}
                     >
                         {/* Hidden Input field */}
