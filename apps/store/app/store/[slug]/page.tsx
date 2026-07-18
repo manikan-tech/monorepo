@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import ProductGallery from "../../../components/product/ProductGallery";
 import SizeSelector from "../../../components/product/SizeSelector";
@@ -31,6 +31,7 @@ const StarRating = ({ rating }: { rating: number }) => (
 
 export default function ProductDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const slug = params.slug as string;
 
   const [product, setProduct] = useState<any>(null);
@@ -44,6 +45,7 @@ export default function ProductDetailPage() {
   const [cartError, setCartError] = useState("");
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isTryOnRouting, setIsTryOnRouting] = useState(false);
 
   // Reviews
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -152,6 +154,26 @@ export default function ProductDetailPage() {
 
   const displayPrice = selectedVariant?.priceOverride ?? product.priceEgp;
 
+  const handleVirtualTryOn = async () => {
+    if (!product?.id) return;
+
+    setIsTryOnRouting(true);
+    try {
+      const res = await fetch("/api/auth/me", { cache: "no-store" });
+      if (res.ok) {
+        router.push(`/visualize?productId=${product.id}`);
+        return;
+      }
+    } catch {
+      // Fall back to login redirect below.
+    } finally {
+      setIsTryOnRouting(false);
+    }
+
+    const nextPath = `/visualize?productId=${encodeURIComponent(product.id)}`;
+    router.push(`/login?next=${encodeURIComponent(nextPath)}`);
+  };
+
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-12 md:py-20">
 
@@ -247,6 +269,11 @@ export default function ProductDetailPage() {
               </button>
               <Link
                 href={`/visualize?productId=${product.id}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void handleVirtualTryOn();
+                }}
+                aria-busy={isTryOnRouting}
                 className="flex-1 flex items-center justify-center gap-3 py-3 px-6 border-2 border-gold-400 text-gold-600 rounded-2xl font-medium text-sm hover:bg-gold-50 hover:text-gold-700 transition-all duration-300 hover:-translate-y-0.5 animate-pulse-glow hover:animate-none"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

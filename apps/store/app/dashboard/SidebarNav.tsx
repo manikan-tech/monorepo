@@ -77,6 +77,20 @@ export default function SidebarNav() {
         </svg>
         <span className="font-medium">Widget Settings</span>
       </Link>
+
+      <Link
+        href="/dashboard/vton-cache"
+        className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors duration-200 ${
+          pathname.startsWith("/dashboard/vton-cache")
+            ? "bg-forest-800 text-white shadow-soft"
+            : "text-forest-50 hover:bg-forest-800 hover:text-white"
+        }`}
+      >
+        <svg className={`w-5 h-5 ${pathname.startsWith("/dashboard/vton-cache") ? "text-gold-400" : "opacity-70"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+        <span className="font-medium">VTON Cache</span>
+      </Link>
     </nav>
   );
 }
