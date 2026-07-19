@@ -342,8 +342,8 @@ export default function Home() {
               <Link href="/dashboard" className="px-8 py-3 bg-white text-forest-950 rounded-xl font-semibold hover:bg-forest-50 transition-colors">
                 Access Dashboard
               </Link>
-              <Link href="/docs" className="px-8 py-3 border border-white/20 text-white rounded-xl font-medium hover:bg-white/10 transition-colors">
-                Read API Docs
+              <Link href="/business#how-it-works" className="px-8 py-3 border border-white/20 text-white rounded-xl font-medium hover:bg-white/10 transition-colors">
+                How It Works
               </Link>
             </div>
           </div>

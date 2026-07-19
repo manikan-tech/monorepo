@@ -9,7 +9,6 @@ import { createClient } from "../app/lib/supabase/client";
 import { useCart } from "./CartContext";
 import { useWishlist } from "./WishlistContext";
 
-// ── Icons ─────────────────────────────────────────────────────────────
 const SearchIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8" />
@@ -40,7 +39,7 @@ const DashboardIcon = () => (
   </svg>
 );
 
-const navLinks = [
+const shopperNavLinks = [
   { name: "Collection", href: "/store" },
   { name: "Virtual Try-On", href: "/visualize" },
   { name: "My Wardrobe", href: "/wardrobe" },
@@ -78,19 +77,16 @@ export default function Navbar() {
     const supabase = createClient();
 
 
-    // Initial fetch
     supabase.auth.getUser().then(({ data }) => {
       const u = data?.user || null;
       setUser(u);
       checkRole(u?.email);
     });
 
-    // Subscribe to auth state changes — refreshes cart/wishlist on login/logout
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user || null;
       setUser(u);
       checkRole(u?.email);
-      // Refresh data stores whenever auth state changes
       void refreshCart();
       void refreshWishlist();
     });
@@ -109,6 +105,7 @@ export default function Navbar() {
   };
 
   const handleSignOut = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
@@ -131,14 +128,11 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-manikan-border/50 shadow-[0_4px_30px_rgba(18,52,59,0.03)] backdrop-blur-xl transition-all duration-300">
-      {/* ── Edge Light ── */}
       <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] w-full bg-transparent overflow-hidden">
         <div className="w-full h-full bg-[linear-gradient(90deg,transparent,rgba(200,150,102,0.8),transparent)] bg-[length:200%_100%] animate-shimmer-slow pointer-events-none" />
       </div>
 
       <div className="max-w-[1400px] mx-auto px-6 h-24 flex items-center justify-between">
-
-        {/* ── Logo ── */}
         <Link href="/" className="flex items-center gap-2 group">
           <div className="relative w-56 h-16 transition-transform duration-500 group-hover:scale-105 group-hover:-translate-y-0.5">
             <Image
@@ -153,7 +147,7 @@ export default function Navbar() {
         </Link>
 
         <div className="hidden lg:flex items-center gap-10">
-          {navLinks.map((link) => {
+          {!isRetailer && shopperNavLinks.map((link) => {
             const isActive = pathname === link.href;
             const isTryOn = link.href === "/visualize";
             return (

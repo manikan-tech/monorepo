@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import AuthInput from "../components/AuthInput";
 import { createClient } from "../../lib/supabase/client";
 
+
 /* ── SVG Icons ──────────────────────────────────────────── */
 
 const MailIcon = (
