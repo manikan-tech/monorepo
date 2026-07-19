@@ -7,8 +7,8 @@ export async function POST() {
     const supabase = await createClient();
     await supabase.auth.signOut();
     
-    // Also clear the old legacy manikan_auth_token just in case
     const cookieStore = await cookies();
+    cookieStore.delete("manikan_role");
     cookieStore.delete("manikan_auth_token");
 
     return NextResponse.json({ success: true });

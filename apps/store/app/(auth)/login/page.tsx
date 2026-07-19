@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import AuthInput from "../components/AuthInput";
 import { createClient } from "../../lib/supabase/client";
 
+
 /* ── SVG Icons ──────────────────────────────────────────── */
 
 const MailIcon = (
@@ -83,7 +84,6 @@ export default function LoginPage() {
         password,
       });
 
-      // Success — redirect based on role provided by backend
       router.push(data.redirect || "/");
     } catch {
       setError("Network error. Please check your connection and try again.");

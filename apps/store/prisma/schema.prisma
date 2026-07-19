@@ -261,6 +261,28 @@ model Review {
   @@unique([customerId, productId])
 }
 
+// ─── Business Inquiry (lead capture) ────────────────────────────
+
+enum InquiryStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CLOSED
+}
+
+model BusinessInquiry {
+  id            String        @id @default(cuid())
+  companyName   String
+  contactName   String
+  email         String
+  phone         String?
+  website       String?
+  monthlyOrders String?       // "Under 100" | "100–1,000" | "1,000+"
+  message       String?
+  status        InquiryStatus @default(NEW)
+  createdAt     DateTime      @default(now())
+}
+
 // ─── Measurement Session (extended) ─────────────────────────────
 
 model MeasurementSession {
