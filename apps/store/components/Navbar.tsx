@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "../app/lib/supabase/client";
 import { useCart } from "./CartContext";
 import { useWishlist } from "./WishlistContext";
@@ -57,6 +58,9 @@ export default function Navbar() {
   const [searchQuery, setSearchQuery] = useState("");
   const [user, setUser] = useState<any>(null);
   const [isRetailer, setIsRetailer] = useState(false);
+  const [showTryOnLoginModal, setShowTryOnLoginModal] = useState(false);
+  const [pendingTryOnHref, setPendingTryOnHref] = useState<string | null>(null);
+  const [isClient, setIsClient] = useState(false);
 
   // ── Check if the logged-in user is a Retailer ────────────────────
   const checkRole = async (email: string | undefined) => {
@@ -70,6 +74,7 @@ export default function Navbar() {
   };
 
   useEffect(() => {
+    setIsClient(true);
     const supabase = createClient();
 
 
@@ -109,6 +114,21 @@ export default function Navbar() {
     router.push("/login");
   };
 
+  const handleNavTryOnClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (user) return;
+
+    e.preventDefault();
+    setPendingTryOnHref(href);
+    setShowTryOnLoginModal(true);
+  };
+
+  const handleContinueToLogin = () => {
+    const href = pendingTryOnHref || "/visualize";
+    setShowTryOnLoginModal(false);
+    setPendingTryOnHref(null);
+    router.push(`/login?next=${encodeURIComponent(href)}`);
+  };
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-manikan-border/50 shadow-[0_4px_30px_rgba(18,52,59,0.03)] backdrop-blur-xl transition-all duration-300">
       {/* ── Edge Light ── */}
@@ -135,10 +155,12 @@ export default function Navbar() {
         <div className="hidden lg:flex items-center gap-10">
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
+            const isTryOn = link.href === "/visualize";
             return (
               <Link
                 key={link.name}
                 href={link.href}
+                onClick={isTryOn ? (e) => handleNavTryOnClick(e, link.href) : undefined}
                 className={`relative font-sans text-[15px] font-medium tracking-wide transition-all duration-300 group py-2 ${isActive ? "text-forest-900" : "text-forest-700/80 hover:text-gold-600"
                   }`}
               >
@@ -151,6 +173,57 @@ export default function Navbar() {
             );
           })}
         </div>
+
+        {showTryOnLoginModal && isClient && typeof window !== "undefined" && createPortal(
+          <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+            <div
+              className="absolute inset-0 bg-[#5C3E21]/20 backdrop-blur-[2px]"
+              onClick={() => {
+                setShowTryOnLoginModal(false);
+                setPendingTryOnHref(null);
+              }}
+            />
+            <div className="relative w-full max-w-md rounded-[28px] border border-[#8C6239]/20 bg-[#FDFBF7]/98 p-6 shadow-[0_30px_100px_rgba(92,62,33,0.25)] backdrop-blur-xl text-[#5C3E21] animate-fade-in-up">
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#8C6239]/10 text-3xl">
+                  🧵
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-[22px] font-semibold leading-tight text-white">
+                    Backstage pass needed
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-white">
+                    Clothes need a backstage pass — please sign in first 😄
+                  </p>
+                  <p className="mt-2 text-xs leading-relaxed text-white/80">
+                    We’ll keep your try-on waiting and take you there right after login.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={handleContinueToLogin}
+                  className="inline-flex items-center justify-center rounded-2xl bg-[#8C6239] px-5 py-3 text-sm font-semibold text-[#FDFBF7] transition-all hover:bg-[#5C3E21] hover:-translate-y-0.5"
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTryOnLoginModal(false);
+                    setPendingTryOnHref(null);
+                  }}
+                  className="inline-flex items-center justify-center rounded-2xl border border-[#8C6239]/20 bg-white/70 px-5 py-3 text-sm font-semibold text-[#5C3E21] transition-all hover:bg-white hover:-translate-y-0.5"
+                >
+                  Maybe later
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
         {/* ── Icons & Sign In ── */}
         <div className="flex items-center gap-6">

@@ -185,6 +185,16 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
     const downloadResult = async () => {
         if (!resultUrl) return;
 
+        const getDownloadExtension = (mimeType: string) => {
+            const part = mimeType.toLowerCase().split(";", 1)[0];
+            const normalized = (part || "").trim();
+            if (normalized === "image/webp") return "webp";
+            if (normalized === "image/jpeg") return "jpg";
+            if (normalized === "image/jpg") return "jpg";
+            if (normalized === "image/png") return "png";
+            return "png";
+        };
+
         try {
             // Turn the displayed result into a same-origin Blob URL first. This
             // keeps downloads working for both live Blob results and cached images.
@@ -194,10 +204,11 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
             }
 
             const imageBlob = await response.blob();
+            const downloadExtension = getDownloadExtension(imageBlob.type || response.headers.get("content-type") || "");
             const downloadUrl = URL.createObjectURL(imageBlob);
             const link = document.createElement("a");
             link.href = downloadUrl;
-            link.download = `manikan_tryon_${selectedGarment?.id || "result"}.png`;
+            link.download = `manikan_tryon_${selectedGarment?.id || "result"}.${downloadExtension}`;
             link.style.display = "none";
             document.body.appendChild(link);
             link.click();
