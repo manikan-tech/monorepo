@@ -2,7 +2,7 @@
 
 import { useState, FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import AuthInput from "../components/AuthInput";
 import { createClient } from "../../lib/supabase/client";
 
@@ -27,6 +27,7 @@ const LockIcon = (
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"customer" | "retailer">("customer");
@@ -84,7 +85,10 @@ export default function LoginPage() {
         password,
       });
 
-      router.push(data.redirect || "/");
+      // Success — redirect based on role provided by backend
+      const nextPath = searchParams.get("next");
+      const safeNextPath = nextPath && nextPath.startsWith("/") ? nextPath : null;
+      router.push(safeNextPath || data.redirect || "/");
     } catch {
       setError("Network error. Please check your connection and try again.");
     } finally {

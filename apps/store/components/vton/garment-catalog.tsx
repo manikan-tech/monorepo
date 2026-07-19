@@ -74,49 +74,120 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment, initi
     const [garments, setGarments] = useState<Garment[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [search, setSearch] = useState<string>("");
-    const [selectedCategory, setSelectedCategory] = useState<string>("all");
-    const [selectedGender, setSelectedGender] = useState<string>("all");
+    const [selectedStyle, setSelectedStyle] = useState<string>("all");
+    const [selectedAudience, setSelectedAudience] = useState<string>("all");
+
+    const STYLE_FILTERS = [
+        { id: "all", label: "All clothes" },
+        { id: "shirt", label: "Tops" },
+        { id: "pants", label: "Bottoms" },
+        { id: "skirt", label: "Skirts" },
+        { id: "dress", label: "Dresses" },
+        { id: "jacket", label: "Jackets" },
+    ];
+
+    const FRIENDLY_CATEGORY_LABELS: Record<Garment["category"], string> = {
+        blouse: "Blouse",
+        shirt: "Top",
+        jacket: "Jacket",
+        pants: "Bottom",
+        skirt: "Skirt",
+        dress: "Dress",
+    };
+
+    const inferGarmentCategory = (product: any): Garment["category"] => {
+        const rawCategory = String(product.categoryRef?.slug || product.category || product.type || "").toLowerCase();
+        const rawName = String(product.name || "").toLowerCase();
+        const combined = `${rawCategory} ${rawName}`;
+
+        if (
+            combined.includes("jacket") ||
+            combined.includes("coat") ||
+            combined.includes("blazer") ||
+            combined.includes("outerwear")
+        ) {
+            return "jacket";
+        }
+
+        if (
+            combined.includes("pants") ||
+            combined.includes("trouser") ||
+            combined.includes("jean") ||
+            combined.includes("bottom") ||
+            combined.includes("short")
+        ) {
+            return "pants";
+        }
+
+        if (combined.includes("skirt")) {
+            return "skirt";
+        }
+
+        if (
+            combined.includes("blouse") ||
+            combined.includes("shirt") ||
+            combined.includes("tee") ||
+            combined.includes("t-shirt") ||
+            combined.includes("top") ||
+            combined.includes("sweater") ||
+            combined.includes("hoodie") ||
+            combined.includes("knit")
+        ) {
+            return "shirt";
+        }
+
+        if (combined.includes("dress") && !combined.includes("shirt") && !combined.includes("tee") && !combined.includes("top")) {
+            return "dress";
+        }
+
+        if (combined.includes("suit")) {
+            return "jacket";
+        }
+
+        return "shirt";
+    };
 
     // Attempt to fetch garments from active store API route, fall back to default catalog on error or empty
     useEffect(() => {
         async function loadGarments() {
             try {
                 setLoading(true);
-                const res = await fetch("/api/products?limit=50");
-                if (!res.ok) {
-                    throw new Error("Failed to fetch from store API");
-                }
-                const data = await res.json();
+                const pageSize = 100;
+                const mapped: Garment[] = [];
+                let page = 1;
+                let totalPages = 1;
 
-                if (data?.products && Array.isArray(data.products) && data.products.length > 0) {
-                    // Map DB structure to garment structures in state
-                    const mapped: Garment[] = data.products.map((p: any) => {
-                        // Map store categories to the values accepted by CatVTON.
-                        const dbCat = String(p.categoryRef?.slug || p.category || "").toLowerCase();
-                        let matchedCategory: Garment["category"] = "shirt";
-                        if (dbCat.includes("skirt")) {
-                            matchedCategory = "skirt";
-                        } else if (dbCat.includes("pants") || dbCat.includes("trouser") || dbCat.includes("bottom") || dbCat.includes("lower")) {
-                            matchedCategory = "pants";
-                        } else if (dbCat.includes("dress") || dbCat.includes("suit")) {
-                            matchedCategory = "dress";
-                        } else if (dbCat.includes("jacket") || dbCat.includes("coat")) {
-                            matchedCategory = "jacket";
-                        } else if (dbCat.includes("blouse")) {
-                            matchedCategory = "blouse";
-                        }
+                while (page <= totalPages) {
+                    const res = await fetch(`/api/products?page=${page}&limit=${pageSize}`);
+                    if (!res.ok) {
+                        throw new Error("Failed to fetch from store API");
+                    }
 
-                        return {
+                    const data = await res.json();
+                    const products = Array.isArray(data?.products) ? data.products : [];
+                    totalPages = Number(data?.pagination?.totalPages || 1);
+
+                    products.forEach((p: any) => {
+                        mapped.push({
                             id: String(p.id),
                             name: p.name,
                             brand: p.brand || "Manikan",
                             imageUrl: p.imageUrl || "",
                             priceEgp: p.priceEgp || 0,
-                            category: matchedCategory,
+                            category: inferGarmentCategory(p),
                             gender: p.gender || "Unisex",
-                            discountPct: p.discountPct || 0
-                        };
+                            discountPct: p.discountPct || 0,
+                        });
                     });
+
+                    if (products.length < pageSize) {
+                        break;
+                    }
+
+                    page += 1;
+                }
+
+                if (mapped.length > 0) {
                     setGarments(mapped);
                 } else {
                     setGarments(FALLBACK_GARMENTS);
@@ -145,10 +216,10 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment, initi
         const matchesSearch =
             g.name.toLowerCase().includes(search.toLowerCase()) ||
             g.brand.toLowerCase().includes(search.toLowerCase());
-        const matchesCategory = selectedCategory === "all" || g.category === selectedCategory;
-        const matchesGender = selectedGender === "all" || g.gender.toLowerCase() === selectedGender.toLowerCase();
+        const matchesCategory = selectedStyle === "all" || g.category === selectedStyle;
+        const matchesAudience = selectedAudience === "all" || g.gender.toLowerCase() === selectedAudience;
 
-        return matchesSearch && matchesCategory && matchesGender;
+        return matchesSearch && matchesCategory && matchesAudience;
     });
 
     return (
@@ -156,8 +227,14 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment, initi
             {/* Header Info */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-forest-50">
                 <div>
-                    <h3 className="font-display text-lg font-bold text-forest-950">Select Garment</h3>
-                    <p className="text-xs text-forest-500 mt-0.5">Click a clothing item you want to try on virtual models.</p>
+                    <h3 className="font-display text-lg font-bold text-forest-950">Pick your look</h3>
+                    <p className="text-xs text-forest-500 mt-0.5">
+                        Search by name or brand, then choose the item you want to try on.
+                    </p>
+                </div>
+                <div className="text-right">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gold-600">Full catalog</p>
+                    <p className="text-xs text-forest-500">{garments.length} items loaded</p>
                 </div>
             </div>
 
@@ -167,7 +244,7 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment, initi
                 <div className="relative">
                     <input
                         type="text"
-                        placeholder="Search items, brands..."
+                        placeholder="Search clothes, brands, or styles..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="w-full pl-9 pr-4 py-2 border border-forest-200 rounded-xl text-sm focus:outline-none focus:border-gold-500 focus:ring-1 focus:ring-gold-500/25 transition-all text-forest-900"
@@ -188,51 +265,44 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment, initi
                     </svg>
                 </div>
 
-                {/* Filters Grid */}
+                {/* Friendly style filters */}
                 <div className="flex flex-wrap items-center gap-2">
-                    {/* Categories */}
-                    <div className="flex items-center gap-1 bg-forest-50/50 p-1 rounded-xl">
-                        {[
-                            { id: "all", label: "All" },
-                            { id: "shirt", label: "Tops" },
-                            { id: "jacket", label: "Jackets" },
-                            { id: "pants", label: "Pants" },
-                            { id: "skirt", label: "Skirts" },
-                            { id: "dress", label: "Dresses" },
-                        ].map((cat) => (
-                            <button
-                                key={cat.id}
-                                onClick={() => setSelectedCategory(cat.id)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${selectedCategory === cat.id
-                                    ? "bg-forest-900 text-white shadow-sm"
-                                    : "text-forest-700 hover:text-forest-900 hover:bg-forest-100/55"
-                                    }`}
-                            >
-                                {cat.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Gender */}
-                    <div className="flex items-center gap-1 bg-forest-50/50 p-1 rounded-xl">
-                        {[
-                            { id: "all", label: "All Genders" },
-                            { id: "men", label: "Men" },
-                            { id: "women", label: "Women" },
-                        ].map((gen) => (
-                            <button
-                                key={gen.id}
-                                onClick={() => setSelectedGender(gen.id)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${selectedGender === gen.id
-                                    ? "bg-forest-900 text-white shadow-sm"
-                                    : "text-forest-700 hover:text-forest-900 hover:bg-forest-100/55"
-                                    }`}
-                            >
-                                {gen.label}
-                            </button>
-                        ))}
-                    </div>
+                    {STYLE_FILTERS.map((style) => (
+                        <button
+                            key={style.id}
+                            onClick={() => setSelectedStyle(style.id)}
+                            className={`px-3.5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all ${selectedStyle === style.id
+                                ? "bg-forest-900 text-white shadow-sm"
+                                : "bg-forest-50 text-forest-700 hover:text-forest-900 hover:bg-forest-100/70"
+                                }`}
+                        >
+                            {style.label}
+                        </button>
+                    ))}
                 </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                    {[
+                        { id: "all", label: "Everyone" },
+                        { id: "women", label: "Women" },
+                        { id: "men", label: "Men" },
+                    ].map((audience) => (
+                        <button
+                            key={audience.id}
+                            onClick={() => setSelectedAudience(audience.id)}
+                            className={`px-3.5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all ${selectedAudience === audience.id
+                                ? "bg-gold-500 text-white shadow-sm"
+                                : "bg-forest-50 text-forest-700 hover:text-forest-900 hover:bg-forest-100/70"
+                                }`}
+                        >
+                            {audience.label}
+                        </button>
+                    ))}
+                </div>
+
+                <p className="text-[11px] text-forest-500">
+                    Tip: full-body photos work best for bottoms and dresses. Clear front-facing photos work best for tops.
+                </p>
             </div>
 
             {/* Garments List Grid */}
@@ -271,7 +341,9 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment, initi
                             <line x1="15" y1="9" x2="9" y2="15" />
                         </svg>
                         <h4 className="text-sm font-bold text-forest-900">No Garments Found</h4>
-                        <p className="text-xs text-forest-450 mt-1 max-w-[200px]">Try adjusting your search query or catalog filter settings.</p>
+                        <p className="text-xs text-forest-450 mt-1 max-w-[220px]">
+                            Try a different search term or switch to “All clothes”.
+                        </p>
                     </div>
                 )}
             </div>

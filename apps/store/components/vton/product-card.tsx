@@ -24,9 +24,9 @@ export default function ProductCard({ product, isSelected, onSelect }: ProductCa
         blouse: "Blouse",
         shirt: "Top",
         jacket: "Jacket",
-        pants: "Pants",
+        pants: "Bottom",
         skirt: "Skirt",
-        dress: "Full Dress",
+        dress: "Dress",
     };
 
     const discountedPrice = product.discountPct

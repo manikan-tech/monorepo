@@ -67,8 +67,35 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
         return "/products/tshirt-gray.png";
     };
 
+    const getCachedPreviewResultUrl = async (garment: Garment) => {
+        const cacheUrl = `/api/vton/cache?productId=${encodeURIComponent(garment.id)}`;
+        try {
+            const response = await fetch(cacheUrl, { method: "HEAD" });
+            if (response.ok) {
+                return cacheUrl;
+            }
+        } catch (error) {
+            console.warn("Cached preview lookup failed:", error);
+        }
+
+        return getCachedFallbackResultUrl(garment);
+    };
+
     const triggerVirtualTryOn = async () => {
-        if (!humanFile || !selectedGarment) return;
+        if (!humanFile) {
+            setApiError("Please upload your photo first.");
+            return;
+        }
+
+        if (!selectedGarment) {
+            setApiError("Please select a garment first.");
+            return;
+        }
+
+        if (!selectedGarment.imageUrl) {
+            setApiError("The selected garment is missing an image.");
+            return;
+        }
 
         setIsLoading(true);
         setApiError(null);
@@ -103,23 +130,30 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
                 : `${window.location.origin}${selectedGarment.imageUrl}`;
             formData.append("garment_image_url", absoluteGarmentUrl);
             formData.append("category", selectedGarment.category);
-            // Hit our fastapi microservice
-            const response = await fetch("http://localhost:8003/api/vton/2d", {
+            // Hit the store backend, which authenticates and proxies to the VTON service
+            const response = await fetch("/api/vton/2d", {
                 method: "POST",
                 body: formData,
             });
 
             clearInterval(stepInterval);
 
+            if (response.status === 401) {
+                window.location.href = "/login";
+                return;
+            }
+
             if (!response.ok) {
                 let errMsg = "API call returned an error response.";
                 try {
                     const errData = await response.json();
-                    errMsg = errData.detail || errMsg;
+                    errMsg = errData.error || errData.detail || errMsg;
                 } catch {
                     // ignore
                 }
-                throw new Error(errMsg);
+                const error: Error & { status?: number } = new Error(errMsg);
+                error.status = response.status;
+                throw error;
             }
 
             // Read response as binary blob mapping
@@ -131,8 +165,12 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
         } catch (err: any) {
             clearInterval(stepInterval);
             console.error("VTON 2D Error:", err);
-            if (selectedGarment) {
-                setResultUrl(getCachedFallbackResultUrl(selectedGarment));
+
+            if (err?.status && err.status < 500) {
+                setApiError(err?.message || "Please check your inputs and try again.");
+            } else if (selectedGarment) {
+                const cachedPreviewUrl = await getCachedPreviewResultUrl(selectedGarment);
+                setResultUrl(cachedPreviewUrl);
                 setResultSource("cached");
                 setApiError(null);
             } else {
@@ -147,6 +185,16 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
     const downloadResult = async () => {
         if (!resultUrl) return;
 
+        const getDownloadExtension = (mimeType: string) => {
+            const part = mimeType.toLowerCase().split(";", 1)[0];
+            const normalized = (part || "").trim();
+            if (normalized === "image/webp") return "webp";
+            if (normalized === "image/jpeg") return "jpg";
+            if (normalized === "image/jpg") return "jpg";
+            if (normalized === "image/png") return "png";
+            return "png";
+        };
+
         try {
             // Turn the displayed result into a same-origin Blob URL first. This
             // keeps downloads working for both live Blob results and cached images.
@@ -156,10 +204,11 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
             }
 
             const imageBlob = await response.blob();
+            const downloadExtension = getDownloadExtension(imageBlob.type || response.headers.get("content-type") || "");
             const downloadUrl = URL.createObjectURL(imageBlob);
             const link = document.createElement("a");
             link.href = downloadUrl;
-            link.download = `manikan_tryon_${selectedGarment?.id || "result"}.png`;
+            link.download = `manikan_tryon_${selectedGarment?.id || "result"}.${downloadExtension}`;
             link.style.display = "none";
             document.body.appendChild(link);
             link.click();
