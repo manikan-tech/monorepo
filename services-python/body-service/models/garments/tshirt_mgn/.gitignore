@@ -1,0 +1,11 @@
+# MGN dataset assets are NON-COMMERCIAL licensed — never commit the binary data.
+# Only the documentation (NOTICE.md, template_meta.json) is tracked.
+*.obj
+*.pkl
+*.jpg
+*.jpeg
+*.png
+_sample_textured/
+!NOTICE.md
+!template_meta.json
+!.gitignore

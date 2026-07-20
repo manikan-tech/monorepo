@@ -11,7 +11,7 @@ requested measurements, then scales the mesh to the exact target height.
 |--------|------|-------------|
 | `GET`  | `/health` | Liveness probe → `{"status":"ok"}` |
 | `POST` | `/generate-avatar` | Bare A-pose body mesh → binary `.glb` |
-| `POST` | `/generate-dressed-avatar` | Body mesh wearing a garment (t-shirt + pants, via vertex colouring) → binary `.glb` |
+| `POST` | `/generate-dressed-avatar` | Body mesh wearing a **real fitted garment mesh** (Pipeline 1) with a **physics-baked drape** for male bodies (Pipeline 2) → 2-node (`body` + `garment`) binary `.glb` |
 
 **`POST /generate-avatar`**
 ```json
@@ -28,6 +28,22 @@ Returns `model/gltf-binary` (a `.glb` file).
   "garment_chest_cm": 54, "garment_length_cm": 72,
   "garment_sleeve_cm": 21, "garment_shoulder_cm": 46 }
 ```
+Optional `product_image_url` (absolute URL of the product's flat-lay photo)
+textures the garment with it (recoloured to `tshirt_color_hex`, shading
+preserved); on any failure it falls back to a flat colour fill. Engine toggles:
+`MANIKAN_DRESSED_ENGINE=v1` (legacy vertex-paint garment), `MANIKAN_PHYSICS_DRAPE=0`
+(kinematic fit only).
+
+## Documentation
+
+The garment/try-on engine is documented in [`docs/`](docs/):
+
+| Doc | What it covers |
+|-----|----------------|
+| [`technical-overview.md`](docs/technical-overview.md) | The core SMPL β-optimisation engine (virtual tape measure, Adam sculptor, height decoupling) |
+| [`garment-fitting-pipeline.md`](docs/garment-fitting-pipeline.md) | **Pipeline 1** — real MGN garment mesh fitted via surface binding (Tier 1 + 1.5) |
+| [`physics-drape-pipeline.md`](docs/physics-drape-pipeline.md) | **Pipeline 2** — physics-baked drape from a precomputed delta library (male, tee) |
+| [`development-journey.md`](docs/development-journey.md) | The narrative history behind both pipelines — the bugs, dead ends, and what actually worked |
 
 ## Prerequisites
 
