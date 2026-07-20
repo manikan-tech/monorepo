@@ -1,4 +1,4 @@
-import { useRef, useMemo, Suspense } from 'react'
+import { useRef, useMemo, useEffect, Suspense } from 'react'
 import { Canvas, useFrame, useLoader } from '@react-three/fiber'
 import { OrbitControls, ContactShadows, Center } from '@react-three/drei'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -7,42 +7,113 @@ import * as THREE from 'three'
 /* ─────────────────────────────────────────────────────────────────────────
    Dressed Avatar Model — loads dressed .glb with vertex colours
    ───────────────────────────────────────────────────────────────────────── */
+// Tier 1.5 idle jiggle tuning — subtle, hem-weighted sway. Purely cosmetic:
+// never changes fit/silhouette, only adds a little life while the model is
+// sitting idle. Amplitude in local mesh units (metres).
+const JIGGLE_AMPLITUDE = 0.009
+const JIGGLE_FREQUENCY = 1.6
+const JIGGLE_MIN_WEIGHT = 0.05 // vertices below this are skipped (perf, and keeps shoulder/collar rigid)
+
 function DressedModel({ url }) {
   const gltf = useLoader(GLTFLoader, url)
   const meshRef = useRef()
+  const garmentRef = useRef(null)
+  const restPositionsRef = useRef(null)
 
-  // Gentle idle rotation
-  useFrame((_, delta) => {
+  // Gentle idle rotation + Tier 1.5 hem jiggle
+  useFrame((state, delta) => {
     if (meshRef.current) {
       meshRef.current.rotation.y += delta * 0.12
     }
+
+    const garment = garmentRef.current
+    const rest = restPositionsRef.current
+    if (garment && rest) {
+      const pos = garment.geometry.attributes.position
+      const { jiggleIdx, heightWeight } = garment.userData
+      const t = state.clock.elapsedTime
+      for (let k = 0; k < jiggleIdx.length; k++) {
+        const i = jiggleIdx[k]
+        const ox = rest[i * 3], oy = rest[i * 3 + 1], oz = rest[i * 3 + 2]
+        const w = heightWeight[i]
+        const dx = JIGGLE_AMPLITUDE * w * Math.sin(t * JIGGLE_FREQUENCY + ox * 8.0)
+        const dz = JIGGLE_AMPLITUDE * 0.6 * w * Math.cos(t * JIGGLE_FREQUENCY * 0.8 + oy * 6.0)
+        pos.setXYZ(i, ox + dx, oy, oz + dz)
+      }
+      pos.needsUpdate = true
+      // Without this, lighting uses the rest-pose normals against displaced
+      // positions -- most visibly wrong (dark/incorrect shading) at high-
+      // curvature areas like the collar, right where jiggle weight fades out.
+      garment.geometry.computeVertexNormals()
+    }
   })
 
-  // Use vertex colours from the GLB (skin + t-shirt colouring)
+  // Use the GLB's own texture (product photo) or vertex colours (skin + flat
+  // t-shirt colouring fallback) depending on what the backend produced.
   const enhancedScene = useMemo(() => {
     const scene = gltf.scene.clone(true)
 
     scene.traverse((child) => {
       if (child.isMesh) {
-        // Check if mesh has vertex colours
-        const hasVertexColors = child.geometry?.attributes?.color
+        const textureMap = child.material?.map || null
+        const hasVertexColors = !!child.geometry?.attributes?.color
+        const isGarment = textureMap || hasVertexColors
 
-        if (hasVertexColors) {
-          // Use vertex colours for the dressed look
+        if (textureMap) {
+          // Textured garment (Phase 4: product photo). Double-sided: thin
+          // garment meshes can fold slightly on themselves (e.g. a subtle
+          // scan-noise pinch at the collar) -- single-sided rendering shows
+          // that as a see-through gap to whatever's behind the canvas.
+          child.material = new THREE.MeshStandardMaterial({
+            map: textureMap,
+            roughness: 0.75,
+            metalness: 0.0,
+            envMapIntensity: 0.6,
+            side: THREE.DoubleSide,
+          })
+        } else if (hasVertexColors) {
+          // Flat-colour garment fallback (no product photo available)
           child.material = new THREE.MeshStandardMaterial({
             vertexColors: true,
             roughness: 0.6,
             metalness: 0.02,
             envMapIntensity: 0.7,
+            side: THREE.DoubleSide,
           })
         } else {
-          // Fallback — skin-coloured PBR material
+          // Skin-coloured PBR material (body mesh) — never jiggled
           child.material = new THREE.MeshStandardMaterial({
             color: new THREE.Color('#c8a88e'),
             roughness: 0.55,
             metalness: 0.05,
             envMapIntensity: 0.8,
           })
+        }
+
+        if (isGarment) {
+          // Own geometry copy — never mutate the cached/loaded original.
+          child.geometry = child.geometry.clone()
+          const posAttr = child.geometry.attributes.position
+          const arr = posAttr.array
+
+          let ymin = Infinity, ymax = -Infinity
+          for (let i = 0; i < posAttr.count; i++) {
+            const y = arr[i * 3 + 1]
+            if (y < ymin) ymin = y
+            if (y > ymax) ymax = y
+          }
+          const span = Math.max(ymax - ymin, 1e-6)
+          const heightWeight = new Float32Array(posAttr.count)
+          const jiggleIdx = []
+          for (let i = 0; i < posAttr.count; i++) {
+            const tNorm = (arr[i * 3 + 1] - ymin) / span // 0 at hem .. 1 at shoulder
+            const w = Math.pow(Math.max(0, 1 - tNorm), 1.5) // strong at hem, ~0 at shoulder
+            heightWeight[i] = w
+            if (w > JIGGLE_MIN_WEIGHT) jiggleIdx.push(i)
+          }
+          child.userData.heightWeight = heightWeight
+          child.userData.jiggleIdx = jiggleIdx
+          child.userData.isGarment = true
         }
 
         child.castShadow = true
@@ -52,6 +123,19 @@ function DressedModel({ url }) {
 
     return scene
   }, [gltf])
+
+  // Wire up the jiggle refs after the scene is committed (refs must not be
+  // touched during render, hence not inside the useMemo above).
+  useEffect(() => {
+    let garment = null
+    enhancedScene.traverse((child) => {
+      if (child.isMesh && child.userData.isGarment) garment = child
+    })
+    garmentRef.current = garment
+    restPositionsRef.current = garment
+      ? garment.geometry.attributes.position.array.slice()
+      : null
+  }, [enhancedScene])
 
   return (
     <Center>
