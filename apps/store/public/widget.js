@@ -1,8 +1,12 @@
+/* eslint-env browser */
 (function() {
-    // 1. Extract context configuration from the script tag dynamically
+    if (typeof window === 'undefined') return;
+
     const currentScript = document.currentScript || Array.from(document.querySelectorAll('script')).find(s => s.src.includes('widget.js'));
-    const RETAILER_ID = currentScript ? currentScript.getAttribute('data-retailer-id') : "demo-retailer";
+    const RETAILER_ID = currentScript ? currentScript.getAttribute('data-retailer-id') : "manikan";
     const PRODUCT_ID = currentScript ? currentScript.getAttribute('data-product-id') : null;
+
+    const activeSizeChartCSV = currentScript ? currentScript.getAttribute('data-size-chart') : "";
 
     let sessionId = localStorage.getItem('manikan_session_id');
     if (!sessionId) {
@@ -11,33 +15,30 @@
     }
 
     let conversationHistory = [];
-    const activeSizeChartCSV = `size_label,chest_cm,waist_cm,hip_cm,length_cm\nS,86,68,90,58\nM,90,72,94,59\nL,94,76,98,60\nXL,98,80,102,61`;
     let activeUserBetas = null; 
 
-    // Inject Modern Premium & Luxurious CSS Styling (Monochrome with subtle Gold Accents)
     const style = document.createElement('style');
     style.innerHTML = `
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
 
         .ai-widget-container {
             position: fixed;
-            bottom: 24px;
-            right: 24px;
+            bottom: 30px;
+            right: 30px;
             z-index: 10000;
             font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
             -webkit-font-smoothing: antialiased;
         }
         
-        /* Floating Button with Elegant Pulse Effect */
         .ai-widget-button {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: #111111;
+            width: 64px;
+            height: 64px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #111111 0%, #2a2a2a 100%);
             color: #ffffff;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
             cursor: pointer;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 12px 35px rgba(0,0,0,0.2);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -45,51 +46,35 @@
             position: relative;
         }
         .ai-widget-button:hover {
-            transform: translateY(-3px) scale(1.02);
-            box-shadow: 0 14px 35px rgba(0,0,0,0.28);
-            background: #1a1a1a;
-        }
-        .ai-widget-button::after {
-            content: '';
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            border: 1px solid #111111;
-            opacity: 0.3;
-            animation: widget-pulse 2.5s infinite;
-        }
-        @keyframes widget-pulse {
-            0% { transform: scale(1); opacity: 0.3; }
-            100% { transform: scale(1.4); opacity: 0; }
+            transform: translateY(-4px) scale(1.03);
+            box-shadow: 0 16px 40px rgba(0,0,0,0.3);
+            background: linear-gradient(135deg, #1a1a1a 0%, #3a3a3a 100%);
         }
 
-        /* Luxurious Chatbox Container with Premium Layout */
         .ai-widget-box {
             display: none;
-            width: 390px;
-            height: 600px;
+            width: 400px;
+            height: 620px;
             background: #ffffff;
-            border-radius: 20px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+            border-radius: 24px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.12);
             position: absolute;
-            bottom: 80px;
+            bottom: 85px;
             right: 0;
             flex-direction: column;
             overflow: hidden;
-            border: 1px solid #ebeeef;
+            border: 1px solid rgba(0,0,0,0.06);
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
         
-        /* Premium Minimalist Header with Fine Gold Border Line */
         .ai-widget-header {
             background: #111111;
             color: white;
-            padding: 20px;
+            padding: 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 2px solid #dfb76c; /* Elegant subtle gold accent */
+            border-bottom: 3px solid #dfb76c;
         }
         .ai-widget-header-title {
             display: flex;
@@ -98,63 +83,69 @@
         }
         .ai-widget-brand {
             font-weight: 700;
-            font-size: 14px;
-            letter-spacing: 2px;
+            font-size: 15px;
+            letter-spacing: 2.5px;
             text-transform: uppercase;
+            background: linear-gradient(90deg, #ffffff, #dfb76c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
         .ai-widget-status {
             font-size: 11px;
             color: #b0b0b0;
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 6px;
+            margin-top: 2px;
         }
         .ai-widget-status::before {
             content: '';
-            width: 6px;
-            height: 6px;
-            background: #4ade80;
+            width: 7px;
+            height: 7px;
+            background: #10b981;
             border-radius: 50%;
             display: inline-block;
+            box-shadow: 0 0 10px #10b981;
         }
 
-        /* Action Menu - Integrated 3D Avatar Button */
         .ai-widget-actions {
-            padding: 10px 20px;
-            background: #fafafa;
-            border-bottom: 1px solid #f0f0f0;
+            padding: 14px 24px;
+            background: #fcfcfc;
+            border-bottom: 1px solid #f3f4f6;
             display: flex;
             justify-content: center;
         }
         .ai-btn-avatar {
             width: 100%;
-            background: #ffffff;
-            color: #111111;
+            background: #111111;
+            color: #ffffff;
             border: 1px solid #111111;
-            padding: 8px 16px;
-            font-size: 11px;
+            padding: 10px 18px;
+            font-size: 12px;
             font-weight: 600;
-            border-radius: 6px;
+            border-radius: 12px;
             cursor: pointer;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: all 0.2s ease-in-out;
+            letter-spacing: 1.5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
             text-align: center;
         }
         .ai-btn-avatar:hover {
-            background: #111111;
-            color: #ffffff;
+            background: #dfb76c;
+            border-color: #dfb76c;
+            color: #111111;
         }
         .ai-btn-avatar.active-linked {
-            background: #e8f5e9;
-            color: #2e7d32;
-            border-color: #2e7d32;
+            background: #e6f4ea;
+            color: #1e7e34;
+            border-color: #1e7e34;
+            box-shadow: none;
         }
 
-        /* Smooth Messages Area */
         .ai-widget-messages {
             flex: 1;
-            padding: 20px;
+            padding: 24px;
             overflow-y: auto;
             background: #fdfdfd;
             display: flex;
@@ -163,14 +154,13 @@
             scrollbar-width: thin;
         }
         .ai-widget-messages::-webkit-scrollbar { width: 4px; }
-        .ai-widget-messages::-webkit-scrollbar-thumb { background: #e0e0e0; border-radius: 4px; }
+        .ai-widget-messages::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
 
-        /* Exquisite Message Bubble Design */
         .ai-message {
-            padding: 12px 16px;
-            border-radius: 14px;
-            max-width: 80%;
-            font-size: 13px;
+            padding: 14px 18px;
+            border-radius: 18px;
+            max-width: 82%;
+            font-size: 13.5px;
             line-height: 1.6;
             word-wrap: break-word;
             animation: message-slide 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -184,26 +174,25 @@
             color: #ffffff;
             align-self: flex-end;
             margin-left: auto;
-            border-bottom-right-radius: 2px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+            border-bottom-right-radius: 4px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.04);
         }
         .ai-message.bot {
-            background: #ffffff;
-            color: #1a1a1a;
+            background: #f4f5f7;
+            color: #1f2937;
             align-self: flex-start;
-            border-bottom-left-radius: 2px;
-            border: 1px solid #f0f0f0;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+            border-bottom-left-radius: 4px;
+            border: 1px solid #e5e7eb;
         }
 
-        /* Calculated Premium Sizing Badges Layout */
         .ai-size-result-badge {
-            margin-top: 10px;
-            background: #f5f5f5;
-            border-left: 3px solid #111111;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: 12px;
+            margin-top: 12px;
+            background: #ffffff;
+            border-left: 4px solid #dfb76c;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12.5px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
         }
         .ai-size-title {
             font-weight: 700;
@@ -212,10 +201,9 @@
             margin-bottom: 2px;
         }
 
-        /* Beautiful Typing Indicator */
         .typing-dots {
             display: flex;
-            gap: 4px;
+            gap: 5px;
             align-items: center;
             height: 12px;
         }
@@ -233,7 +221,6 @@
             40% { transform: scale(1.0); }
         }
 
-        /* Dynamic Product Card Layout */
         .ai-product-cards-container {
             display: flex;
             flex-direction: column;
@@ -244,8 +231,8 @@
         .ai-product-card {
             background: #ffffff;
             border: 1px solid #eef0f1;
-            border-radius: 10px;
-            padding: 14px;
+            border-radius: 12px;
+            padding: 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -255,9 +242,9 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.02);
         }
         .ai-product-card:hover {
-            border-color: #111111;
+            border-color: #dfb76c;
             transform: translateY(-2px);
-            box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
         }
         .ai-product-info {
             display: flex;
@@ -266,9 +253,8 @@
         }
         .ai-product-name {
             font-weight: 600;
-            font-size: 13px;
+            font-size: 13.5px;
             color: #111111;
-            letter-spacing: 0.2px;
         }
         .ai-product-cat {
             font-size: 10px;
@@ -281,64 +267,66 @@
             font-weight: 600;
             background: #111111;
             color: #ffffff;
-            padding: 8px 14px;
-            border-radius: 6px;
+            padding: 10px 16px;
+            border-radius: 8px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            transition: background 0.2s;
+            transition: all 0.2s;
         }
         .ai-product-card:hover .ai-product-btn {
-            background: #333333;
+            background: #dfb76c;
+            color: #111111;
         }
 
-        /* Refined Input Design Area */
         .ai-widget-input-area {
             display: flex;
-            border-top: 1px solid #f0f0f0;
-            padding: 16px;
+            border-top: 1px solid #f3f4f6;
+            padding: 18px 24px;
             background: white;
             align-items: center;
             gap: 12px;
         }
         .ai-widget-input {
             flex: 1;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 12px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 14px 18px;
             outline: none;
-            font-size: 13px;
+            font-size: 13.5px;
             color: #1a1a1a;
             transition: all 0.2s;
             font-family: inherit;
         }
         .ai-widget-input:focus {
-            border-color: #111111;
-            box-shadow: 0 0 0 2px rgba(17, 17, 17, 0.04);
+            border-color: #dfb76c;
+            box-shadow: 0 0 0 3px rgba(223, 183, 108, 0.15);
         }
         .ai-widget-send {
             background: #111111;
             color: white;
             border: none;
-            border-radius: 10px;
-            width: 42px;
-            height: 42px;
+            border-radius: 14px;
+            width: 48px;
+            height: 48px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background 0.2s;
+            transition: all 0.2s;
         }
-        .ai-widget-send:hover { background: #2a2a2a; }
-        .ai-widget-send svg { width: 16px; height: 16px; fill: currentColor; }
+        .ai-widget-send:hover { 
+            background: #dfb76c; 
+            color: #111111;
+        }
+        .ai-widget-send svg { width: 18px; height: 18px; fill: currentColor; }
     `;
     document.head.appendChild(style);
 
-    // Create Widget Markup
     const container = document.createElement('div');
     container.className = 'ai-widget-container';
     container.innerHTML = `
         <button class="ai-widget-button" id="widgetToggle">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
         </button>
         <div class="ai-widget-box" id="widgetBox">
             <div class="ai-widget-header">
@@ -352,7 +340,7 @@
                 <button class="ai-btn-avatar" id="btnConnectAvatar">Connect 3D Avatar</button>
             </div>
             <div class="ai-widget-messages" id="widgetMessages">
-                <div class="ai-message bot">Welcome to Nour Atelier. I am your premium AI fashion co-pilot. Share your measurements, ask for size recommendations, or link your 3D mannequin for immediate geometric precision fitting!</div>
+                <div class="ai-message bot">Welcome to Manikan Store. I am your premium AI fashion co-pilot. Share your measurements, ask for size recommendations, or link your 3D mannequin for immediate geometric precision fitting!</div>
             </div>
             <div class="ai-widget-input-area">
                 <input type="text" class="ai-widget-input" id="widgetInput" placeholder="Ask about sizing or lookups...">
@@ -377,7 +365,6 @@
     };
     closeBtn.onclick = () => { box.style.display = 'none'; };
 
-    // Decoupled Interactive Action Trigger for 3D Mesh
     btnConnectAvatar.onclick = () => {
         if (!activeUserBetas) {
             activeUserBetas = [0.12, -0.45, 0.88, 0.05, -0.1, 0.02, -0.05, 0.1, -0.2, 0.15]; 
@@ -438,7 +425,6 @@
             loadingDiv.innerHTML = cleanReply;
             conversationHistory.push({ role: "assistant", content: cleanReply });
 
-            // If calculations are returned from Case 3, inject structural UI elements
             if (data.recommended_size) {
                 const badge = document.createElement('div');
                 badge.className = 'ai-size-result-badge';

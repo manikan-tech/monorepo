@@ -1,5 +1,5 @@
 "use client";
-
+import Script from "next/script";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -9,6 +9,7 @@ import { createClient } from "../app/lib/supabase/client";
 import { useCart } from "./CartContext";
 import { useWishlist } from "./WishlistContext";
 
+const currentProduct = typeof window !== "undefined" ? (window as any).currentProductContext : null;
 const SearchIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8" />
@@ -128,6 +129,13 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-manikan-border/50 shadow-[0_4px_30px_rgba(18,52,59,0.03)] backdrop-blur-xl transition-all duration-300">
+      <Script 
+      src="/widget.js" 
+      strategy="lazyOnload" 
+      data-retailer-id="haneen"
+      data-product-id={currentProduct?.id || null}
+      data-size-chart={currentProduct?.size_chart_csv || ""} 
+    />
       <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] w-full bg-transparent overflow-hidden">
         <div className="w-full h-full bg-[linear-gradient(90deg,transparent,rgba(200,150,102,0.8),transparent)] bg-[length:200%_100%] animate-shimmer-slow pointer-events-none" />
       </div>
@@ -150,11 +158,21 @@ export default function Navbar() {
           {!isRetailer && shopperNavLinks.map((link) => {
             const isActive = pathname === link.href;
             const isTryOn = link.href === "/visualize";
+            const isWardrobe = link.href === "/wardrobe";
             return (
               <Link
                 key={link.name}
                 href={link.href}
-                onClick={isTryOn ? (e) => handleNavTryOnClick(e, link.href) : undefined}
+                onClick={(e) => {
+                if (isWardrobe) {
+                  e.preventDefault();
+                  if (typeof window !== 'undefined' && (window as any).ManikanWidget) {
+                    (window as any).ManikanWidget.open();
+                  }
+                } else if (isTryOn) {
+                  handleNavTryOnClick(e, link.href);
+                }
+              }}
                 className={`relative font-sans text-[15px] font-medium tracking-wide transition-all duration-300 group py-2 ${isActive ? "text-forest-900" : "text-forest-700/80 hover:text-gold-600"
                   }`}
               >
