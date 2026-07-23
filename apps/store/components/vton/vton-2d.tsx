@@ -124,14 +124,11 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
         try {
             const formData = new FormData();
             formData.append("human_image", humanFile);
-            // Resolve relative URLs to absolute URLs relative to the window origin
-            const absoluteGarmentUrl = selectedGarment.imageUrl.startsWith("http")
-                ? selectedGarment.imageUrl
-                : `${window.location.origin}${selectedGarment.imageUrl}`;
-            formData.append("garment_image_url", absoluteGarmentUrl);
-            formData.append("category", selectedGarment.category);
-            // Hit the store backend, which authenticates and proxies to the VTON service
-            const response = await fetch("/api/vton/2d", {
+            // The server resolves the product image/category from its catalog.
+            // Do not send a retailer VTON key to the browser: the first-party
+            // proxy injects its server-only credential when calling /api/vton/2d.
+            formData.append("product_id", selectedGarment.id);
+            const response = await fetch("/api/vton/2d/proxy", {
                 method: "POST",
                 body: formData,
             });

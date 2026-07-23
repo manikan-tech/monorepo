@@ -1,6 +1,12 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "globalEnv": [
+    "VTON_SERVICE_URL",
+    "VTON_2D_SERVICE_KEY",
+    "VTON_2D_SERVICE_KEY_PREVIOUS",
+    "VTON_ALLOWED_IMAGE_HOSTS"
+  ],
   "tasks": {
     "build": {
       "dependsOn": [

@@ -1,10 +1,22 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import ProductCard from "../../components/ProductCard";
 
 export default function StorePage() {
+  return (
+    <Suspense fallback={<StorePageFallback />}>
+      <StorePageContent />
+    </Suspense>
+  );
+}
+
+function StorePageFallback() {
+  return <div className="min-h-screen" aria-busy="true" />;
+}
+
+function StorePageContent() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
