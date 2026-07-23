@@ -27,6 +27,12 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
 // ─── B2B: Retailer (existing) ───────────────────────────────────
 
 model Retailer {
@@ -44,6 +50,31 @@ model Retailer {
 
   products  Product[]
   sessions  MeasurementSession[]
+  subscription Subscription?
+}
+
+// ─── SaaS billing ──────────────────────────────────────────────
+
+// There is one current billing subscription per retailer. Stripe identifiers
+// are only written by the verified Stripe webhook, never by browser requests.
+model Subscription {
+  id                   String             @id @default(cuid())
+  retailerId           String             @unique
+  stripeCustomerId     String             @unique
+  stripeSubscriptionId String?            @unique
+  status               SubscriptionStatus @default(PAST_DUE)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+}
+
+// Stripe retries deliveries until a 2xx response is returned. Storing the
+// event ID makes all state transitions idempotent across retries and deploys.
+model StripeWebhookEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
 }
 
 // ─── Category ───────────────────────────────────────────────────
