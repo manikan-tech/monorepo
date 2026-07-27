@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type StripeRecord = Record<string, unknown>;
+type ProcessingResult = "processed" | "duplicate" | "stale";
 
 function asRecord(value: unknown): StripeRecord | undefined {
   return value !== null && typeof value === "object"
@@ -28,34 +29,51 @@ function metadataValue(value: unknown, key: string): string | undefined {
 }
 
 /**
- * Extract identifiers only from the verified Stripe event. `retailerId` must
- * be set in subscription Checkout metadata by our authenticated server-side
- * checkout creation endpoint; it is never accepted from this HTTP request.
+ * Extracts the immutable Stripe subscription identifier for supported events.
+ * Subscription events use their object ID; invoice events reference a parent
+ * subscription. Customer IDs are deliberately never used as a fallback.
  */
-function getBillingIdentifiers(object: unknown) {
-  const payload = asRecord(object) ?? {};
-  const subscriptionDetails = asRecord(
-    asRecord(payload.parent)?.subscription_details,
-  );
+function getSubscriptionIdForEvent(event: Stripe.Event): string | undefined {
+  const payload = event.data.object as unknown as StripeRecord;
 
-  return {
-    customerId: stripeId(payload.customer),
-    subscriptionId:
-      stripeId(payload.subscription) ??
-      stripeId(subscriptionDetails?.subscription),
-    retailerId:
-      metadataValue(payload.metadata, "retailerId") ??
-      metadataValue(subscriptionDetails?.metadata, "retailerId"),
-  };
+  if (event.type === "customer.subscription.deleted") {
+    return typeof payload.id === "string" ? payload.id : undefined;
+  }
+
+  if (event.type === "checkout.session.completed") {
+    return stripeId(payload.subscription);
+  }
+
+  if (
+    event.type === "invoice.payment_succeeded" ||
+    event.type === "invoice.payment_failed"
+  ) {
+    const parent = asRecord(payload.parent);
+    const details = asRecord(parent?.subscription_details);
+    return stripeId(payload.subscription) ?? stripeId(details?.subscription);
+  }
+
+  return undefined;
+}
+
+function getCustomerId(object: unknown): string | undefined {
+  return stripeId(asRecord(object)?.customer);
+}
+
+function isOlderThanLastEvent(
+  lastStripeEventAt: number,
+  incomingEventAt: number,
+): boolean {
+  return incomingEventAt < lastStripeEventAt;
 }
 
 async function createEventIfNew(
-  db: Prisma.TransactionClient,
+  tx: Prisma.TransactionClient,
   event: Stripe.Event,
 ): Promise<boolean> {
-  // PostgreSQL's ON CONFLICT avoids a unique-constraint exception, which would
-  // otherwise abort the surrounding transaction before we can return 200.
-  const inserted = await db.$queryRaw<{ id: string }[]>`
+  // ON CONFLICT avoids a unique-constraint exception that would abort the
+  // transaction before the handler could safely acknowledge a duplicate.
+  const inserted = await tx.$queryRaw<{ id: string }[]>`
     INSERT INTO "StripeWebhookEvent" ("id", "type")
     VALUES (${event.id}, ${event.type})
     ON CONFLICT ("id") DO NOTHING
@@ -64,96 +82,137 @@ async function createEventIfNew(
   return inserted.length === 1;
 }
 
-async function requireRetailer(
-  db: Prisma.TransactionClient,
-  retailerId: string,
-) {
-  const retailer = await db.retailer.findUnique({
-    where: { id: retailerId },
-    select: { id: true },
-  });
-  if (!retailer) {
-    // Retry rather than map a valid event to a different tenant.
-    throw new Error("Verified Stripe event refers to an unknown retailer");
+async function activateCheckoutSubscription(
+  tx: Prisma.TransactionClient,
+  event: Stripe.Event,
+): Promise<"processed" | "stale"> {
+  const session = event.data.object as unknown as StripeRecord;
+  const checkoutSessionId =
+    typeof session.id === "string" ? session.id : undefined;
+  const subscriptionId = getSubscriptionIdForEvent(event);
+  const customerId = getCustomerId(session);
+
+  if (
+    session.mode !== "subscription" ||
+    !checkoutSessionId ||
+    !subscriptionId ||
+    !customerId
+  ) {
+    throw new Error(
+      "Verified Checkout Session is missing required subscription data",
+    );
   }
-}
 
-async function activateSubscription(
-  db: Prisma.TransactionClient,
-  object: unknown,
-) {
-  const { customerId, subscriptionId, retailerId } =
-    getBillingIdentifiers(object);
-  if (!customerId)
-    throw new Error("Verified Stripe event is missing a customer identifier");
+  const checkout = await tx.billingCheckout.findUnique({
+    where: { stripeCheckoutSessionId: checkoutSessionId },
+    select: { retailerId: true },
+  });
+  if (!checkout) {
+    throw new Error(
+      "Verified Checkout Session has no server-side tenant binding",
+    );
+  }
 
-  if (retailerId) {
-    await requireRetailer(db, retailerId);
-    await db.subscription.upsert({
-      where: { retailerId },
-      create: {
-        retailerId,
-        stripeCustomerId: customerId,
-        stripeSubscriptionId: subscriptionId,
-        status: "ACTIVE",
-      },
-      update: {
-        stripeCustomerId: customerId,
-        ...(subscriptionId ? { stripeSubscriptionId: subscriptionId } : {}),
-        status: "ACTIVE",
-      },
+  // Metadata is only a defense-in-depth consistency check. BillingCheckout is
+  // the tenant authority because it was recorded by the authenticated server.
+  const metadataRetailerId = metadataValue(session.metadata, "retailerId");
+  if (metadataRetailerId && metadataRetailerId !== checkout.retailerId) {
+    throw new Error(
+      "Verified Checkout Session tenant metadata does not match binding",
+    );
+  }
+
+  const existing = await tx.subscription.findUnique({
+    where: { stripeSubscriptionId: subscriptionId },
+    select: {
+      retailerId: true,
+      stripeCustomerId: true,
+      lastStripeEventAt: true,
+    },
+  });
+
+  if (existing) {
+    if (
+      existing.retailerId !== checkout.retailerId ||
+      existing.stripeCustomerId !== customerId
+    ) {
+      throw new Error(
+        "Stripe subscription identity conflicts with tenant binding",
+      );
+    }
+    if (isOlderThanLastEvent(existing.lastStripeEventAt, event.created)) {
+      return "stale";
+    }
+
+    await tx.subscription.update({
+      where: { stripeSubscriptionId: subscriptionId },
+      data: { status: "ACTIVE", lastStripeEventAt: event.created },
     });
-    return;
+    return "processed";
   }
 
-  // Invoice events are mapped through the Stripe customer saved at checkout.
-  const result = await db.subscription.updateMany({
-    where: { stripeCustomerId: customerId },
-    data: { status: "ACTIVE" },
+  await tx.subscription.create({
+    data: {
+      retailerId: checkout.retailerId,
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: subscriptionId,
+      status: "ACTIVE",
+      lastStripeEventAt: event.created,
+    },
   });
-  if (result.count !== 1) {
-    throw new Error(
-      "No subscription is mapped to this verified Stripe customer",
-    );
-  }
+  return "processed";
 }
 
-async function markPastDue(db: Prisma.TransactionClient, object: unknown) {
-  const { customerId } = getBillingIdentifiers(object);
-  if (!customerId)
-    throw new Error("Verified invoice is missing a customer identifier");
+async function updateSubscriptionStatus(
+  tx: Prisma.TransactionClient,
+  event: Stripe.Event,
+  status: "ACTIVE" | "PAST_DUE" | "CANCELLED",
+): Promise<"processed" | "stale"> {
+  const subscriptionId = getSubscriptionIdForEvent(event);
+  const customerId = getCustomerId(event.data.object);
 
-  const result = await db.subscription.updateMany({
-    where: { stripeCustomerId: customerId },
-    data: { status: "PAST_DUE" },
+  if (!subscriptionId || !customerId) {
+    throw new Error("Verified Stripe event is missing subscription identity");
+  }
+
+  const subscription = await tx.subscription.findUnique({
+    where: { stripeSubscriptionId: subscriptionId },
+    select: { stripeCustomerId: true, lastStripeEventAt: true },
   });
-  if (result.count !== 1) {
+  if (!subscription || subscription.stripeCustomerId !== customerId) {
     throw new Error(
-      "No subscription is mapped to this verified Stripe customer",
+      "Verified Stripe event does not match a known subscription",
     );
   }
+  if (isOlderThanLastEvent(subscription.lastStripeEventAt, event.created)) {
+    return "stale";
+  }
+
+  await tx.subscription.update({
+    where: { stripeSubscriptionId: subscriptionId },
+    data: { status, lastStripeEventAt: event.created },
+  });
+  return "processed";
 }
 
-async function cancelSubscription(
-  db: Prisma.TransactionClient,
-  object: unknown,
-) {
-  const { customerId, subscriptionId } = getBillingIdentifiers(object);
-  if (!customerId && !subscriptionId) {
-    throw new Error("Verified subscription is missing identifiers");
-  }
+async function processEvent(event: Stripe.Event): Promise<ProcessingResult> {
+  return prisma.$transaction(async (tx) => {
+    if (!(await createEventIfNew(tx, event))) return "duplicate";
 
-  const result = await db.subscription.updateMany({
-    where: subscriptionId
-      ? { stripeSubscriptionId: subscriptionId }
-      : { stripeCustomerId: customerId! },
-    data: { status: "CANCELLED" },
+    switch (event.type) {
+      case "checkout.session.completed":
+        return activateCheckoutSubscription(tx, event);
+      case "invoice.payment_succeeded":
+        return updateSubscriptionStatus(tx, event, "ACTIVE");
+      case "invoice.payment_failed":
+        return updateSubscriptionStatus(tx, event, "PAST_DUE");
+      case "customer.subscription.deleted":
+        return updateSubscriptionStatus(tx, event, "CANCELLED");
+      default:
+        // Verified but unsupported events are recorded and acknowledged.
+        return "processed";
+    }
   });
-  if (result.count !== 1) {
-    throw new Error(
-      "No subscription is mapped to this verified Stripe subscription",
-    );
-  }
 }
 
 export async function POST(request: Request) {
@@ -170,50 +229,28 @@ export async function POST(request: Request) {
 
   let event: Stripe.Event;
   try {
-    // Use the raw body: JSON parsing before constructEvent breaks verification.
+    // Stripe signature verification must receive the exact, unparsed body.
     const rawBody = await request.text();
     event = new Stripe(stripeSecretKey).webhooks.constructEvent(
       rawBody,
       signature,
       webhookSecret,
     );
-  } catch (error) {
-    // Never log raw bodies, signatures, or secrets; they can contain PII.
-    console.warn("Rejected Stripe webhook with an invalid signature", {
-      reason:
-        error instanceof Error ? error.message : "Unknown verification error",
-    });
+  } catch {
+    // Do not log signatures, raw payloads, secrets, or verification stacks.
+    console.warn("Rejected Stripe webhook with an invalid signature");
     return new Response("Invalid Stripe signature", { status: 400 });
   }
 
   try {
-    const duplicate = await prisma.$transaction(async (tx) => {
-      if (!(await createEventIfNew(tx, event))) return true;
-
-      switch (event.type) {
-        case "checkout.session.completed":
-        case "invoice.payment_succeeded":
-          await activateSubscription(tx, event.data.object);
-          break;
-        case "invoice.payment_failed":
-          await markPastDue(tx, event.data.object);
-          break;
-        case "customer.subscription.deleted":
-          await cancelSubscription(tx, event.data.object);
-          break;
-        default:
-          // Acknowledge unrelated, verified events without changing access.
-          break;
-      }
-      return false;
-    });
-
+    const result = await processEvent(event);
     return Response.json({
       received: true,
-      ...(duplicate ? { duplicate: true } : {}),
+      ...(result === "duplicate" ? { duplicate: true } : {}),
+      ...(result === "stale" ? { stale: true } : {}),
     });
   } catch (error) {
-    // A 500 tells Stripe to retry a verified event that was not persisted.
+    // A 500 causes Stripe to retry. Only safe event metadata is logged.
     console.error("Failed to process verified Stripe webhook", {
       eventId: event.id,
       eventType: event.type,
