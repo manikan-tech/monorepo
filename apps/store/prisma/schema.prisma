@@ -27,6 +27,12 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
 // ─── B2B: Retailer (existing) ───────────────────────────────────
 
 model Retailer {
@@ -42,8 +48,51 @@ model Retailer {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  products  Product[]
-  sessions  MeasurementSession[]
+  products         Product[]
+  sessions         MeasurementSession[]
+  subscriptions    Subscription[]
+  billingCheckouts BillingCheckout[]
+}
+
+// ─── SaaS billing ──────────────────────────────────────────────
+
+// Stripe identifiers are only written by verified Stripe webhooks. Historical
+// rows are retained so delayed events cannot overwrite a newer subscription.
+model Subscription {
+  id                   String             @id @default(cuid())
+  retailerId           String
+  stripeCustomerId     String
+  // Legacy rows may not have a Stripe subscription ID. New webhook-created
+  // rows always provide one and are the only rows eligible for state changes.
+  stripeSubscriptionId String?            @unique
+  status               SubscriptionStatus @default(PAST_DUE)
+  lastStripeEventAt    Int                @default(0)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+
+  @@index([retailerId, status])
+  @@index([stripeCustomerId])
+}
+
+// A Checkout Session is created only by an authenticated server-side flow and
+// recorded before redirecting the retailer to Stripe. Webhooks use this record
+// as the tenant authority instead of trusting event metadata.
+model BillingCheckout {
+  stripeCheckoutSessionId String   @id
+  retailerId              String
+  createdAt               DateTime @default(now())
+
+  retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+}
+
+// Stripe retries deliveries until a 2xx response is returned. Storing the
+// event ID makes all state transitions idempotent across retries and deploys.
+model StripeWebhookEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
 }
 
 // ─── Category ───────────────────────────────────────────────────
