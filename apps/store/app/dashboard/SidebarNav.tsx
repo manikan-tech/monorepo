@@ -1,14 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useTransition } from "react";
+import { createClient } from "../lib/supabase/client";
 
 export default function SidebarNav() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  function handleLogout() {
+    startTransition(async () => {
+      await fetch("/api/auth/logout", { method: "POST" });
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push("/login");
+      router.refresh();
+    });
+  }
 
   return (
-    <nav className="flex-1 mt-6 px-4 space-y-2">
-      <Link
+    <div className="flex flex-col flex-1">
+      <nav className="flex-1 mt-6 px-4 space-y-2">
+        <Link
         href="/dashboard"
         className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors duration-200 ${
           pathname === "/dashboard"
@@ -107,5 +122,27 @@ export default function SidebarNav() {
         <span className="font-medium">Settings</span>
       </Link>
     </nav>
+    <div className="flex flex-col mt-auto pb-4 px-4 space-y-1 pt-6 border-t border-forest-800">
+      <Link
+        href="/"
+        className="flex items-center space-x-3 px-4 py-3 rounded-xl text-forest-50/80 hover:bg-forest-800/70 hover:text-white transition-all duration-200"
+      >
+        <svg className="w-5 h-5 flex-shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+        <span className="font-medium text-sm">Storefront</span>
+      </Link>
+      <button
+        onClick={handleLogout}
+        disabled={isPending}
+        className="flex items-center space-x-3 w-full px-4 py-3 rounded-xl text-red-400/80 hover:bg-red-500/10 hover:text-red-300 transition-all duration-200 disabled:opacity-50"
+      >
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+        <span className="font-medium text-sm">{isPending ? "Signing out..." : "Sign Out"}</span>
+      </button>
+    </div>
+    </div>
   );
 }
