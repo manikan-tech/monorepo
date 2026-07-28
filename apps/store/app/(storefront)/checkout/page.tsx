@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useCart } from "../../components/CartContext";
+import { useCart } from "../../../components/CartContext";
 import { useRouter } from "next/navigation";
-import { createClient } from "../lib/supabase/client";
+import { createClient } from "../../lib/supabase/client";
 
 type Address = { id: string; label: string; street: string; city: string; state: string; country: string; isDefault: boolean };
 

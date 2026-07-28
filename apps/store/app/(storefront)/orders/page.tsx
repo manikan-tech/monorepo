@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createClient } from "../lib/supabase/client";
+import { createClient } from "../../lib/supabase/client";
 import { useRouter } from "next/navigation";
 
 type OrderItem = { id: string; quantity: number; unitPriceEgp: number; sizeLabel: string; product: { name: string; slug: string; imageUrl: string } };

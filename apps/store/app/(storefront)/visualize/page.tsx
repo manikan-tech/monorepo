@@ -1,6 +1,6 @@
-import Vton2D from "../../components/vton/vton-2d";
+import Vton2D from "../../../components/vton/vton-2d";
 import { redirect } from "next/navigation";
-import { getCustomerFromCookies } from "../lib/auth";
+import { getCustomerFromCookies } from "../../lib/auth";
 
 export const metadata = {
     title: "Virtual Try-On | Manikan Studio",

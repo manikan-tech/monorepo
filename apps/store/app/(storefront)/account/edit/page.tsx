@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
-import { getCustomerFromCookies } from "../../lib/auth";
-import { prisma } from "../../lib/prisma";
+import { getCustomerFromCookies } from "../../../lib/auth";
+import { prisma } from "../../../lib/prisma";
 import { redirect } from "next/navigation";
 import { updateProfile } from "./actions";
 

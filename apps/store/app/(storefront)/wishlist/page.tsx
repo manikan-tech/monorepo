@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useWishlist } from "../../components/WishlistContext";
+import { useWishlist } from "../../../components/WishlistContext";
 import { useEffect } from "react";
-import { createClient } from "../lib/supabase/client";
+import { createClient } from "../../lib/supabase/client";
 import { useRouter } from "next/navigation";
 
 export default function WishlistPage() {
