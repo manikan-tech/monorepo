@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import ProductCard from "../components/ProductCard";
+import ProductCard from "../../components/ProductCard";
 
 export default function Home() {
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Dynamically fetch 4 products from the backend for the New Arrivals section
     fetch("/api/products?limit=4")
       .then((res) => res.json())
       .then((data) => {
@@ -21,17 +20,13 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* ── Hero Section ── */}
       <section className="relative w-full min-h-[85vh] flex items-center overflow-hidden bg-forest-950">
-        {/* Animated Background Elements */}
         <div className="absolute inset-0 opacity-20 pointer-events-none">
           <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[70%] bg-gold-500/30 rounded-full blur-[120px] animate-float" />
           <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[80%] bg-forest-500/30 rounded-full blur-[150px] animate-float" style={{ animationDelay: "2s" }} />
         </div>
 
         <div className="relative z-10 max-w-[1200px] mx-auto px-6 w-full flex flex-col md:flex-row items-center gap-12">
-          
-          {/* Left Text Block */}
           <div className="flex-1 flex flex-col items-start gap-6 pt-10 md:pt-0">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-gold-500/30 bg-gold-500/10 text-gold-400 text-sm font-medium animate-fade-in-up">
               <span className="relative flex h-2 w-2">
@@ -61,15 +56,11 @@ export default function Home() {
               </Link>
             </div>
           </div>
-          
-          {/* Right Visual Animation Block */}
           <div className="flex-1 w-full relative animate-fade-in-up" style={{ animationDelay: "400ms" }}>
              <div className="relative w-full aspect-[4/5] max-w-md mx-auto pointer-events-none">
                <div className="absolute inset-0 bg-gradient-to-tr from-forest-800 to-forest-900 rounded-[2.5rem] border border-white/10 shadow-[0_20px_50px_rgba(10,34,41,0.5)] overflow-hidden">
                  <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_50%_50%,_var(--tw-gradient-stops))] from-gold-500/20 via-transparent to-transparent animate-pulse-glow" />
                  <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-forest-950 to-transparent z-10" />
-                 
-                 {/* Virtual Try-On Scanning Animation */}
                  <div className="absolute top-1/4 inset-x-8 h-[2px] bg-gold-400 shadow-[0_0_15px_rgba(200,150,102,0.8)] z-20 animate-scan" />
                  
                  <div className="absolute inset-0 flex flex-col items-center justify-center z-10 gap-4">
@@ -80,7 +71,6 @@ export default function Home() {
                  </div>
                </div>
                
-               {/* Floating Stats */}
                <div className="absolute top-10 -left-6 bg-white/10 backdrop-blur-md border border-white/10 p-4 rounded-2xl shadow-xl animate-float">
                  <p className="text-xs text-gold-300 font-bold uppercase tracking-wider">AI Accuracy</p>
                  <p className="text-2xl font-display font-semibold text-white">99.8%</p>
@@ -141,7 +131,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Featured Products (Dynamically Fetched from Backend) ── */}
+      {/* ── Featured Products  ── */}
       <section className="py-24 max-w-[1200px] mx-auto px-6 w-full">
         <div className="flex justify-between items-end mb-12 animate-fade-in-up">
           <div>
@@ -185,7 +175,6 @@ export default function Home() {
 
       {/* ── Value Proposition Section ── */}
       <section id="how-it-works" className="py-24 bg-cream-50 border-y border-forest-900/5 relative overflow-hidden">
-        {/* Decorative background circle */}
         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-white rounded-full blur-[100px] opacity-40 -translate-y-1/2 translate-x-1/3 pointer-events-none" />
 
         <div className="max-w-[1200px] mx-auto px-6 w-full text-center relative z-10">

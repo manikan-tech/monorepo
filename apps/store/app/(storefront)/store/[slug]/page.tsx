@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import ProductGallery from "../../../components/product/ProductGallery";
-import SizeSelector from "../../../components/product/SizeSelector";
-import { useCart } from "../../../components/CartContext";
-import { useWishlist } from "../../../components/WishlistContext";
-import Modal from "../../../components/Modal";
+import ProductGallery from "../../../../components/product/ProductGallery";
+import SizeSelector from "../../../../components/product/SizeSelector";
+import { useCart } from "../../../../components/CartContext";
+import { useWishlist } from "../../../../components/WishlistContext";
+import Modal from "../../../../components/Modal";
 
 type Review = {
   id: string;

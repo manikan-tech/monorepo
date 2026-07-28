@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useCart } from "../../components/CartContext";
+import { useCart } from "../../../components/CartContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { createClient } from "../lib/supabase/client";
+import { createClient } from "../../lib/supabase/client";
 
 export default function CartPage() {
   const { items, removeFromCart, updateQuantity, clearCart, cartTotal, loading } = useCart();
