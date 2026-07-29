@@ -1,76 +1,43 @@
-import path from "path";
-import { access, readFile } from "fs/promises";
-import { NextRequest, NextResponse } from "next/server";
-import { getCustomerFromCookies } from "../../../lib/auth";
+import { NextResponse } from "next/server";
 
-const CACHE_DIR = path.join(process.cwd(), "public", "vton-cache");
-const CACHE_EXTENSIONS = ["png", "webp", "jpg", "jpeg"] as const;
+import { prisma } from "../../../lib/prisma";
+import { requireActiveVtonSubscription } from "../../../lib/vton-subscription";
 
-const MIME_TYPES: Record<(typeof CACHE_EXTENSIONS)[number], string> = {
-    png: "image/png",
-    webp: "image/webp",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-};
-
-async function findCachedFile(productId: string) {
-    for (const extension of CACHE_EXTENSIONS) {
-        const filePath = path.join(CACHE_DIR, `${productId}.${extension}`);
-        try {
-            await access(filePath);
-            return {
-                filePath,
-                contentType: MIME_TYPES[extension],
-            };
-        } catch {
-            // Try the next extension.
-        }
-    }
-
-    return null;
+function isResponse(
+  value: { retailerId: string } | NextResponse,
+): value is NextResponse {
+  return value instanceof NextResponse;
 }
 
-async function buildCachedPreviewResponse(productId: string, method: "GET" | "HEAD") {
-    const cachedFile = await findCachedFile(productId);
-    if (!cachedFile) {
-        return NextResponse.json({ error: "Cached preview not found." }, { status: 404 });
-    }
+// Returns cache metadata only. Cached objects are not exposed through this
+// developer-management endpoint.
+export async function GET() {
+  const access = await requireActiveVtonSubscription();
+  if (isResponse(access)) return access;
 
-    const headers = new Headers({
-        "Content-Type": cachedFile.contentType,
-        "Cache-Control": "public, max-age=3600, immutable",
-    });
+  const cacheEntries = await prisma.vtonCacheEntry.findMany({
+    where: { retailerId: access.retailerId },
+    select: {
+      id: true,
+      cacheKey: true,
+      metadata: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+    orderBy: { updatedAt: "desc" },
+  });
 
-    if (method === "HEAD") {
-        return new NextResponse(null, { status: 200, headers });
-    }
-
-    const body = await readFile(cachedFile.filePath);
-    return new NextResponse(body, { status: 200, headers });
+  return NextResponse.json({ cacheEntries });
 }
 
-async function handleCachedPreview(request: NextRequest, method: "GET" | "HEAD") {
-    const customer = await getCustomerFromCookies();
-    if (!customer) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+// Invalidates only cache rows owned by the authenticated active retailer.
+export async function DELETE() {
+  const access = await requireActiveVtonSubscription();
+  if (isResponse(access)) return access;
 
-    const productId = request.nextUrl.searchParams.get("productId")?.trim();
-    if (!productId) {
-        return NextResponse.json({ error: "productId is required." }, { status: 400 });
-    }
+  const result = await prisma.vtonCacheEntry.deleteMany({
+    where: { retailerId: access.retailerId },
+  });
 
-    if (!/^[a-zA-Z0-9._-]+$/.test(productId)) {
-        return NextResponse.json({ error: "Invalid productId." }, { status: 400 });
-    }
-
-    return buildCachedPreviewResponse(productId, method);
-}
-
-export async function GET(request: NextRequest) {
-    return handleCachedPreview(request, "GET");
-}
-
-export async function HEAD(request: NextRequest) {
-    return handleCachedPreview(request, "HEAD");
+  return NextResponse.json({ invalidated: result.count });
 }
