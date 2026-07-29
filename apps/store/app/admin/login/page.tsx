@@ -6,7 +6,8 @@ import Image from "next/image";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [secret, setSecret] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -19,7 +20,7 @@ export default function AdminLoginPage() {
         const res = await fetch("/api/admin/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ secret }),
+          body: JSON.stringify({ email, password }),
         });
 
         if (res.ok) {
@@ -28,7 +29,7 @@ export default function AdminLoginPage() {
         } else {
           const data = await res.json();
           setError(data.error ?? "Invalid credentials");
-          setSecret("");
+          setPassword("");
         }
       } catch {
         setError("Network error — please try again");
@@ -82,19 +83,37 @@ export default function AdminLoginPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label
-                htmlFor="secret"
+                htmlFor="email"
                 className="block text-xs font-semibold uppercase tracking-wider text-forest-200/60 mb-2"
               >
-                Admin Secret
+                Email
               </label>
               <input
-                id="secret"
+                id="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@manikan.com"
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/25 text-sm focus:outline-none focus:border-gold-500/60 focus:bg-white/8 transition-all mb-4"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="password"
+                className="block text-xs font-semibold uppercase tracking-wider text-forest-200/60 mb-2"
+              >
+                Password
+              </label>
+              <input
+                id="password"
                 type="password"
                 autoComplete="current-password"
                 required
-                value={secret}
-                onChange={(e) => setSecret(e.target.value)}
-                placeholder="Enter admin secret"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/25 text-sm focus:outline-none focus:border-gold-500/60 focus:bg-white/8 transition-all"
               />
             </div>
@@ -110,7 +129,7 @@ export default function AdminLoginPage() {
 
             <button
               type="submit"
-              disabled={isPending || !secret.trim()}
+              disabled={isPending || !email.trim() || !password.trim()}
               className="w-full py-3 rounded-xl font-semibold text-sm transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               style={{
                 background: "linear-gradient(135deg, #C8966A 0%, #F0C080 50%, #C8966A 100%)",

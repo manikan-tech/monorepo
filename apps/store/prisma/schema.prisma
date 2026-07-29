@@ -18,6 +18,7 @@ enum OrderStatus {
   DELIVERED
   CANCELLED
   RETURNED
+  RETURN_PENDING
 }
 
 enum PaymentStatus {
@@ -27,13 +28,34 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum AdminRole {
+  SUPER_ADMIN
+  SUPPORT
+}
+
 enum SubscriptionStatus {
   ACTIVE
   PAST_DUE
   CANCELLED
 }
 
+enum AuditAction {
+  ACTIVATED
+  SUSPENDED
+  PLAN_CHANGED
+}
+
 // ─── B2B: Retailer (existing) ───────────────────────────────────
+
+model PlatformAdmin {
+  id        String    @id @default(cuid())
+  authId    String    @unique
+  email     String    @unique
+  role      AdminRole @default(SUPPORT)
+  createdAt DateTime  @default(now())
+
+  auditLogs RetailerAuditLog[]
+}
 
 model Retailer {
   id             String   @id @default(cuid())
@@ -54,6 +76,7 @@ model Retailer {
   billingCheckouts BillingCheckout[]
   originAllowlist  OriginAllowlist[]
   vtonCacheEntries VtonCacheEntry[]
+  auditLogs        RetailerAuditLog[]
 }
 
 // ─── SaaS billing ──────────────────────────────────────────────
@@ -125,6 +148,20 @@ model StripeWebhookEvent {
   id          String   @id
   type        String
   processedAt DateTime @default(now())
+}
+
+// ─── Audit Logs ─────────────────────────────────────────────────
+
+model RetailerAuditLog {
+  id         String      @id @default(cuid())
+  retailerId String
+  adminId    String
+  action     AuditAction
+  reason     String?
+  createdAt  DateTime    @default(now())
+
+  retailer Retailer      @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  admin    PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
 }
 
 // ─── Category ───────────────────────────────────────────────────

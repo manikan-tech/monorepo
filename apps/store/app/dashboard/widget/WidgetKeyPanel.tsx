@@ -106,29 +106,7 @@ export default function WidgetKeyPanel() {
     handleUpdateOrigins(allowedOrigins.filter(o => o !== originToRemove));
   };
 
-  const handleToggleActivation = async () => {
-    setActionLoading("toggle");
-    setMessage(null);
-    const newState = !isActivated;
-    try {
-      const res = await fetch("/api/retailer/widget-key", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActivated: newState }),
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to update activation status");
-      }
-      const data = await res.json();
-      setIsActivated(data.isActivated);
-      setMessage({ type: "success", text: `Widget ${newState ? "activated" : "deactivated"} successfully.` });
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message });
-    } finally {
-      setActionLoading(null);
-    }
-  };
+
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(apiKey);
@@ -160,21 +138,11 @@ export default function WidgetKeyPanel() {
             Manage your API key and widget access.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-forest-900">{isActivated ? 'Active' : 'Inactive'}</span>
-          <button
-            onClick={handleToggleActivation}
-            disabled={actionLoading === "toggle"}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-              isActivated ? "bg-manikan-teal" : "bg-gray-200"
-            } ${actionLoading === "toggle" ? "opacity-50 cursor-not-allowed" : ""}`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                isActivated ? "translate-x-6" : "translate-x-1"
-              }`}
-            />
-          </button>
+        <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 border border-manikan-border rounded-full">
+          <div className={`w-2 h-2 rounded-full ${isActivated ? "bg-green-500" : "bg-amber-500"}`} />
+          <span className="text-xs font-semibold uppercase tracking-wider text-forest-700">
+            {isActivated ? "Active" : "Pending"}
+          </span>
         </div>
       </div>
 

@@ -1,43 +1,43 @@
 import { cookies } from "next/headers";
-import { timingSafeEqual } from "crypto";
+import { createClient } from "./supabase/server";
+import { prisma } from "./prisma";
 
-const ADMIN_COOKIE_NAME = "manikan_admin";
 // 8-hour session — admin does not need an indefinitely-live session
 export const ADMIN_SESSION_MAX_AGE = 8 * 60 * 60;
 export interface AdminSession {
   authenticated: true;
+  id: string;
+  email: string;
+  role: "SUPER_ADMIN" | "SUPPORT";
 }
 
 /**
- * Returns the admin session if the request carries a valid admin cookie.
+ * Returns the admin session if the request carries a valid admin cookie and Supabase session.
  */
 export async function getAdminSession(): Promise<AdminSession | null> {
   try {
     const cookieStore = await cookies();
-    const value = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
-    if (!value) return null;
+    const role = cookieStore.get("manikan_role")?.value;
+    if (role !== "admin") return null;
 
-    if (!verifyAdminSecret(value)) return null;
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    return { authenticated: true };
-  } catch {
+    if (!user || !user.email) return null;
+    const admin = await prisma.platformAdmin.findUnique({
+      where: { email: user.email },
+    });
+
+    if (!admin) return null;
+
+    return {
+      authenticated: true,
+      id: admin.id,
+      email: admin.email,
+      role: admin.role,
+    };
+  } catch (error) {
+    console.error("Error in getAdminSession:", error);
     return null;
-  }
-}
-
-/**
- * Verifies the plain-text secret against ADMIN_SECRET env variable
- */
-export function verifyAdminSecret(submitted: string): boolean {
-  const expected = process.env.ADMIN_SECRET;
-  if (!expected || !submitted) return false;
-
-  try {
-    const a = Buffer.from(submitted);
-    const b = Buffer.from(expected);
-    if (a.length !== b.length) return false;
-    return timingSafeEqual(a, b);
-  } catch {
-    return false;
   }
 }

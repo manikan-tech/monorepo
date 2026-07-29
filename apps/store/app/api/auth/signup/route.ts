@@ -5,15 +5,23 @@ import { prisma } from "../../../lib/prisma";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { firstName, lastName, phone, email, password } = body;
+    const { role = "customer", firstName, lastName, storeName, phone, email, password } = body;
 
     // ── Validation ─────────────────────────────────────────
-    if (!firstName || typeof firstName !== "string" || firstName.trim().length < 2) {
-      return NextResponse.json({ error: "First name is required (minimum 2 characters)" }, { status: 400 });
-    }
+    if (role === "customer") {
+      if (!firstName || typeof firstName !== "string" || firstName.trim().length < 2) {
+        return NextResponse.json({ error: "First name is required (minimum 2 characters)" }, { status: 400 });
+      }
 
-    if (!lastName || typeof lastName !== "string" || lastName.trim().length < 2) {
-      return NextResponse.json({ error: "Last name is required (minimum 2 characters)" }, { status: 400 });
+      if (!lastName || typeof lastName !== "string" || lastName.trim().length < 2) {
+        return NextResponse.json({ error: "Last name is required (minimum 2 characters)" }, { status: 400 });
+      }
+    } else if (role === "retailer") {
+      if (!storeName || typeof storeName !== "string" || storeName.trim().length < 2) {
+        return NextResponse.json({ error: "Store name is required (minimum 2 characters)" }, { status: 400 });
+      }
+    } else {
+      return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
 
     if (!email || typeof email !== "string") {
@@ -29,24 +37,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
     }
 
-    // ── Check for existing Customer ─────────────────────────
-    const existingCustomer = await prisma.customer.findUnique({
-      where: { email: email.toLowerCase().trim() },
-    });
+    // ── Check for existing account ─────────────────────────
+    if (role === "customer") {
+      const existingCustomer = await prisma.customer.findUnique({
+        where: { email: email.toLowerCase().trim() },
+      });
 
-    if (existingCustomer) {
-      return NextResponse.json({ error: "An account with this email already exists" }, { status: 409 });
+      if (existingCustomer) {
+        return NextResponse.json({ error: "An account with this email already exists" }, { status: 409 });
+      }
+    } else {
+      const existingRetailer = await prisma.retailer.findUnique({
+        where: { email: email.toLowerCase().trim() },
+      });
+
+      if (existingRetailer) {
+        return NextResponse.json({ error: "A retailer account with this email already exists" }, { status: 409 });
+      }
     }
 
     // ── Sign up via Supabase Auth ──────────────────────────
     const supabase = await createClient();
+
+    const fullName = role === "customer"
+      ? `${firstName.trim()} ${lastName.trim()}`
+      : storeName.trim();
 
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: email.toLowerCase().trim(),
       password,
       options: {
         data: {
-          full_name: `${firstName.trim()} ${lastName.trim()}`,
+          full_name: fullName,
           phone: phone?.trim() || null,
         },
       },
@@ -61,16 +83,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Signup failed. Please try again." }, { status: 500 });
     }
 
-    // ── Create Customer profile in Prisma ───────────────────
-    await prisma.customer.create({
-      data: {
-        authId: data.user.id,
-        email: email.toLowerCase().trim(),
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        phone: phone?.trim() || null,
-      },
-    });
+    // ── Create profile in Prisma ───────────────────
+    if (role === "customer") {
+      await prisma.customer.create({
+        data: {
+          authId: data.user.id,
+          email: email.toLowerCase().trim(),
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          phone: phone?.trim() || null,
+        },
+      });
+    } else {
+      await prisma.retailer.create({
+        data: {
+          authId: data.user.id,
+          email: email.toLowerCase().trim(),
+          storeName: storeName.trim(),
+          isActivated: false,
+        },
+      });
+    }
 
     // ── Return success (requires email verification) ────────
     return NextResponse.json(
