@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
-import Stripe from "stripe";
+import type Stripe from "stripe";
 
+import { stripe } from "../../../lib/stripe";
 import { prisma } from "../../../lib/prisma";
 
 export const runtime = "nodejs";
@@ -217,8 +218,7 @@ async function processEvent(event: Stripe.Event): Promise<ProcessingResult> {
 
 export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-  if (!webhookSecret || !stripeSecretKey) {
+  if (!webhookSecret) {
     console.error("Stripe webhook configuration is incomplete");
     return new Response("Webhook configuration error", { status: 500 });
   }
@@ -231,11 +231,7 @@ export async function POST(request: Request) {
   try {
     // Stripe signature verification must receive the exact, unparsed body.
     const rawBody = await request.text();
-    event = new Stripe(stripeSecretKey).webhooks.constructEvent(
-      rawBody,
-      signature,
-      webhookSecret,
-    );
+    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch {
     // Do not log signatures, raw payloads, secrets, or verification stacks.
     console.warn("Rejected Stripe webhook with an invalid signature");
