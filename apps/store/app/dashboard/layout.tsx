@@ -1,5 +1,6 @@
 import React from "react";
 import { getAuthFromCookies } from "../lib/auth";
+import { prisma } from "../lib/prisma";
 import { redirect } from "next/navigation";
 import SidebarNav from "./SidebarNav";
 
@@ -13,6 +14,11 @@ export default async function DashboardLayout({
   if (!user) {
     redirect("/login");
   }
+
+  const retailer = await prisma.retailer.findUnique({
+    where: { id: user.sub },
+    select: { isActivated: true },
+  });
 
   return (
     <div className="flex min-h-screen bg-manikan-bg text-manikan-text">
@@ -36,7 +42,7 @@ export default async function DashboardLayout({
           </div>
         </div>
 
-        <SidebarNav />
+        <SidebarNav isActivated={retailer?.isActivated ?? false} />
 
         <div className="p-6 border-t border-forest-800">
           <div className="flex items-center space-x-3">

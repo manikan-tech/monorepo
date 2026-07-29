@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 type Retailer = {
   id: string;
@@ -86,12 +87,12 @@ export default function RetailersTable({ initialRetailers }: { initialRetailers:
               >
                 {/* Store Name */}
                 <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
+                  <Link href={`/admin/retailers/${retailer.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
                     <div className="w-8 h-8 rounded-full bg-forest-100 flex items-center justify-center text-xs font-bold text-forest-700 flex-shrink-0">
                       {retailer.storeName[0]?.toUpperCase()}
                     </div>
-                    <span className="font-medium text-forest-900 text-sm">{retailer.storeName}</span>
-                  </div>
+                    <span className="font-medium text-forest-900 text-sm hover:underline">{retailer.storeName}</span>
+                  </Link>
                 </td>
 
                 {/* Email */}
