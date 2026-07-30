@@ -122,7 +122,9 @@ def _build_gemini_client(api_key: str) -> ChatGoogleGenerativeAI:
     return ChatGoogleGenerativeAI(
         model="gemini-2.0-flash",
         google_api_key=api_key,
-        timeout=5,
+        # Google's API rejects any deadline below 10s outright (400
+        # INVALID_ARGUMENT) - this is a hard minimum, not tunable lower.
+        timeout=10,
         # Quota/auth errors should fall through to the next provider
         # immediately instead of the client silently retrying for up to
         # a minute+, which is what made /recommend look "stuck" in the
@@ -143,7 +145,7 @@ async def _call_bedrock_gateway(messages: list[dict]) -> RecommendationOutput:
     if not settings.bedrock_full_url or not settings.bedrock_api_key:
         raise RuntimeError("Bedrock gateway not configured (missing base_url or api_key)")
 
-    async with httpx.AsyncClient(timeout=4) as client:
+    async with httpx.AsyncClient(timeout=4, follow_redirects=True) as client:
         response = await client.post(
             settings.bedrock_full_url,
             headers={
@@ -184,7 +186,7 @@ async def call_llm_with_fallback(messages: list[dict]) -> tuple[RecommendationOu
             response.provider = provider_tag
             return response, provider_tag
         except Exception as e:
-            logger.warning(f"Provider {provider_tag} failed: {e}")
+            logger.warning(f"Provider {provider_tag} failed: {type(e).__name__}: {e}")
             last_error = e
             continue
 
@@ -194,7 +196,7 @@ async def call_llm_with_fallback(messages: list[dict]) -> tuple[RecommendationOu
         response.provider = "BEDROCK"
         return response, "BEDROCK"
     except Exception as e:
-        logger.warning(f"Provider BEDROCK failed: {e}")
+        logger.warning(f"Provider BEDROCK failed: {type(e).__name__}: {e}")
         last_error = e
 
     try:
@@ -207,7 +209,7 @@ async def call_llm_with_fallback(messages: list[dict]) -> tuple[RecommendationOu
         response.provider = "OLLAMA-FALLBACK"
         return response, "OLLAMA-FALLBACK"
     except Exception as e:
-        logger.warning(f"Provider OLLAMA-FALLBACK failed: {e}")
+        logger.warning(f"Provider OLLAMA-FALLBACK failed: {type(e).__name__}: {e}")
         last_error = e
 
     raise RuntimeError(f"All LLM providers failed. Last error: {last_error}")
@@ -329,7 +331,21 @@ def _try_answer_from_size_chart_locally(question: str, size_chart_raw: str) -> O
         field = "waist_cm"
     elif "hip" in question:
         field = "hip_cm"
+
     if not field:
+        # No specific dimension mentioned - if this still reads like a
+        # generic "what sizes/what's the biggest size" question, answer
+        # with the list of available sizes instead of falling through
+        # to the (slower, less reliable) LLM path.
+        available_sizes = [e.get("size") for e in size_chart if e.get("size")]
+        if not available_sizes:
+            return None
+        if any(w in question for w in ("what size", "which size", "sizes do you", "available size")):
+            return f"This item comes in these sizes: {', '.join(available_sizes)}."
+        if any(w in question for w in ("max", "largest", "biggest", "up to")):
+            return f"The largest size we carry for this item is {available_sizes[-1]}."
+        if any(w in question for w in ("min", "smallest")):
+            return f"The smallest size we carry for this item is {available_sizes[0]}."
         return None
 
     values = [e[field] for e in size_chart if isinstance(e.get(field), (int, float))]
@@ -349,6 +365,23 @@ async def call_conversational_agent(state: FitState) -> FitState:
     betas = state.get("betas")
     size_chart = state.get("size_chart")
     is_question = _is_descriptive_question(state["messages"])
+
+    # A sizing question with no product AND no category context at all -
+    # "max size" means nothing store-wide (it varies by item), so ask
+    # which category instead of guessing or going to the LLM.
+    if is_question and not size_chart and not product_id:
+        available_categories = state.get("available_categories") or []
+        if available_categories:
+            categories_str = ", ".join(available_categories)
+            message = f"That depends on what you're shopping for - {categories_str}? Pick a category above and I'll give you the exact sizes."
+        else:
+            message = "That depends on the item - which category are you shopping for?"
+        state["structured_response"] = RecommendationOutput(
+            action=ActionType.PROVIDE_RECOMMENDATION,
+            message=message,
+            provider="STATIC",
+        )
+        return state
 
     # The user is asking something descriptive about this product's size
     # chart (e.g. "what's the max chest size?") rather than submitting

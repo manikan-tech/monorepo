@@ -23,11 +23,26 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"
 
+    # CORS - comma-separated list of allowed origins. Defaults to local dev
+    # only; set ALLOWED_ORIGINS in .env to the real store domain(s) before
+    # any real deployment.
+    allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    # Shared-secret key the widget must send on every /recommend request.
+    # If left unset, the check is skipped (permissive) - useful for local
+    # dev before this is configured, but should be set before any real
+    # deployment.
+    recommend_api_key: Optional[str] = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @property
+    def allowed_origins_list(self) -> List[str]:
+        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
 
     @property
     def gemini_keys(self) -> List[str]:

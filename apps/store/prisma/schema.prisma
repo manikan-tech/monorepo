@@ -68,6 +68,7 @@ model Category {
 // ─── Product (extended) ─────────────────────────────────────────
 
 model Product {
+
   id          String                       @id @default(cuid())
   retailerId  String
   categoryId  String?
@@ -90,6 +91,29 @@ model Product {
   createdAt   DateTime                     @default(now())
   updatedAt   DateTime                     @updatedAt
 
+  id              String                       @id @default(cuid())
+  retailerId      String
+  categoryId      String?
+  productCode     String
+  name            String
+  slug            String                       @unique
+  description     String?
+  category        String
+  gender          String
+  brand           String
+  fabric          String
+  priceEgp        Float
+  discountPct     Float                        @default(0)
+  imageUrl        String
+  images          String[]
+  stock           Int                          @default(0)
+  isActive        Boolean                      @default(true)
+  embedding       Unsupported("vector(1536)")?
+  garmentColorHex String? // garment colour (hex) for the 3D virtual try-on
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+
+
   retailer       Retailer             @relation(fields: [retailerId], references: [id], onDelete: Cascade)
   categoryRef    Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   variants       ProductVariant[]
@@ -105,6 +129,7 @@ model Product {
 // ─── Product Variant (extended) ─────────────────────────────────
 
 model ProductVariant {
+
   id             String  @id @default(cuid())
   productId      String
   sku            String  @unique
@@ -116,6 +141,19 @@ model ProductVariant {
   hipCm          Float?
   lengthCm       Float?
   inseamCm       Float?
+
+  id                String  @id @default(cuid())
+  productId         String
+  sku               String  @unique
+  sizeLabel         String
+  priceOverride     Float?
+  stock             Int     @default(0)
+  chestCm           Float?
+  waistCm           Float?
+  hipCm             Float?
+  lengthCm          Float?
+  inseamCm          Float?
+
   // ─── Flat garment measurements — used by the 3D virtual try-on engine ───
   garmentChestCm     Float?
   garmentLengthCm    Float?
@@ -220,8 +258,8 @@ model Order {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  customer Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  address  Address?    @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  customer Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  address  Address?  @relation(fields: [addressId], references: [id], onDelete: SetNull)
   items    OrderItem[]
 }
 
