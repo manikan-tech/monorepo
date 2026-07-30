@@ -49,16 +49,43 @@ def _check_rate_limit(session_id: str) -> None:
     log.append(now)
 
 
+# Per-retailer usage tracking (in-memory) - foundation for KPI reporting
+# and anomaly detection (e.g. a sudden spike in overall traffic). Keyed
+# by a fixed "widget" label for now since we only see one caller
+# (widget.js calling us directly). Once the Next.js proxy route lands
+# (List 3), Next.js can pass a retailer identifier through and this can
+# be broken down per-retailer again on their side.
+_usage_log: deque = deque()
+_ANOMALY_WINDOW_SECONDS = 3600
+_ANOMALY_THRESHOLD = 200  # requests/hour before we log a warning
+
+
+def _track_usage() -> None:
+    now = time.time()
+    _usage_log.append(now)
+    while _usage_log and now - _usage_log[0] > _ANOMALY_WINDOW_SECONDS:
+        _usage_log.popleft()
+    if len(_usage_log) > _ANOMALY_THRESHOLD:
+        logger.warning(
+            f"Usage anomaly: {len(_usage_log)} requests in the last hour "
+            f"(threshold {_ANOMALY_THRESHOLD}). Review for possible abuse."
+        )
+
+
 async def verify_widget_key(x_widget_key: Optional[str] = Header(None)) -> None:
     """
-    Shared-secret check between widget.js and this service. If
-    RECOMMEND_API_KEY isn't set in .env yet, this is skipped entirely -
-    permissive for local dev, but should be configured before any real
-    deployment.
+    Shared-secret check between the caller (currently widget.js directly;
+    later the team's Next.js proxy route per Trello List 3) and this
+    service. Real per-retailer identity/auth (Retailer.apiKey +
+    OriginAllowlist) is handled on the Next.js side against the database
+    - this key is just a simple shared secret confirming the request came
+    from our own infrastructure. If RECOMMEND_API_KEY isn't set in .env
+    yet, this is skipped entirely - permissive for local dev only.
     """
     settings = get_settings()
     if settings.recommend_api_key and x_widget_key != settings.recommend_api_key:
         raise HTTPException(status_code=401, detail="Invalid or missing widget API key")
+    _track_usage()
 
 
 class ChatRecommendRequest(BaseModel):

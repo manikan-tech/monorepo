@@ -6,6 +6,7 @@
     // Static, retailer-wide config - set once when the script is embedded
     const RETAILER_ID = currentScript ? currentScript.getAttribute('data-retailer-id') : "manikan";
     const RECOMMEND_API_BASE = currentScript ? currentScript.getAttribute('data-recommend-api') : "http://127.0.0.1:8000";
+    const WIDGET_API_KEY = currentScript ? currentScript.getAttribute('data-widget-key') : "";
     // Default to same-origin if not explicitly configured, so the
     // fetch_products branch still works instead of silently skipping
     // whenever NEXT_PUBLIC_SITE_URL isn't set on the Script tag.
@@ -103,10 +104,12 @@
     // "show me more shirts" style requests don't re-hit the network.
     let availableCategories = [];
     const categoryProductsCache = {};
-    // Cache of size_chart_json strings per category, built from one
+    // Cache of {chart, productId} per category, built from one
     // representative product's variants - so a category only needs to be
     // fetched in detail once per session, no matter how many times the
-    // user asks about sizing in that category.
+    // user asks about sizing in that category. productId is kept so
+    // category-level recommendations can still be logged to
+    // MeasurementSession (which requires a real productId).
     const categorySizeChartCache = {};
 
     async function getCategorySizeChart(category) {
@@ -130,8 +133,9 @@
                     hip_cm: v.hipCm,
                 }))
             );
-            categorySizeChartCache[category] = chart;
-            return chart;
+            const entry = { chart, productId: product.id || representative.id };
+            categorySizeChartCache[category] = entry;
+            return entry;
         } catch (err) {
             console.warn(`Could not load size chart for category ${category}:`, err);
             return null;
@@ -271,13 +275,20 @@
         const { productId, sizeChart: productSizeChart } = getCurrentProductContext();
         let sizeChart = productSizeChart;
 
-        // No specific product in context, but the user has measurements
-        // and picked a real category - use (or fetch + cache) that
-        // category's representative size chart instead of leaving it
-        // empty, so the backend can still compute a real recommendation.
+        // No specific product in context, but a real category is picked -
+        // use (or fetch + cache) that category's representative size
+        // chart, purely to compute/answer sizing questions. productId
+        // stays null here on purpose: logging a MeasurementSession
+        // against a "representative" product would be misleading data,
+        // and would make isPurchased meaningless (it's meant to track
+        // whether a *real* product recommendation converted). Actual
+        // logging happens once the shopper engages a specific product.
         const isRealCategory = catSelect.value !== 'general' && catSelect.value !== 'search';
-        if (!sizeChart && userMeasurements && isRealCategory) {
-            sizeChart = await getCategorySizeChart(catSelect.value);
+        if (!sizeChart && isRealCategory) {
+            const categoryData = await getCategorySizeChart(catSelect.value);
+            if (categoryData) {
+                sizeChart = categoryData.chart;
+            }
         }
 
         // Intent reflects what the user actually asked for, not a fixed value
@@ -292,14 +303,17 @@
         // request hanging (e.g. while an LLM provider quota error is
         // being retried upstream).
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const timeoutId = setTimeout(() => controller.abort(), 40000);
 
         showThinking();
 
         try {
             const response = await fetch(`${RECOMMEND_API_BASE}/recommend`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(WIDGET_API_KEY ? { 'X-Widget-Key': WIDGET_API_KEY } : {}),
+                },
                 signal: controller.signal,
                 body: JSON.stringify({
                     session_id: sessionId,
@@ -422,10 +436,17 @@
     document.getElementById('widgetSend').onclick = sendMessage;
     document.getElementById('widgetInput').onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
 
+    function ensureMeasurementsVisible() {
+        const measurementsRow = document.getElementById('measurementsRow');
+        measurementsRow.classList.remove('hidden');
+        document.getElementById('measurementsToggle').textContent = '📏 Hide measurements';
+    }
+
     window.ManikanWidget = {
         open: function() {
             document.getElementById('widgetBox').style.display = 'flex';
             initChat();
+            ensureMeasurementsVisible();
         },
         // Called by "Find My Size" buttons on a product page. Opens the
         // chat and immediately shows the measurement inputs for the
@@ -442,9 +463,7 @@
                 'bot'
             );
 
-            const measurementsRow = document.getElementById('measurementsRow');
-            measurementsRow.classList.remove('hidden');
-            document.getElementById('measurementsToggle').textContent = '📏 Hide measurements';
+            ensureMeasurementsVisible();
         },
     };
 })();

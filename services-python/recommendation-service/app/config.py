@@ -3,18 +3,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # Supabase credentials
-    database_url: Optional[str] = None
-    direct_url: Optional[str] = None
-    next_public_supabase_url: Optional[str] = None
-    next_public_supabase_publishable_key: Optional[str] = None
-    supabase_service_key: Optional[str] = None
-
     # Google AI Studio (Gemini) - primary provider, two keys for redundancy
     gemini_api_key_1: Optional[str] = None
     gemini_api_key_2: Optional[str] = None
 
-    # Bedrock Gateway - custom ITI endpoint, request/response shape not confirmed yet
+    # Bedrock Gateway - ITI endpoint
     bedrock_api_key: Optional[str] = None
     bedrock_base_url: Optional[str] = None
     bedrock_chat_endpoint: Optional[str] = None
@@ -28,10 +21,15 @@ class Settings(BaseSettings):
     # any real deployment.
     allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
-    # Shared-secret key the widget must send on every /recommend request.
-    # If left unset, the check is skipped (permissive) - useful for local
-    # dev before this is configured, but should be set before any real
-    # deployment.
+    # Shared-secret key the caller must send on every /recommend request.
+    # Currently this is widget.js calling us directly. Once the team's
+    # Next.js proxy route (app/api/recommend/route.ts, gated by
+    # authorizeServiceRequest against Retailer.apiKey + OriginAllowlist -
+    # see Trello List 3) lands, THAT route will become the only caller,
+    # and this key just needs to be a single shared secret between
+    # Next.js and this service - the real per-retailer identity check
+    # happens on their side against the database, not here. If left
+    # unset, the check is skipped - permissive for local dev only.
     recommend_api_key: Optional[str] = None
 
     model_config = SettingsConfigDict(
