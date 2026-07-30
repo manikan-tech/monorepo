@@ -90,7 +90,6 @@ async function main() {
                 authId: authUserId,
                 email,
                 storeName: "Manikan Official Store",
-                plan: "premium",
                 isActivated: true
             }
         });

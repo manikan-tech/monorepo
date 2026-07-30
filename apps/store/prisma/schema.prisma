@@ -19,7 +19,6 @@ enum OrderStatus {
   CANCELLED
   RETURN_PENDING
   RETURNED
-  RETURN_PENDING
 }
 
 enum PaymentStatus {
@@ -66,7 +65,6 @@ model Retailer {
   hashedPassword String?
   isActivated    Boolean  @default(false)
   apiKey         String   @unique @default(cuid())
-  plan           String   @default("free")
   widgetSettings Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -82,24 +80,63 @@ model Retailer {
 
 // ─── SaaS billing ──────────────────────────────────────────────
 
+// Pricing tiers define the quota limits each retailer receives per month.
+// The `quotas` JSON shape: { BODY_MODELING: number, VTON_2D: number, RECOMMENDATION: number }
+model Plan {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  priceEgpMonthly Float
+  quotas          Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
 // Stripe identifiers are only written by verified Stripe webhooks. Historical
 // rows are retained so delayed events cannot overwrite a newer subscription.
+// `planId` and `currentPeriodEnd` are nullable so legacy/webhook-created rows
+// (which predate Plan selection) remain valid until fully migrated.
 model Subscription {
   id                   String             @id @default(cuid())
   retailerId           String
+  planId               String?
   stripeCustomerId     String
   // Legacy rows may not have a Stripe subscription ID. New webhook-created
   // rows always provide one and are the only rows eligible for state changes.
   stripeSubscriptionId String?            @unique
   status               SubscriptionStatus @default(PAST_DUE)
+  currentPeriodEnd     DateTime?
+  // Running tally of usage per service scope in the current billing period.
+  // Shape: { BODY_MODELING: number, VTON_2D: number, RECOMMENDATION: number }
+  currentPeriodUsage   Json               @default("{}")
   lastStripeEventAt    Int                @default(0)
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
   retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  plan     Plan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
 
   @@index([retailerId, status])
   @@index([stripeCustomerId])
+}
+
+// ─── Service Usage Rollup (Metering) ───────────────────────────
+
+// Provides an asynchronous, low-cost ledger for daily service metering.
+// Used for historical graphing/analytics in the dashboard.
+model ServiceUsageDailyRollup {
+  id         String   @id @default(cuid())
+  retailerId String
+  service    String // e.g. "BODY_MODELING", "VTON_2D", "RECOMMENDATION"
+  date       DateTime @db.Date // Truncated to midnight UTC
+  count      Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([retailerId, service, date])
+  @@index([retailerId, date])
 }
 
 // A Checkout Session is created only by an authenticated server-side flow and
@@ -187,27 +224,28 @@ model Category {
 // ─── Product (extended) ─────────────────────────────────────────
 
 model Product {
-  id             String                       @id @default(cuid())
-  retailerId     String
-  categoryId     String?
-  productCode    String
-  name           String
-  slug           String                       @unique
-  description    String?
-  category       String
-  gender         String
-  brand          String
-  fabric         String
-  priceEgp       Float
-  discountPct    Float                        @default(0)
-  imageUrl       String
-  images         String[]
-  stock          Int                          @default(0)
-  isActive       Boolean                      @default(true)
-  embedding      Unsupported("vector(1536)")?
+  id              String                       @id @default(cuid())
+  retailerId      String
+  categoryId      String?
+  productCode     String
+  name            String
+  slug            String                       @unique
+  description     String?
+  category        String
+  gender          String
+  brand           String
+  fabric          String
+  priceEgp        Float
+  discountPct     Float                        @default(0)
+  imageUrl        String
+  images          String[]
+  stock           Int                          @default(0)
+  isActive        Boolean                      @default(true)
+  embedding       Unsupported("vector(1536)")?
   garmentColorHex String? // garment colour (hex) for the 3D virtual try-on
-  createdAt      DateTime                     @default(now())
-  updatedAt      DateTime                     @updatedAt
+  tshirtColorHex  String? // garment colour (hex) for the 3D virtual try-on
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
 
   retailer      Retailer             @relation(fields: [retailerId], references: [id], onDelete: Cascade)
   categoryRef   Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)

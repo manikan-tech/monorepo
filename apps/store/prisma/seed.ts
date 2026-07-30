@@ -66,6 +66,37 @@ interface CsvRow {
 async function main() {
     console.log("🌱 Starting database seeding from CSV...");
 
+    // ── Seed Plan Tiers ──────────────────────────────────────────────────
+    // ⚠️  PRODUCT OWNER: these quotas/prices are placeholders. Confirm
+    //     actual go-to-market pricing before deploying to production.
+    const plans = [
+        {
+            name: "Free",
+            priceEgpMonthly: 0,
+            quotas: { BODY_MODELING: 100, VTON_2D: 50, RECOMMENDATION: 500 },
+        },
+        {
+            name: "Starter",
+            priceEgpMonthly: 999,
+            quotas: { BODY_MODELING: 1000, VTON_2D: 200, RECOMMENDATION: 5000 },
+        },
+        {
+            name: "Growth",
+            priceEgpMonthly: 2499,
+            quotas: { BODY_MODELING: 5000, VTON_2D: 1000, RECOMMENDATION: 20000 },
+        },
+    ];
+
+    for (const plan of plans) {
+        await prisma.plan.upsert({
+            where: { name: plan.name },
+            update: { priceEgpMonthly: plan.priceEgpMonthly, quotas: plan.quotas },
+            create: plan,
+        });
+    }
+    console.log(`Seeded ${plans.length} pricing plans (Free / Starter / Growth).`);
+
+
     // Locating the catalog CSV file
     const csvPath = path.resolve("./../../demo-retailer-catalog-final.csv");
     if (!fs.existsSync(csvPath)) {
@@ -113,7 +144,6 @@ async function main() {
             authId: "default-retailer-auth-id",
             email: "retailer@manikan.com",
             storeName: "Manikan Official Store",
-            plan: "premium",
         },
     });
     console.log(`Linked Retailer: ${retailer.storeName}`);

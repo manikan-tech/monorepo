@@ -11,11 +11,21 @@ export default async function SettingsPage() {
 
   const retailer = await prisma.retailer.findUnique({
     where: { id: user.sub },
+    include: {
+      subscriptions: {
+        where: { status: "ACTIVE" },
+        include: { plan: true },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+    },
   });
 
   if (!retailer) {
     redirect("/login");
   }
+
+  const planName = retailer.subscriptions[0]?.plan?.name ?? "No Plan";
 
   return (
     <div className="space-y-8 max-w-4xl">
@@ -47,8 +57,8 @@ export default async function SettingsPage() {
           </p>
         </div>
       </div>
-      
-      <SettingsClient retailer={retailer} />
+
+      <SettingsClient retailer={retailer} planName={planName} />
     </div>
   );
 }

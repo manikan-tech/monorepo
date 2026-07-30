@@ -28,7 +28,7 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     // ── Security gate (key + fail-closed Origin + allowlist + rate limit) ──
-    const auth = await authorizeWidgetRequest(request, CORS_HEADERS);
+    const auth = await authorizeWidgetRequest(request, CORS_HEADERS, "RECOMMENDATION");
     if (!auth.ok) {
         return auth.response;
     }
@@ -84,6 +84,12 @@ export async function GET(
             sleeve_length_cm: v.garmentSleeveCm,
             shoulder_width_cm: v.garmentShoulderCm,
         };
+    }
+
+    // ── Deduct Quota ──
+    if (auth.subscription) {
+        const { consumeQuota } = await import("../../../../lib/widget-auth");
+        await consumeQuota(auth.subscription.id, "RECOMMENDATION");
     }
 
     return NextResponse.json(

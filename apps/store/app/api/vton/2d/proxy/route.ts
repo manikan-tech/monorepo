@@ -76,10 +76,40 @@ export async function POST(request: NextRequest) {
         // choose an active catalog product, never an arbitrary remote URL.
         const product = await prisma.product.findFirst({
             where: { id: productId, isActive: true },
-            select: { id: true },
+            select: { id: true, retailerId: true },
         });
         if (!product) {
             return jsonError(requestId, 404, "Product not found.");
+        }
+
+        // ── Enforce Retailer Quota ──
+        const subscription = await prisma.subscription.findFirst({
+            where: { retailerId: product.retailerId, status: "ACTIVE" },
+            include: { plan: true },
+            orderBy: { createdAt: "desc" },
+        });
+
+        if (!subscription || !subscription.plan) {
+            return jsonError(requestId, 429, "The store does not have an active subscription for this feature.");
+        }
+
+        const quotas = (subscription.plan.quotas ?? {}) as Record<string, number>;
+        const maxAllowed = quotas["VTON_2D"] ?? 0;
+        const usage = (subscription.currentPeriodUsage ?? {}) as Record<string, number>;
+        const currentUsage = usage["VTON_2D"] ?? 0;
+
+        if (currentUsage >= maxAllowed) {
+            return NextResponse.json(
+                {
+                    error: "Quota exceeded. Upgrade your plan to continue using this service.",
+                    code: "QUOTA_EXCEEDED",
+                    usage: currentUsage,
+                    limit: maxAllowed,
+                    scope: "VTON_2D",
+                    requestId
+                },
+                { status: 429 }
+            );
         }
 
         const serviceKey = process.env.VTON_2D_SERVICE_KEY;
@@ -101,6 +131,12 @@ export async function POST(request: NextRequest) {
             body: upstreamFormData,
             cache: "no-store",
         });
+
+        if (upstream.ok) {
+            // Deduct quota on success
+            const { consumeQuota } = await import("../../../../lib/widget-auth");
+            await consumeQuota(subscription.id, "VTON_2D");
+        }
 
         const headers = new Headers({
             "Content-Type": upstream.headers.get("content-type") || "application/octet-stream",

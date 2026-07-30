@@ -163,26 +163,24 @@ export default function OrdersTable({
                   </td>
                   <td className="px-6 py-4">
                     <span
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${
-                        order.status === "DELIVERED"
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${order.status === "DELIVERED"
                           ? "bg-green-50 text-green-700 border-green-200"
                           : order.status === "CANCELLED" ||
-                              order.status === "RETURNED"
+                            order.status === "RETURNED"
                             ? "bg-red-50 text-red-700 border-red-200"
                             : order.status === "SHIPPED"
                               ? "bg-indigo-50 text-indigo-700 border-indigo-200"
                               : "bg-yellow-50 text-yellow-700 border-yellow-200"
-                      }`}
+                        }`}
                     >
                       {order.status}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     <span
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${
-                        PAYMENT_STATUS_COLORS[order.paymentStatus] ??
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${PAYMENT_STATUS_COLORS[order.paymentStatus] ??
                         "bg-gray-50 text-gray-600 border-gray-200"
-                      }`}
+                        }`}
                     >
                       {order.paymentStatus}
                     </span>

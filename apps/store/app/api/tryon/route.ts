@@ -38,7 +38,7 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest) {
     // ── 0. Security gate (key + fail-closed Origin + allowlist + rate limit) ──
-    const auth = await authorizeWidgetRequest(request, CORS_HEADERS);
+    const auth = await authorizeWidgetRequest(request, CORS_HEADERS, "BODY_MODELING");
     if (!auth.ok) {
         return auth.response;
     }
@@ -224,6 +224,12 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         // A persistence failure must not break the shopper's try-on experience.
         console.error("Failed to save MeasurementSession:", error);
+    }
+
+    // ── 5.5 Deduct Quota ──
+    if (auth.subscription) {
+        const { consumeQuota } = await import("../../lib/widget-auth");
+        await consumeQuota(auth.subscription.id, "BODY_MODELING");
     }
 
     // ── 6. Stream the .glb back ──
