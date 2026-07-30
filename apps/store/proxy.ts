@@ -10,6 +10,7 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // Match only specific routes to avoid running on static assets or breaking storefront routing (404 fix)
   matcher: [
+    "/admin/:path*",
     "/dashboard/:path*",
     "/account/:path*",
     "/login",

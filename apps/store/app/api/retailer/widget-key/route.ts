@@ -93,6 +93,15 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const retailer = await prisma.retailer.findUnique({
+    where: { id: user.sub },
+    select: { isActivated: true },
+  });
+
+  if (!retailer || !retailer.isActivated) {
+    return NextResponse.json({ error: "Forbidden: Account is pending activation." }, { status: 403 });
+  }
+
   const updated = await prisma.retailer.update({
     where: { id: user.sub },
     data: { apiKey: generatePublicKey() },
@@ -116,23 +125,16 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const data: Prisma.RetailerUpdateInput = {};
+  const current = await prisma.retailer.findUnique({
+    where: { id: user.sub },
+    select: { isActivated: true, widgetSettings: true },
+  });
 
-  // ── isActivated toggle ──
-  // MVP: the retailer flips their OWN activation so we can test the widget flow
-  // end-to-end without an admin dashboard or a billing system.
-  // ─── ENTERPRISE NOTE (future): this MUST become admin-only + paywall-gated.
-  //     A retailer must not be able to self-activate a paid feature. See
-  //     docs/enterprise-roadmap.md § Security. ───
-  if (body.isActivated !== undefined) {
-    if (typeof body.isActivated !== "boolean") {
-      return NextResponse.json(
-        { error: "isActivated must be a boolean" },
-        { status: 400 }
-      );
-    }
-    data.isActivated = body.isActivated;
+  if (!current || !current.isActivated) {
+    return NextResponse.json({ error: "Forbidden: Account is pending activation." }, { status: 403 });
   }
+
+  const data: Prisma.RetailerUpdateInput = {};
 
   // ── allowedOrigins (validated, then MERGED into widgetSettings) ──
   if (body.allowedOrigins !== undefined) {
@@ -163,16 +165,12 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    const current = await prisma.retailer.findUnique({
-      where: { id: user.sub },
-      select: { widgetSettings: true },
-    });
     // MERGE — never overwrite the UI team's colour/language keys.
-    const merged = { ...readSettings(current?.widgetSettings), allowedOrigins: normalized };
+    const merged = { ...readSettings(current.widgetSettings), allowedOrigins: normalized };
     data.widgetSettings = merged as Prisma.InputJsonValue;
   }
 
-  if (data.isActivated === undefined && data.widgetSettings === undefined) {
+  if (data.widgetSettings === undefined) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 

@@ -33,6 +33,17 @@ CORS_ORIGINS: list[str] = [
 DEVICE = torch.device("cpu")
 NUM_BETAS: int = 10
 
+# ─── Garment engine ─────────────────────────────────────────────────────
+# Dressed-avatar engine: "v2" = Pipeline 1 real garment mesh; "v1" = legacy
+# vertex-paint fallback. Overridable via the MANIKAN_DRESSED_ENGINE env var.
+USE_GARMENT_V2: bool = os.environ.get("MANIKAN_DRESSED_ENGINE", "v2").lower() != "v1"
+
+# Pipeline 2: physics-baked drape via the precomputed delta library (relaxed
+# pose, tee category). Male-only for now (female needs its own tuning pass +
+# grid). Falls back to the kinematic v2 fit if disabled or if it errors, so
+# avatar generation never breaks. Toggle with MANIKAN_PHYSICS_DRAPE=0.
+USE_PHYSICS_DRAPE: bool = os.environ.get("MANIKAN_PHYSICS_DRAPE", "1") != "0"
+
 # ─── Optimisation hyper-parameters (tuned for SMPL on CPU) ──────────────
 OPT_ITERATIONS: int = int(os.environ.get("OPT_ITERATIONS", "80"))
 OPT_LR: float = float(os.environ.get("OPT_LR", "0.05"))

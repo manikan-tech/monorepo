@@ -17,6 +17,7 @@ enum OrderStatus {
   SHIPPED
   DELIVERED
   CANCELLED
+  RETURN_PENDING
   RETURNED
 }
 
@@ -27,7 +28,34 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum AdminRole {
+  SUPER_ADMIN
+  SUPPORT
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+enum AuditAction {
+  ACTIVATED
+  SUSPENDED
+  PLAN_CHANGED
+}
+
 // ─── B2B: Retailer (existing) ───────────────────────────────────
+
+model PlatformAdmin {
+  id        String    @id @default(cuid())
+  authId    String    @unique
+  email     String    @unique
+  role      AdminRole @default(SUPPORT)
+  createdAt DateTime  @default(now())
+
+  auditLogs RetailerAuditLog[]
+}
 
 model Retailer {
   id             String   @id @default(cuid())
@@ -42,8 +70,98 @@ model Retailer {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  products  Product[]
-  sessions  MeasurementSession[]
+  products         Product[]
+  sessions         MeasurementSession[]
+  subscriptions    Subscription[]
+  billingCheckouts BillingCheckout[]
+  originAllowlist  OriginAllowlist[]
+  vtonCacheEntries VtonCacheEntry[]
+  auditLogs        RetailerAuditLog[]
+}
+
+// ─── SaaS billing ──────────────────────────────────────────────
+
+// Stripe identifiers are only written by verified Stripe webhooks. Historical
+// rows are retained so delayed events cannot overwrite a newer subscription.
+model Subscription {
+  id                   String             @id @default(cuid())
+  retailerId           String
+  stripeCustomerId     String
+  // Legacy rows may not have a Stripe subscription ID. New webhook-created
+  // rows always provide one and are the only rows eligible for state changes.
+  stripeSubscriptionId String?            @unique
+  status               SubscriptionStatus @default(PAST_DUE)
+  lastStripeEventAt    Int                @default(0)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+
+  @@index([retailerId, status])
+  @@index([stripeCustomerId])
+}
+
+// A Checkout Session is created only by an authenticated server-side flow and
+// recorded before redirecting the retailer to Stripe. Webhooks use this record
+// as the tenant authority instead of trusting event metadata.
+model BillingCheckout {
+  stripeCheckoutSessionId String   @id
+  retailerId              String
+  createdAt               DateTime @default(now())
+
+  retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+}
+
+// Tenant-owned Origins used by VTON developer tooling. Origin values are
+// normalized before persistence so equivalent values cannot bypass the limit.
+model OriginAllowlist {
+  id         String   @id @default(cuid())
+  retailerId String
+  origin     String
+  createdAt  DateTime @default(now())
+
+  retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+
+  @@unique([retailerId, origin])
+  @@index([retailerId])
+}
+
+// Metadata for cached VTON work. Cache data is isolated by retailer and must
+// never be queried or invalidated without the retailerId predicate.
+model VtonCacheEntry {
+  id         String   @id @default(cuid())
+  retailerId String
+  cacheKey   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+
+  @@unique([retailerId, cacheKey])
+  @@index([retailerId, updatedAt])
+}
+
+// Stripe retries deliveries until a 2xx response is returned. Storing the
+// event ID makes all state transitions idempotent across retries and deploys.
+model StripeWebhookEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
+}
+
+// ─── Audit Logs ─────────────────────────────────────────────────
+
+model RetailerAuditLog {
+  id         String      @id @default(cuid())
+  retailerId String
+  adminId    String
+  action     AuditAction
+  reason     String?
+  createdAt  DateTime    @default(now())
+
+  retailer Retailer      @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  admin    PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
 }
 
 // ─── Category ───────────────────────────────────────────────────
@@ -68,60 +186,36 @@ model Category {
 // ─── Product (extended) ─────────────────────────────────────────
 
 model Product {
-
-  id          String                       @id @default(cuid())
-  retailerId  String
-  categoryId  String?
-  productCode String
-  name        String
-  slug        String                       @unique
-  description String?
-  category    String
-  gender      String
-  brand       String
-  fabric      String
-  priceEgp    Float
-  discountPct Float                        @default(0)
-  imageUrl    String
-  images      String[]
-  stock       Int                          @default(0)
-  isActive    Boolean                      @default(true)
-  embedding   Unsupported("vector(1536)")?
-  tshirtColorHex String?                    // garment colour (hex) for the 3D virtual try-on
-  createdAt   DateTime                     @default(now())
-  updatedAt   DateTime                     @updatedAt
-
-  id              String                       @id @default(cuid())
-  retailerId      String
-  categoryId      String?
-  productCode     String
-  name            String
-  slug            String                       @unique
-  description     String?
-  category        String
-  gender          String
-  brand           String
-  fabric          String
-  priceEgp        Float
-  discountPct     Float                        @default(0)
-  imageUrl        String
-  images          String[]
-  stock           Int                          @default(0)
-  isActive        Boolean                      @default(true)
-  embedding       Unsupported("vector(1536)")?
+  id             String                       @id @default(cuid())
+  retailerId     String
+  categoryId     String?
+  productCode    String
+  name           String
+  slug           String                       @unique
+  description    String?
+  category       String
+  gender         String
+  brand          String
+  fabric         String
+  priceEgp       Float
+  discountPct    Float                        @default(0)
+  imageUrl       String
+  images         String[]
+  stock          Int                          @default(0)
+  isActive       Boolean                      @default(true)
+  embedding      Unsupported("vector(1536)")?
   garmentColorHex String? // garment colour (hex) for the 3D virtual try-on
-  createdAt       DateTime                     @default(now())
-  updatedAt       DateTime                     @updatedAt
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
 
-
-  retailer       Retailer             @relation(fields: [retailerId], references: [id], onDelete: Cascade)
-  categoryRef    Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  variants       ProductVariant[]
-  sessions       MeasurementSession[]
-  cartItems      CartItem[]
-  wishlistItems  Wishlist[]
-  reviews        Review[]
-  orderItems     OrderItem[]
+  retailer      Retailer             @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  categoryRef   Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  variants      ProductVariant[]
+  sessions      MeasurementSession[]
+  cartItems     CartItem[]
+  wishlistItems Wishlist[]
+  reviews       Review[]
+  orderItems    OrderItem[]
 
   @@unique([retailerId, productCode])
 }
@@ -129,36 +223,22 @@ model Product {
 // ─── Product Variant (extended) ─────────────────────────────────
 
 model ProductVariant {
-
-  id             String  @id @default(cuid())
-  productId      String
-  sku            String  @unique
-  sizeLabel      String
-  priceOverride  Float?
-  stock          Int     @default(0)
-  chestCm        Float?
-  waistCm        Float?
-  hipCm          Float?
-  lengthCm       Float?
-  inseamCm       Float?
-
-  id                String  @id @default(cuid())
+  id                String @id @default(cuid())
   productId         String
-  sku               String  @unique
+  sku               String @unique
   sizeLabel         String
   priceOverride     Float?
-  stock             Int     @default(0)
+  stock             Int    @default(0)
   chestCm           Float?
   waistCm           Float?
   hipCm             Float?
   lengthCm          Float?
   inseamCm          Float?
-
   // ─── Flat garment measurements — used by the 3D virtual try-on engine ───
-  garmentChestCm     Float?
-  garmentLengthCm    Float?
-  garmentSleeveCm    Float?
-  garmentShoulderCm  Float?
+  garmentChestCm    Float?
+  garmentLengthCm   Float?
+  garmentSleeveCm   Float?
+  garmentShoulderCm Float?
 
   product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   cartItems  CartItem[]
@@ -178,12 +258,12 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  addresses  Address[]
-  cartItems  CartItem[]
-  wishlist   Wishlist[]
-  orders     Order[]
-  reviews    Review[]
-  sessions   MeasurementSession[]
+  addresses Address[]
+  cartItems CartItem[]
+  wishlist  Wishlist[]
+  orders    Order[]
+  reviews   Review[]
+  sessions  MeasurementSession[]
 }
 
 // ─── Address ────────────────────────────────────────────────────
@@ -243,20 +323,22 @@ model Wishlist {
 // ─── Order ──────────────────────────────────────────────────────
 
 model Order {
-  id             String        @id @default(cuid())
-  customerId     String
-  addressId      String?
-  status         OrderStatus   @default(PENDING)
-  subtotalEgp    Float
-  shippingEgp    Float         @default(0)
-  discountEgp    Float         @default(0)
-  totalEgp       Float
-  paymentMethod  String?
-  paymentStatus  PaymentStatus @default(PENDING)
-  trackingNumber String?
-  notes          String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id                    String        @id @default(cuid())
+  customerId            String
+  addressId             String?
+  status                OrderStatus   @default(PENDING)
+  subtotalEgp           Float
+  shippingEgp           Float         @default(0)
+  discountEgp           Float         @default(0)
+  totalEgp              Float
+  paymentMethod         String?
+  paymentStatus         PaymentStatus @default(PENDING)
+  stripePaymentIntentId String?       @unique
+  refundReferenceId     String?       @unique
+  trackingNumber        String?
+  notes                 String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
   customer Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
   address  Address?  @relation(fields: [addressId], references: [id], onDelete: SetNull)
@@ -315,7 +397,7 @@ model BusinessInquiry {
   email         String
   phone         String?
   website       String?
-  monthlyOrders String?       // "Under 100" | "100–1,000" | "1,000+"
+  monthlyOrders String? // "Under 100" | "100–1,000" | "1,000+"
   message       String?
   status        InquiryStatus @default(NEW)
   createdAt     DateTime      @default(now())
@@ -327,7 +409,7 @@ model MeasurementSession {
   id                 String   @id @default(cuid())
   retailerId         String
   customerId         String?
-  shopperRef         String?  // anonymous visitor token (MVP Tier 2) — see docs/enterprise-roadmap.md
+  shopperRef         String? // anonymous visitor token (MVP Tier 2) — see docs/enterprise-roadmap.md
   productId          String
   heightCm           Float
   weightKg           Float

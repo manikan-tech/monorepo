@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AuthInput from "../components/AuthInput";
@@ -26,6 +26,18 @@ const LockIcon = (
 /* ── Page Component ─────────────────────────────────────── */
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageFallback />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginPageFallback() {
+  return <div className="min-h-[420px]" aria-busy="true" />;
+}
+
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");

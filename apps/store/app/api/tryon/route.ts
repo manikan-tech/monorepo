@@ -142,6 +142,16 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 4. Proxy to the Body Service ──
+    // Resolve the product photo to an ABSOLUTE URL so the Body Service (which has
+    // no catalog/DB access) can fetch it for garment texturing. Demo t-shirts use
+    // a relative path served from this app's /public; the rest of the catalog uses
+    // absolute Supabase Storage URLs — normalize both to absolute here.
+    const productImageUrl = product.imageUrl
+        ? product.imageUrl.startsWith("http")
+            ? product.imageUrl
+            : new URL(product.imageUrl, request.nextUrl.origin).toString()
+        : null;
+
     let glb: ArrayBuffer;
     try {
         const upstream = await fetch(`${BODY_SERVICE_URL}/generate-dressed-avatar`, {
@@ -159,6 +169,8 @@ export async function POST(request: NextRequest) {
                 garment_length_cm: variant.garmentLengthCm,
                 garment_sleeve_cm: variant.garmentSleeveCm,
                 garment_shoulder_cm: variant.garmentShoulderCm,
+                product_id: product.id,
+                product_image_url: productImageUrl,
             }),
         });
 

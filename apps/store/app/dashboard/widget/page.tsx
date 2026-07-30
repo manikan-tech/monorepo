@@ -14,8 +14,12 @@ export default async function WidgetPage() {
 
   const retailer = await prisma.retailer.findUnique({
     where: { id: user.sub },
-    select: { widgetSettings: true },
+    select: { widgetSettings: true, isActivated: true },
   });
+
+  if (!retailer?.isActivated) {
+    redirect("/dashboard");
+  }
 
   return (
     <div className="space-y-6">

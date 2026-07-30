@@ -65,6 +65,25 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // route protection for admin
+  const isAdminRoute = request.nextUrl.pathname.startsWith("/admin");
+  const isAdminLogin = request.nextUrl.pathname === "/admin/login";
+
+  if (isAdminRoute && !isAdminLogin) {
+    if (!user || role !== "admin") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/login";
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // Prevent Admins from accessing Retailer dashboard or Customer account
+  if (user && role === "admin" && (isDashboard || isAccount || request.nextUrl.pathname === "/login")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin";
+    return NextResponse.redirect(url);
+  }
+
   // Prevent Customers from accessing Retailer dashboard
   if (user && isDashboard && role !== "retailer") {
     const url = request.nextUrl.clone();

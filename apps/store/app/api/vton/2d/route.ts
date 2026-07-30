@@ -1,219 +1,145 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { getCustomerFromCookies } from "../../../lib/auth";
+import { prisma } from "../../../lib/prisma";
+import { authorizeServiceRequest } from "../../../lib/service-auth";
 
 const VTON_SERVICE_URL = process.env.VTON_SERVICE_URL || "http://localhost:8003";
 const MAX_HUMAN_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const REQUEST_TIMEOUT_MS = 90_000;
+const ALLOWED_IMAGE_HOSTS = new Set(
+    (process.env.VTON_ALLOWED_IMAGE_HOSTS || "")
+        .split(",")
+        .map((host) => host.trim().toLowerCase())
+        .filter(Boolean)
+);
 
 const CATEGORY_ALIASES: Record<string, string> = {
-    top: "shirt",
-    tops: "shirt",
-    tee: "shirt",
-    tees: "shirt",
-    tshirt: "shirt",
-    "t-shirt": "shirt",
-    tshirts: "shirt",
-    upper: "shirt",
-    upper_body: "shirt",
-    upperbody: "shirt",
-    lower: "pants",
-    lower_body: "pants",
-    lowerbody: "pants",
-    trouser: "pants",
-    trousers: "pants",
-    jean: "pants",
-    jeans: "pants",
-    shorts: "pants",
-    dresses: "dress",
-    overall: "dress",
+    top: "shirt", tops: "shirt", tee: "shirt", tees: "shirt", tshirt: "shirt",
+    "t-shirt": "shirt", tshirts: "shirt", upper: "shirt", upper_body: "shirt",
+    upperbody: "shirt", lower: "pants", lower_body: "pants", lowerbody: "pants",
+    trouser: "pants", trousers: "pants", jean: "pants", jeans: "pants", shorts: "pants",
+    dresses: "dress", overall: "dress",
 };
-
 const ALLOWED_CATEGORIES = new Set(["blouse", "shirt", "jacket", "pants", "skirt", "dress"]);
 
-function normalizeCategory(value: FormDataEntryValue | null): string | null {
-    if (typeof value !== "string") return null;
-
+function normalizeCategory(value: string): string | null {
     const normalized = value.trim().toLowerCase().replace(/\s+/g, "_");
     if (!normalized) return null;
-
     return CATEGORY_ALIASES[normalized] || normalized;
 }
 
-function resolveGarmentImageUrl(value: FormDataEntryValue | null, origin: string): string | null {
-    if (typeof value !== "string") return null;
-
-    const raw = value.trim();
-    if (!raw) return null;
-
+function resolveProductImageUrl(value: string): string | null {
     try {
-        const resolved = new URL(raw, origin);
-        if (resolved.protocol !== "http:" && resolved.protocol !== "https:") {
+        const url = new URL(value);
+        // The VTON service fetches this URL itself. Restricting it to known
+        // asset hosts prevents a retailer-controlled catalog field from being
+        // used as an SSRF primitive against the service's private network.
+        if (url.protocol !== "https:" || !ALLOWED_IMAGE_HOSTS.has(url.hostname.toLowerCase())) {
             return null;
         }
-
-        return resolved.toString();
+        return url.toString();
     } catch {
         return null;
     }
 }
 
-function jsonError(
-    requestId: string,
-    status: number,
-    code: string,
-    error: string,
-    details?: Record<string, unknown>
-) {
-    return NextResponse.json(
-        {
-            error,
-            code,
-            requestId,
-            ...(details || {}),
-        },
-        { status }
-    );
+function jsonError(requestId: string, status: number, code: string, error: string) {
+    return NextResponse.json({ error, code, requestId }, { status });
 }
 
 function extractUpstreamError(payload: unknown): { error: string; code?: string } {
-    if (!payload || typeof payload !== "object") {
-        return { error: "Virtual try-on service error" };
-    }
-
+    if (!payload || typeof payload !== "object") return { error: "Virtual try-on service error" };
     const data = payload as Record<string, unknown>;
     const detail = data.detail;
-
     if (detail && typeof detail === "object") {
-        const detailObj = detail as Record<string, unknown>;
-        const error = typeof detailObj.error === "string"
-            ? detailObj.error
-            : typeof detailObj.detail === "string"
-                ? detailObj.detail
-                : "Virtual try-on service error";
-        const code = typeof detailObj.code === "string" ? detailObj.code : undefined;
-        return { error, code };
-    }
-
-    if (typeof detail === "string") {
-        return { error: detail };
-    }
-
-    if (typeof data.error === "string") {
+        const value = detail as Record<string, unknown>;
         return {
-            error: data.error,
-            code: typeof data.code === "string" ? data.code : undefined,
+            error: typeof value.error === "string" ? value.error : "Virtual try-on service error",
+            code: typeof value.code === "string" ? value.code : undefined,
         };
     }
-
-    return { error: "Virtual try-on service error" };
+    return {
+        error: typeof detail === "string" ? detail : typeof data.error === "string" ? data.error : "Virtual try-on service error",
+        code: typeof data.code === "string" ? data.code : undefined,
+    };
 }
 
+// Internal service endpoint. It is intentionally not browser/session callable.
+// /api/vton/2d/proxy is the sole storefront entrypoint.
 export async function POST(request: NextRequest) {
     const requestId = request.headers.get("x-request-id") || randomUUID();
-    const customer = await getCustomerFromCookies();
-    if (!customer) {
-        return jsonError(requestId, 401, "UNAUTHORIZED", "Unauthorized");
-    }
+    const auth = await authorizeServiceRequest(request, "VTON_2D");
+    if (!auth.ok) return auth.response;
 
     try {
         const formData = await request.formData();
-
         const humanImage = formData.get("human_image");
+        const productId = formData.get("product_id");
         if (!(humanImage instanceof File)) {
             return jsonError(requestId, 400, "MISSING_HUMAN_IMAGE", "human_image is required.");
         }
-
-        if (!humanImage.type.startsWith("image/")) {
-            return jsonError(requestId, 400, "INVALID_HUMAN_IMAGE_TYPE", "human_image must be an image file.");
+        if (!humanImage.type.startsWith("image/") || humanImage.size <= 0) {
+            return jsonError(requestId, 400, "INVALID_HUMAN_IMAGE", "human_image must be a non-empty image file.");
         }
-
-        if (humanImage.size <= 0) {
-            return jsonError(requestId, 400, "EMPTY_HUMAN_IMAGE", "human_image cannot be empty.");
-        }
-
         if (humanImage.size > MAX_HUMAN_IMAGE_SIZE_BYTES) {
-            return jsonError(
-                requestId,
-                400,
-                "HUMAN_IMAGE_TOO_LARGE",
-                "human_image must be 5MB or smaller."
-            );
+            return jsonError(requestId, 400, "HUMAN_IMAGE_TOO_LARGE", "human_image must be 5MB or smaller.");
+        }
+        if (typeof productId !== "string" || !productId.trim()) {
+            return jsonError(requestId, 400, "MISSING_PRODUCT_ID", "product_id is required.");
         }
 
-        const garmentImageUrl = resolveGarmentImageUrl(
-            formData.get("garment_image_url"),
-            request.nextUrl.origin
-        );
+        // Product data is the source of truth. This prevents callers from
+        // spending a retailer's AI quota on arbitrary image URLs/categories.
+        const product = await prisma.product.findFirst({
+            where: { id: productId, isActive: true },
+            select: { imageUrl: true, category: true },
+        });
+        if (!product) {
+            return jsonError(requestId, 404, "PRODUCT_NOT_FOUND", "Product not found.");
+        }
+        const garmentImageUrl = resolveProductImageUrl(product.imageUrl);
         if (!garmentImageUrl) {
-            return jsonError(
-                requestId,
-                400,
-                "INVALID_GARMENT_IMAGE_URL",
-                "garment_image_url must be a valid http(s) image URL."
-            );
+            return jsonError(requestId, 422, "INVALID_PRODUCT_IMAGE", "Product image is not permitted for virtual try-on.");
         }
-
-        const category = normalizeCategory(formData.get("category"));
+        const category = normalizeCategory(product.category);
         if (!category || !ALLOWED_CATEGORIES.has(category)) {
-            return jsonError(
-                requestId,
-                422,
-                "UNSUPPORTED_CATEGORY",
-                "category must be one of: blouse, shirt, jacket, pants, skirt, dress."
-            );
+            return jsonError(requestId, 422, "UNSUPPORTED_CATEGORY", "Product category is not supported for virtual try-on.");
         }
 
-        const proxyFormData = new FormData();
-        proxyFormData.append("human_image", humanImage);
-        proxyFormData.append("garment_image_url", garmentImageUrl);
-        proxyFormData.append("category", category);
-
-        const upstream = await fetch(`${VTON_SERVICE_URL}/api/vton/2d`, {
-            method: "POST",
-            body: proxyFormData,
-            headers: {
-                "X-Request-Id": requestId,
-            },
-        });
-
-        const contentType = upstream.headers.get("content-type") || "application/octet-stream";
-        const headers = new Headers({
-            "Content-Type": contentType,
-            "Cache-Control": "no-store, max-age=0",
-        });
+        const upstreamFormData = new FormData();
+        upstreamFormData.append("human_image", humanImage);
+        upstreamFormData.append("garment_image_url", garmentImageUrl);
+        upstreamFormData.append("category", category);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        let upstream: Response;
+        try {
+            upstream = await fetch(`${VTON_SERVICE_URL}/api/vton/2d`, {
+                method: "POST",
+                body: upstreamFormData,
+                headers: { "X-Request-Id": requestId },
+                signal: controller.signal,
+                cache: "no-store",
+            });
+        } finally {
+            clearTimeout(timeout);
+        }
 
         if (!upstream.ok) {
-            const responseContentType = upstream.headers.get("content-type") || "";
-            let errorMessage = "Virtual try-on service error";
-            let errorCode = "VTON_SERVICE_ERROR";
-
-            if (responseContentType.includes("application/json")) {
-                const detail = await upstream.json().catch(() => ({}));
-                const upstreamError = extractUpstreamError(detail);
-                errorMessage = upstreamError.error || errorMessage;
-                errorCode = upstreamError.code || errorCode;
-            } else {
-                const text = await upstream.text().catch(() => "");
-                if (text.trim()) {
-                    errorMessage = text.slice(0, 500);
-                }
-            }
-
-            return jsonError(requestId, upstream.status, errorCode, errorMessage);
+            const payload = await upstream.json().catch(() => null);
+            const error = extractUpstreamError(payload);
+            return jsonError(requestId, upstream.status, error.code || "VTON_SERVICE_ERROR", error.error);
         }
-
-        const body = await upstream.arrayBuffer();
-        return new NextResponse(body, {
+        return new NextResponse(upstream.body, {
             status: 200,
-            headers,
+            headers: {
+                "Content-Type": upstream.headers.get("content-type") || "application/octet-stream",
+                "Cache-Control": "no-store, max-age=0",
+                "X-Content-Type-Options": "nosniff",
+            },
         });
     } catch (error) {
-        console.error("VTON proxy error [%s]:", requestId, error);
-        return jsonError(
-            requestId,
-            502,
-            "VTON_SERVICE_UNREACHABLE",
-            "Virtual try-on service unreachable"
-        );
+        console.error("VTON service proxy error [%s]:", requestId, error);
+        return jsonError(requestId, 502, "VTON_SERVICE_UNREACHABLE", "Virtual try-on service unreachable");
     }
 }

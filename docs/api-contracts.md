@@ -144,7 +144,13 @@ Runs the differentiable SMPL optimiser and returns a bare A-pose avatar mesh.
 Binary `.glb` (`Content-Type: model/gltf-binary`).
 
 ### **POST** `/generate-dressed-avatar`
-Same optimiser plus a vertex-coloured garment. Adds `tshirt_color_hex`, `garment_chest_cm`, `garment_length_cm`, `garment_sleeve_cm`, `garment_shoulder_cm` to the request body. Returns a binary `.glb`.
+Same optimiser plus a **real fitted garment mesh** (Pipeline 1) with a **physics-baked drape** for male bodies (Pipeline 2, falls back to the kinematic fit otherwise). Adds `tshirt_color_hex`, `garment_chest_cm`, `garment_length_cm`, `garment_sleeve_cm`, `garment_shoulder_cm` to the request body. Returns a 2-node (`body` + `garment`) binary `.glb`.
+
+Optional texturing fields:
+* `product_image_url` — absolute URL of the product's flat-lay photo. When present and loadable, the garment is textured with it (segmented, then recoloured to `tshirt_color_hex` with the photo's fold/weave shading preserved); on any failure it falls back cleanly to a flat `tshirt_color_hex` fill. The Store's `/api/tryon` proxy resolves the product's `imageUrl` (relative → absolute) and passes it here.
+* `product_id` — catalog id, diagnostics/cache label only.
+
+Engine toggles (env, Body Service): `MANIKAN_DRESSED_ENGINE=v1` reverts to the legacy vertex-paint garment; `MANIKAN_PHYSICS_DRAPE=0` disables the physics drape (kinematic fit only).
 
 > The widget does not call these directly — the Store proxy (`/api/tryon`, `/api/avatar`) does.
 
