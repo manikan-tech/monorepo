@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { updateRetailerProfile } from "../../actions/retailer";
 
-export default function SettingsClient({ retailer }: { retailer: any }) {
+export default function SettingsClient({ retailer, planName }: { retailer: any; planName: string }) {
   const [storeName, setStoreName] = useState(retailer.storeName);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState({ text: "", type: "" });
@@ -95,7 +95,7 @@ export default function SettingsClient({ retailer }: { retailer: any }) {
                   Plan
                 </label>
                 <div className="w-full px-4 py-2.5 rounded-xl border border-forest-100 bg-forest-50/50 text-forest-900/60 text-sm capitalize">
-                  {retailer.plan}
+                  {planName}
                 </div>
               </div>
               <div>

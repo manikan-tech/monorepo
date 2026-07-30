@@ -6,7 +6,7 @@ export async function POST() {
   try {
     const supabase = await createClient();
     await supabase.auth.signOut();
-    
+
     const cookieStore = await cookies();
     cookieStore.delete("manikan_role");
     cookieStore.delete("manikan_auth_token");

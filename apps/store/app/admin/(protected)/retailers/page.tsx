@@ -11,9 +11,14 @@ export default async function AdminRetailersPage() {
       id: true,
       storeName: true,
       email: true,
-      plan: true,
       isActivated: true,
       createdAt: true,
+      subscriptions: {
+        where: { status: "ACTIVE" },
+        include: { plan: true },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
       _count: {
         select: {
           products: true,

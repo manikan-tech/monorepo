@@ -3,13 +3,19 @@
 import { useState } from "react";
 import Link from "next/link";
 
+type SubscriptionWithPlan = {
+  id: string;
+  status: string;
+  plan: { name: string } | null;
+};
+
 type Retailer = {
   id: string;
   storeName: string;
   email: string;
-  plan: string;
   isActivated: boolean;
   createdAt: Date;
+  subscriptions: SubscriptionWithPlan[];
   _count: {
     products: number;
     sessions: number;
@@ -101,7 +107,7 @@ export default function RetailersTable({ initialRetailers }: { initialRetailers:
                 {/* Plan */}
                 <td className="px-6 py-4">
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-gold-50 text-gold-700 border-gold-200 capitalize">
-                    {retailer.plan}
+                    {retailer.subscriptions[0]?.plan?.name ?? "No Plan"}
                   </span>
                 </td>
 

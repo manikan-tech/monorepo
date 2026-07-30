@@ -264,22 +264,20 @@ export default async function DashboardPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
-                            order.status === "DELIVERED"
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${order.status === "DELIVERED"
                               ? "bg-green-50 text-green-700 border-green-200"
                               : order.status === "CANCELLED"
-                              ? "bg-red-50 text-red-700 border-red-200"
-                              : order.status === "SHIPPED"
-                              ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                              : "bg-yellow-50 text-yellow-700 border-yellow-200"
-                          }`}
+                                ? "bg-red-50 text-red-700 border-red-200"
+                                : order.status === "SHIPPED"
+                                  ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                  : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                            }`}
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full ${
-                            order.status === "DELIVERED" ? "bg-green-500" :
-                            order.status === "CANCELLED" ? "bg-red-500" :
-                            order.status === "SHIPPED" ? "bg-indigo-500" :
-                            "bg-yellow-500"
-                          }`} />
+                          <span className={`w-1.5 h-1.5 rounded-full ${order.status === "DELIVERED" ? "bg-green-500" :
+                              order.status === "CANCELLED" ? "bg-red-500" :
+                                order.status === "SHIPPED" ? "bg-indigo-500" :
+                                  "bg-yellow-500"
+                            }`} />
                           {order.status}
                         </span>
                       </td>

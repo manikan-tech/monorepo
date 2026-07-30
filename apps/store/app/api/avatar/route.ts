@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authorizeWidgetRequest } from "../../lib/widget-auth";
+import { authorizeWidgetRequest, consumeQuota } from "../../lib/widget-auth";
 
 // ─── POST /api/avatar ───
 // Thin proxy for the bare 3D body avatar (no garment). Enforces the
@@ -24,7 +24,7 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest) {
     // ── Security gate (key + fail-closed Origin + allowlist + rate limit) ──
-    const auth = await authorizeWidgetRequest(request, CORS_HEADERS);
+    const auth = await authorizeWidgetRequest(request, CORS_HEADERS, "BODY_MODELING");
     if (!auth.ok) {
         return auth.response;
     }
@@ -74,6 +74,12 @@ export async function POST(request: NextRequest) {
         }
 
         const glb = await upstream.arrayBuffer();
+
+        // ── Deduct Quota ──
+        if (auth.subscription) {
+            await consumeQuota(auth.subscription.id, "BODY_MODELING");
+        }
+
         return new NextResponse(glb, {
             status: 200,
             headers: { ...CORS_HEADERS, "Content-Type": "model/gltf-binary" },
