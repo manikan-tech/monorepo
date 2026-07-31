@@ -15,3 +15,12 @@ __pycache__/
 # ─── Local artifacts ────────────────────────────────────────────────────
 *.glb
 .env
+
+# ─── Drape-bake scratch (regeneratable from a real bake run) ────────────
+# Raw per-point simulation inputs/outputs and one-off backups: large binary
+# .npz files with no value once baked into models/garments/*/delta_library.npz.
+# Keep only the tool scripts and the final result manifests (small, referenced
+# from docs/known-issues.md as the evidence trail).
+tools/drape_bake/_pilot_inputs/
+tools/drape_bake/_pilot_outputs/
+tools/drape_bake/_prebake_backup/

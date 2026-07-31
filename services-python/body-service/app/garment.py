@@ -82,6 +82,53 @@ DROOP_FACTOR: float = 1.4           # extra downward sag applied to loosened fab
 # sleeves from ballooning when a loose size is chosen.
 TORSO_JOINT_IDS = [0, 3, 6, 9]
 
+# ── Pants (Phase 1) ──────────────────────────────────────────────────────
+# In-house SMPL-carved pants templates (one per gender, straight-leg cut), saved
+# as native .npz (verts + faces) by tools/drape_bake/extract_relaxed_pants.py.
+# Unlike the MGN tee .obj, these are authored clean, so no seam-weld is needed
+# at load time.
+PANTS_DIR = Path(__file__).resolve().parent.parent / "models" / "garments" / "pants"
+PANTS_TEMPLATE_NPZ = {"male": "pants_male.npz", "female": "pants_female.npz"}
+# Joints a waist/hip size change loosens: Pelvis + both hips (the seat/hip). Kept
+# off the knees/ankles so a looser size adds room in the seat and thigh without
+# ballooning the lower leg (the pants analogue of TORSO_JOINT_IDS for the tee).
+PANTS_HIP_JOINT_IDS = [0, 1, 2]
+# Fraction of the garment's height (measured down from the waist) that the
+# waist-driven looseness acts over — the seat + upper thigh, fading to zero by
+# the knee, so extra size shows as seat room rather than wide ankles.
+PANTS_SEAT_BAND: float = 0.45
+
+# ── Fit-strain overlay (Phase 1.5) ───────────────────────────────────────
+# A too-small size doesn't just render oddly -- it means the fabric would have
+# to stretch to actually contain the body. Rather than hide that (push-out
+# already does, for rendering), surface it: a per-vertex "how tight does this
+# feel" field, rendered as a translucent red overlay + a plain-English verdict.
+FIT_EASE_OK_M: float = 0.008        # >=8mm clearance from skin reads "comfortable"
+FIT_PEN_FULL_M: float = -0.012      # <=12mm penetration reads "fully strained" (red)
+FIT_STRAIN_GAMMA: float = 0.75      # lifts mid-strain values so zones read as zones, not just edges
+FIT_STRAIN_SMOOTH_ITERS: int = 3    # adjacency smoothing passes (speckle -> legible zones)
+# Calibrated empirically against real fits at a fixed body (waist 104cm): mean
+# seat-region strain measured 0.039/0.057/0.080/0.142/0.234 at size diffs of
+# 0/-8/-12/-18/-24cm respectively. 0.12 sits in the gap between "snug, a size
+# shoppers sometimes choose on purpose" (-12cm, 0.080) and "genuinely tight,
+# should size up" (-18cm, 0.142) -- re-calibrate if PANTS_SEAT_BAND or the
+# ease/penetration constants above change.
+FIT_VERDICT_THRESHOLD: float = 0.12
+FIT_OVERLAY_OFFSET_M: float = 0.0015  # nudges the overlay mesh off the garment surface (no z-fighting)
+FIT_OVERLAY_MAX_ALPHA: int = 190    # overlay opacity at strain=1 (0-255); strain=0 is fully transparent
+
+# Region labels for the verdict, keyed by SMPL dominant joint (same ids as
+# PANTS_JOINT_IDS). Only "seat" for now: with sizing currently waist-driven
+# only (apply_pants_looseness), the knee-dominant vertices (the anatomical
+# thigh/knee area) measure ~0 strain regardless of size -- PANTS_SEAT_BAND
+# fades the looseness expansion out well above the knee, and real strain from
+# a too-small waist genuinely concentrates at the pelvis/hips, not the thigh
+# flesh. A "thighs" label would never fire honestly until a hip/thigh-specific
+# size axis exists -- add it back then, not before.
+PANTS_REGION_LABELS = {
+    "seat": [0, 1, 2],      # Pelvis, L_Hip, R_Hip
+}
+
 # Hem coverage: how much to extend the hem downward (in metres) per metre of
 # extra belly protrusion vs. the reference body, so a much larger belly doesn't
 # make the hem visually ride up and stop covering the torso.
@@ -96,6 +143,12 @@ FRONT_SIGN: float = 1.0
 # erasing the garment's overall silhouette.
 SMOOTH_ITERATIONS: int = 3
 SMOOTH_LAMBDA: float = 0.4
+
+# Curvature clamp (pants Phase 2): caps how sharply the garment can follow
+# body-surface curvature above this deviation-from-neighbour-average, mimicking
+# real fabric's bending stiffness rather than a zero-thickness offset surface.
+CURVATURE_CLAMP_THRESHOLD_M: float = 0.0015
+CURVATURE_CLAMP_ITERS: int = 15
 
 # Seam welding at template load time. The raw MGN donor mesh's sleeves and
 # torso are separate mesh islands that only *touch* at the armhole (no shared
@@ -404,6 +457,41 @@ def load_garment_template(gender: str = "male") -> dict:
     return tmpl
 
 
+def load_pants_template(gender: str = "male") -> dict:
+    """
+    Load and cache the gender-specific pants template (vertices, faces, UV).
+
+    These are native .npz files carved from the SMPL body (see
+    tools/drape_bake/extract_relaxed_pants.py) — already welded and clean, so
+    unlike load_garment_template() there's no seam-weld pass. Cached under a
+    "pants_<gender>" key so it never collides with the tee templates.
+    """
+    key = f"pants_{gender}"
+    if key in _template_cache:
+        return _template_cache[key]
+
+    fname = PANTS_TEMPLATE_NPZ.get(gender, PANTS_TEMPLATE_NPZ["male"])
+    path = PANTS_DIR / fname
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Pants template not found at {path}. Run "
+            "tools/drape_bake/extract_relaxed_pants.py to generate it."
+        )
+
+    data = np.load(path)
+    vertices = data["verts"].astype(np.float64)
+    faces = data["faces"].astype(np.int64)
+    uv = _compute_planar_uv(vertices)
+
+    tmpl = {"vertices": vertices, "faces": faces, "uv": uv}
+    _template_cache[key] = tmpl
+    logger.info(
+        "Pants template loaded (%s): %s — %d verts, %d faces",
+        gender, fname, len(vertices), len(faces),
+    )
+    return tmpl
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  Reference body (gendered β=0, pose=0)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -600,6 +688,72 @@ def apply_size_looseness(
     return result
 
 
+def apply_pants_looseness(
+    garment_verts: np.ndarray,
+    binding: dict,
+    body_verts: np.ndarray,
+    body_faces: np.ndarray,
+    lbs_weights: np.ndarray,
+    garment_waist_cm: float,
+    body_waist_cm: float,
+) -> np.ndarray:
+    """
+    Differentiate pants sizes by expanding/contracting the fitted garment around
+    the seat/hip, proportional to how much bigger (or smaller) the chosen size's
+    waist circumference is than the body's own waist.
+
+    The pants analogue of apply_size_looseness: waist-driven (not chest),
+    weighted by the pelvis/hip joints (PANTS_HIP_JOINT_IDS, not the spine), and
+    concentrated in the seat + upper thigh (fading to the knee via PANTS_SEAT_BAND)
+    so extra size reads as seat room rather than wide ankles.
+
+        diff_cm = garment_waist_cm*2 (flat width -> circumference) - body_waist_cm
+
+    A positive diff loosens the seat; a negative diff tightens it (guarded by
+    TOO_SMALL_DIFF_CM). No hem-extension pass (that is a tee/belly concern).
+    """
+    diff_cm = (garment_waist_cm * 2.0) - body_waist_cm
+    if diff_cm < TOO_SMALL_DIFF_CM:
+        raise ValueError("TOO_SMALL")
+
+    body = trimesh.Trimesh(body_verts, body_faces, process=False)
+    tri_id, bary = binding["tri_id"], binding["bary"]
+
+    normals = _normalize(_interp(body.vertex_normals[body_faces[tri_id]], bary))
+    horizontal = normals.copy()
+    horizontal[:, 1] = 0.0
+    horizontal = _normalize(horizontal)
+
+    hip_weight_per_bodyvert = lbs_weights[:, PANTS_HIP_JOINT_IDS].sum(axis=1)  # (V,)
+    hip_attr = hip_weight_per_bodyvert[body_faces[tri_id]]                    # (N, 3)
+    hip_w = np.einsum("nj,nj->n", bary, hip_attr)                             # (N,)
+
+    # Vertical position within the garment: t=1 at the waist, t=0 at the hem.
+    ymin, ymax = garment_verts[:, 1].min(), garment_verts[:, 1].max()
+    span = max(ymax - ymin, 1e-6)
+    t = np.clip((garment_verts[:, 1] - ymin) / span, 0.0, 1.0)
+    # Seat band: full effect at the waist, fading to zero PANTS_SEAT_BAND below it
+    # (keeps the lower leg from ballooning when a size loosens).
+    seat_band = np.clip((t - (1.0 - PANTS_SEAT_BAND)) / PANTS_SEAT_BAND, 0.0, 1.0)
+
+    looseness_radius = (diff_cm / (2.0 * math.pi * 100.0)) * LOOSENESS_DAMPING
+    expansion = horizontal * looseness_radius * hip_w[:, None] * seat_band[:, None]
+
+    if looseness_radius > 0:
+        # Loosened seat fabric sags a little rather than only puffing outward.
+        droop = -looseness_radius * DROOP_FACTOR * hip_w * seat_band
+        expansion[:, 1] += droop
+
+    result = garment_verts + expansion
+    logger.info(
+        "Pants looseness: garment_waist=%.1fcm body_waist=%.1fcm diff=%.1fcm "
+        "radius=%.1fmm mean|expansion|=%.1fmm",
+        garment_waist_cm, body_waist_cm, diff_cm,
+        looseness_radius * 1000, np.linalg.norm(expansion, axis=1).mean() * 1000,
+    )
+    return result
+
+
 def smooth_garment(
     garment_verts: np.ndarray,
     garment_faces: np.ndarray,
@@ -630,6 +784,66 @@ def smooth_garment(
     smoothed = np.asarray(mesh.vertices, dtype=np.float64)
     smoothed[boundary_verts] = pinned_positions
     return smoothed
+
+
+def clamp_garment_curvature(
+    garment_verts: np.ndarray,
+    garment_faces: np.ndarray,
+    threshold_m: float = CURVATURE_CLAMP_THRESHOLD_M,
+    iterations: int = CURVATURE_CLAMP_ITERS,
+) -> np.ndarray:
+    """
+    Limit how sharply the garment surface can follow body curvature it
+    inherited from deform_garment()'s exact per-vertex surface tracking.
+
+    Real fabric has bending stiffness -- it doesn't perfectly conform to
+    every sub-centimetre body feature the way a zero-thickness offset
+    surface does (pants Phase 2 finding: even the bare, canonical
+    beta=0/pose=0 SMPL body carries an ~11-12mm local protrusion at the
+    crotch/pelvis, independent of pose or shape, that a tightly-bound
+    garment surface faithfully tracks at ~6mm). Rather than adjudicate
+    whether that's genuine anatomy or a scan-registration artifact --
+    body-scan literature documents the crotch/armpit as commonly
+    self-occluded, distortion-prone regions -- this clamps curvature above
+    `threshold_m` unconditionally, everywhere: the same behaviour real
+    cloth would show regardless of the answer.
+
+    Per vertex: measure deviation from the neighbour-average position (a
+    curvature proxy). Where it exceeds `threshold_m`, pull the vertex
+    toward that average just enough to cap the deviation at the
+    threshold -- not toward zero, so vertices already under threshold
+    (the garment's intended taper/silhouette/size-driven shape) are left
+    untouched. Boundary loops (waist, hems) are pinned each iteration,
+    matching smooth_garment()'s convention.
+    """
+    V = garment_verts.astype(np.float64).copy()
+    F = np.asarray(garment_faces, dtype=np.int64)
+
+    edges = np.sort(
+        np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]], axis=0), axis=1
+    )
+    uniq_edges, edge_counts = np.unique(edges, axis=0, return_counts=True)
+    boundary_verts = np.unique(uniq_edges[edge_counts == 1])
+    pinned_positions = V[boundary_verts].copy()
+
+    all_edges = np.concatenate([edges, edges[:, ::-1]], axis=0)
+    src, dst = all_edges[:, 0], all_edges[:, 1]
+    degree = np.zeros(len(V))
+    np.add.at(degree, src, 1.0)
+    degree[degree == 0] = 1.0
+
+    for _ in range(iterations):
+        neighbor_sum = np.zeros_like(V)
+        np.add.at(neighbor_sum, src, V[dst])
+        navg = neighbor_sum / degree[:, None]
+        dev = V - navg
+        dev_mag = np.linalg.norm(dev, axis=1)
+        excess = np.clip(dev_mag - threshold_m, 0.0, None)
+        pull = np.where(dev_mag > 1e-9, excess / np.maximum(dev_mag, 1e-9), 0.0)
+        V = V - dev * pull[:, None]
+        V[boundary_verts] = pinned_positions
+
+    return V
 
 
 def resample_boundary(
@@ -742,6 +956,139 @@ def resolve_interpenetration(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  Fit-strain diagnostics (Phase 1.5)
+# ═══════════════════════════════════════════════════════════════════════════
+def _smooth_vertex_scalar(
+    values: np.ndarray,
+    faces: np.ndarray,
+    iterations: int = FIT_STRAIN_SMOOTH_ITERS,
+) -> np.ndarray:
+    """
+    Adjacency-average a per-vertex SCALAR field (not positions) over the mesh,
+    `iterations` passes. Vectorised via the same np.add.at accumulation pattern
+    used elsewhere in this file for vertex normals. Spreads a raw per-vertex
+    signal (isolated hits, one vertex at a time) into legible zones instead of
+    single-pixel speckle.
+    """
+    edges = np.concatenate(
+        [faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]], axis=0
+    )
+    edges = np.concatenate([edges, edges[:, ::-1]], axis=0)  # undirected
+    src, dst = edges[:, 0], edges[:, 1]
+
+    degree = np.zeros(len(values), dtype=np.float64)
+    np.add.at(degree, src, 1.0)
+    degree[degree == 0] = 1.0
+
+    result = values.astype(np.float64).copy()
+    for _ in range(iterations):
+        neighbor_sum = np.zeros_like(result)
+        np.add.at(neighbor_sum, src, result[dst])
+        result = 0.5 * result + 0.5 * (neighbor_sum / degree)
+    return result
+
+
+def compute_fit_strain(
+    garment_verts: np.ndarray,
+    garment_faces: np.ndarray,
+    body_verts: np.ndarray,
+    body_faces: np.ndarray,
+    ease_ok_m: float = FIT_EASE_OK_M,
+    pen_full_m: float = FIT_PEN_FULL_M,
+) -> np.ndarray:
+    """
+    Per-garment-vertex "how tight does this feel" field, in [0, 1]:
+        0 = comfortable ease (>= ease_ok_m clearance from the skin)
+        1 = fully strained  (>= |pen_full_m| penetration -- the fabric would
+            have to stretch this far to actually contain the body there)
+
+    Must be computed on the garment BEFORE resolve_interpenetration -- push-out
+    is a rendering fix (it hides interpenetration from the final mesh), and
+    would erase exactly the signal this is meant to surface. Smoothed over
+    mesh adjacency (isolated vertex hits -> legible zones) and gamma-lifted so
+    mid-strain areas are visible, not just the single worst point.
+    """
+    body = trimesh.Trimesh(body_verts, body_faces, process=False)
+    closest, _dist, tri_id = trimesh.proximity.closest_point(body, garment_verts)
+    signed = np.einsum(
+        "nk,nk->n", garment_verts - closest, body.face_normals[tri_id]
+    )  # positive = outside the body, negative = inside
+    strain = np.clip((ease_ok_m - signed) / (ease_ok_m - pen_full_m), 0.0, 1.0)
+    strain = _smooth_vertex_scalar(strain, garment_faces)
+    return strain ** FIT_STRAIN_GAMMA
+
+
+def describe_fit_strain(
+    strain: np.ndarray,
+    binding: dict,
+    lbs_weights: np.ndarray,
+    body_faces: np.ndarray,
+    region_labels: Dict[str, list] = PANTS_REGION_LABELS,
+    threshold: float = FIT_VERDICT_THRESHOLD,
+) -> Optional[str]:
+    """
+    Best-effort plain-English verdict for where a size runs tight, e.g.
+    "Too tight at the seat and thighs — consider sizing up". Derived from
+    which body region (by dominant SMPL joint, the same technique
+    apply_pants_looseness already uses for weighting) carries the highest mean
+    strain. Returns None when nothing crosses `threshold` -- a comfortable fit
+    gets no verdict, not a false "fits great" claim this pipeline can't back up.
+    """
+    tri_id, bary = binding["tri_id"], binding["bary"]
+    dominant_joint = np.argmax(lbs_weights, axis=1)          # per BODY vertex
+    tri_joints = dominant_joint[body_faces[tri_id]]          # (N, 3) per garment vert
+    nearest_corner = np.argmax(bary, axis=1)                 # closest of the 3 tri corners
+    garment_joint = tri_joints[np.arange(len(nearest_corner)), nearest_corner]
+
+    hits = []
+    for label, joint_ids in region_labels.items():
+        mask = np.isin(garment_joint, joint_ids)
+        if mask.sum() == 0:
+            continue
+        mean_strain = float(strain[mask].mean())
+        if mean_strain >= threshold:
+            hits.append((mean_strain, label))
+
+    if not hits:
+        return None
+    hits.sort(reverse=True)
+    labels = [label for _, label in hits[:2]]
+    return f"Too tight at the {' and '.join(labels)} — consider sizing up"
+
+
+def build_fit_strain_overlay(
+    garment_verts: np.ndarray,
+    garment_faces: np.ndarray,
+    strain: np.ndarray,
+    scale: float,
+    offset_m: float = FIT_OVERLAY_OFFSET_M,
+    max_alpha: int = FIT_OVERLAY_MAX_ALPHA,
+) -> trimesh.Trimesh:
+    """
+    A translucent RED overlay mesh, same topology as the garment, nudged
+    outward along its own vertex normals so it doesn't z-fight the garment
+    surface underneath. Per-vertex RGBA: fully transparent where strain=0,
+    up to `max_alpha` red where strain=1.
+
+    Meant as a 3RD glTF node (alongside "body" and "garment") that a client can
+    show/hide independently -- it sits visually on top of the real garment
+    texture without ever replacing it, so "show fit map" is a pure toggle.
+    """
+    base = trimesh.Trimesh(garment_verts, garment_faces, process=False)
+    overlay_verts = (garment_verts + base.vertex_normals * offset_m) * scale
+
+    colors = np.zeros((len(garment_verts), 4), dtype=np.uint8)
+    colors[:, 0] = 224  # red
+    colors[:, 1] = 40
+    colors[:, 2] = 40
+    colors[:, 3] = np.clip(strain * max_alpha, 0, 255).astype(np.uint8)
+
+    return trimesh.Trimesh(
+        overlay_verts, garment_faces, vertex_colors=colors, process=False
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  Assembly / export
 # ═══════════════════════════════════════════════════════════════════════════
 def _hex_to_rgb(color_hex: str) -> Tuple[int, int, int]:
@@ -758,6 +1105,7 @@ def build_dressed_glb(
     target_height_m: float,
     garment_uv: Optional[np.ndarray] = None,
     texture_image: Optional[Image.Image] = None,
+    fit_strain: Optional[np.ndarray] = None,
 ) -> bytes:
     """
     Assemble a 2-node GLB (node "body" + node "garment"), and uniformly scale
@@ -767,6 +1115,13 @@ def build_dressed_glb(
     with it (Phase 4: product photo). Otherwise it falls back to the flat
     `color_hex` vertex-colour fill (Phase 1-3 behaviour), so texture failures
     never break avatar generation.
+
+    If `fit_strain` (Phase 1.5, per-garment-vertex, from compute_fit_strain) is
+    given, a 3RD node "fit_strain" is added: a translucent red overlay sharing
+    the garment's topology, nudged off its surface. It sits on top of the real
+    garment (texture or flat colour) without replacing it, so a client can show
+    or hide it independently -- a pure "show fit map" toggle, never a rendering
+    fork.
     """
     h = float(body_verts[:, 1].max() - body_verts[:, 1].min())
     scale = target_height_m / h if h > 0 else 1.0
@@ -794,11 +1149,16 @@ def build_dressed_glb(
     scene.add_geometry(body_mesh, node_name="body", geom_name="body")
     scene.add_geometry(garment_mesh, node_name="garment", geom_name="garment")
 
+    if fit_strain is not None:
+        overlay_mesh = build_fit_strain_overlay(garment_verts, garment_faces, fit_strain, scale)
+        scene.add_geometry(overlay_mesh, node_name="fit_strain", geom_name="fit_strain")
+
     glb: bytes = scene.export(file_type="glb")
     logger.info(
-        "Dressed 2-node GLB built: body=%d verts, garment=%d verts, scale=%.4f, "
-        "textured=%s, %d bytes",
-        len(bv), len(gv), scale, texture_image is not None, len(glb),
+        "Dressed GLB built: body=%d verts, garment=%d verts, scale=%.4f, "
+        "textured=%s, fit_strain=%s, %d bytes",
+        len(bv), len(gv), scale, texture_image is not None,
+        fit_strain is not None, len(glb),
     )
     return glb
 
@@ -856,3 +1216,112 @@ def dress(
         garment_uv=template["uv"], texture_image=texture_image,
     )
     return {"glb": glb, "n_pushed": n_pushed, "garment_verts": len(garment)}
+
+
+def dress_pants(
+    model,
+    gender: str,
+    user_body_verts: np.ndarray,
+    body_faces: np.ndarray,
+    color_hex: str,
+    target_height_m: float,
+    garment_waist_cm: Optional[float] = None,
+    body_waist_cm: Optional[float] = None,
+    texture_image: Optional[Image.Image] = None,
+    include_fit_strain: bool = False,
+) -> dict:
+    """
+    Full Tier-1 PANTS fit for one already-solved body (native scale, pose=0).
+
+    The pants analogue of dress(): binds the SMPL-carved pants template to the
+    gendered β=0 reference body, re-projects it onto the user's body, applies
+    waist-driven size looseness (if a size is chosen), smooths, pushes off the
+    skin, and exports the same 2-node (body + garment) GLB.
+
+    If both `garment_waist_cm` (the size's flat waist width) and `body_waist_cm`
+    (the user's own waist) are given, the seat is expanded/contracted to reflect
+    the size choice; raises ValueError("TOO_SMALL") if drastically small.
+
+    If `include_fit_strain` (Phase 1.5), a 3rd "fit_strain" GLB node is added:
+    a translucent red overlay showing exactly where a too-small size can't
+    contain the body, plus a plain-English verdict in the returned dict.
+    Computed on the smoothed-but-not-yet-pushed-out garment, since push-out is
+    a rendering fix that would otherwise erase the very signal this surfaces.
+
+    Returns { "glb": bytes, "n_pushed": int, "garment_verts": int,
+              "fit_verdict": Optional[str], "strain_mean": float, "strain_max": float }.
+    """
+    template = load_pants_template(gender)
+    ref_body = get_reference_body(model, gender)
+
+    # Composite cache key so the pants binding never collides with the tee's.
+    binding = bind_garment(template["vertices"], ref_body, body_faces, f"pants_{gender}")
+    garment = deform_garment(binding, user_body_verts, body_faces)
+
+    lbs_weights = model.lbs_weights.detach().cpu().numpy() if include_fit_strain else None
+    if garment_waist_cm is not None and body_waist_cm is not None:
+        if lbs_weights is None:
+            lbs_weights = model.lbs_weights.detach().cpu().numpy()
+        garment = apply_pants_looseness(
+            garment, binding, user_body_verts, body_faces, lbs_weights,
+            garment_waist_cm, body_waist_cm,
+        )
+
+    garment = smooth_garment(garment, template["faces"])
+
+    fit_strain = fit_verdict = None
+    strain_mean = strain_max = 0.0
+    if include_fit_strain:
+        fit_strain = compute_fit_strain(
+            garment, template["faces"], user_body_verts, body_faces
+        )
+        strain_mean, strain_max = float(fit_strain.mean()), float(fit_strain.max())
+        fit_verdict = describe_fit_strain(fit_strain, binding, lbs_weights, body_faces)
+
+    garment, n_pushed = resolve_interpenetration(garment, user_body_verts, body_faces)
+    # Push-out snaps each clipping vertex independently to its own nearest
+    # body point with no neighbour averaging -- harmless on the tee's shallow
+    # torso curvature, but stair-steps visibly in the pants crotch's tighter
+    # concavity (Phase 2 finding: fine "wrinkling" that persisted across every
+    # cloth-stiffness setting turned out to be this, baked in before the sim
+    # ever runs). One more pinned-boundary smooth removes the terracing; the
+    # light re-push-out catches the handful of vertices smoothing pulls back
+    # inside (verified: ~2/4274 candidates, all within 1.5cm of the surface).
+    garment = smooth_garment(garment, template["faces"])
+    # Final push-out margin raised from the 4mm default to 12mm -- ABOVE the
+    # physics bake's own collision distance_min (10mm, bake_one.py). At 4mm
+    # the kinematic pre-fit only guaranteed less clearance than the cloth
+    # solver's own comfort zone wants; at snug sizes this left a large
+    # fraction of vertices sitting at-or-inside the solver's margin from
+    # frame 1 (Phase 2 snug-fit non-convergence investigation: confirmed 34%
+    # of vertices on the worst tested point, down to ~4% after this change).
+    garment, _ = resolve_interpenetration(garment, user_body_verts, body_faces, margin=0.012)
+
+    # Curvature clamp runs LAST, after push-out, not right after
+    # deform_garment(): applying it earlier gets partly undone by push-out's
+    # hard "stay outside the body" constraint wherever the body's own surface
+    # protrudes (confirmed: ~12% of nearby verts got pushed back out by up to
+    # 7mm when clamped beforehand). Run last, the garment is allowed to
+    # bridge/gap slightly over a sharp body contour instead of tracking it --
+    # the same thing real fabric with bending stiffness would do.
+    garment = clamp_garment_curvature(garment, template["faces"])
+    # clamp_garment_curvature() is body-unaware (pure neighbour-average
+    # smoothing) and can pull a few vertices back inside the margin the push-
+    # out just secured -- one more light push-out catches that.
+    garment, _ = resolve_interpenetration(garment, user_body_verts, body_faces, margin=0.012)
+
+    glb = build_dressed_glb(
+        user_body_verts, body_faces, garment, template["faces"],
+        color_hex, target_height_m,
+        garment_uv=template["uv"], texture_image=texture_image,
+        fit_strain=fit_strain,
+    )
+    logger.info(
+        "Dressed pants (%s): garment=%d verts, %d pushed off body, "
+        "fit_strain=%s verdict=%r",
+        gender, len(garment), n_pushed, include_fit_strain, fit_verdict,
+    )
+    return {
+        "glb": glb, "n_pushed": n_pushed, "garment_verts": len(garment),
+        "fit_verdict": fit_verdict, "strain_mean": strain_mean, "strain_max": strain_max,
+    }
