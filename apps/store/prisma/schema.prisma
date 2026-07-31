@@ -275,10 +275,16 @@ model ProductVariant {
   lengthCm          Float?
   inseamCm          Float?
   // ─── Flat garment measurements — used by the 3D virtual try-on engine ───
+  // Tee-category fields:
   garmentChestCm    Float?
   garmentLengthCm   Float?
   garmentSleeveCm   Float?
   garmentShoulderCm Float?
+  // Pants-category fields:
+  garmentWaistCm    Float?
+  garmentHipCm      Float?
+  garmentInseamCm   Float?
+  garmentRiseCm     Float?
 
   product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   cartItems  CartItem[]

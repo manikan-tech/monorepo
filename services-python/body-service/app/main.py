@@ -660,10 +660,24 @@ class DressedAvatarPayload(BaseModel):
         ..., description="Hex colour for the t-shirt, e.g. '#1a1a2e' — also the "
                           "authoritative base colour when texturing from a photo"
     )
-    garment_chest_cm: float = Field(...)
-    garment_length_cm: float = Field(...)
-    garment_sleeve_cm: float = Field(...)
-    garment_shoulder_cm: float = Field(...)
+    category: str = Field(
+        "tshirt", description="Garment category: 'tshirt' (default) or 'pants'. "
+                              "Defaults to tshirt so every existing caller is "
+                              "unaffected."
+    )
+    # Tee-category measurements. Optional so a pants request need not send them;
+    # the tshirt path still requires garment_chest_cm to size correctly.
+    garment_chest_cm: Optional[float] = Field(None)
+    garment_length_cm: Optional[float] = Field(None)
+    garment_sleeve_cm: Optional[float] = Field(None)
+    garment_shoulder_cm: Optional[float] = Field(None)
+    # Pants-category measurements (flat/half measurements, matching the store's
+    # ProductVariant columns). garment_waist_cm drives sizing; the rest are
+    # accepted for API completeness and not yet consumed.
+    garment_waist_cm: Optional[float] = Field(None)
+    garment_hip_cm: Optional[float] = Field(None)
+    garment_inseam_cm: Optional[float] = Field(None)
+    garment_rise_cm: Optional[float] = Field(None)
     product_id: Optional[str] = Field(
         None, description="Catalog product id (diagnostics / cache label only)"
     )
@@ -986,6 +1000,63 @@ def _dressed_glb_physics(
     return glb
 
 
+def _dressed_glb_physics_pants(
+    model,
+    betas: torch.Tensor,
+    height_cm: float,
+    waist_cm: float,
+    garment_waist_cm: Optional[float],
+    color_hex: str,
+    texture_image,
+):
+    """
+    Pipeline 2 runtime path for PANTS. Poses the body with hip abduction (the
+    feet-apart stance the pants grid was baked in -- NOT the tee's relaxed
+    shoulders), then adds the interpolated delta on top of a kinematic fit that
+    reproduces the bake's own pre-fit exactly.
+
+    Returns None when the drape is unavailable (flag off, missing library, or
+    body outside the grid) so the caller falls through to dress_pants().
+    """
+    draper = physics_drape.get_pants_draper(model, "male")
+    if draper is None:
+        return None
+
+    body_pose = torch.zeros(1, 69, dtype=torch.float32, device=DEVICE)
+    a = physics_drape.PANTS_POSE_HIP_ABDUCTION_RAD
+    body_pose[0, 0:3] = torch.tensor([0.0, 0.0, a], device=DEVICE)    # L_Hip
+    body_pose[0, 3:6] = torch.tensor([0.0, 0.0, -a], device=DEVICE)   # R_Hip
+    with torch.no_grad():
+        output = model(
+            betas=betas.to(DEVICE),
+            global_orient=torch.zeros(1, 3, dtype=torch.float32, device=DEVICE),
+            body_pose=body_pose,
+            return_verts=True,
+        )
+    body_verts = output.vertices.detach().cpu().numpy().squeeze().astype(np.float64)
+    faces = np.asarray(model.faces, dtype=np.int64)
+    lbs_weights = model.lbs_weights.detach().cpu().numpy()
+
+    # no size chosen -> assume a fitted size (flat waist ~= body waist / 2)
+    gwaist = garment_waist_cm if garment_waist_cm is not None else waist_cm / 2.0
+
+    result = draper.drape(
+        body_verts, faces, lbs_weights,
+        body_waist_cm=waist_cm, height_cm=height_cm, garment_waist_cm=gwaist,
+    )
+    if result is None:
+        return None            # outside the grid -> Tier 1
+    draped, garment_faces, garment_uv, info = result
+
+    glb = garment.build_dressed_glb(
+        body_verts, faces, draped, garment_faces,
+        color_hex, height_cm / 100.0,
+        garment_uv=garment_uv, texture_image=texture_image,
+    )
+    logger.info("Pants physics drape served: %s", info)
+    return glb
+
+
 def generate_dressed_avatar_mesh_v2(
     sex: str,
     height_cm: float,
@@ -1000,6 +1071,11 @@ def generate_dressed_avatar_mesh_v2(
     garment_shoulder_cm: Optional[float] = None,
     product_id: Optional[str] = None,
     product_image_url: Optional[str] = None,
+    category: str = "tshirt",
+    garment_waist_cm: Optional[float] = None,
+    garment_hip_cm: Optional[float] = None,
+    garment_inseam_cm: Optional[float] = None,
+    garment_rise_cm: Optional[float] = None,
 ) -> bytes:
     """
     Fit a real, independently-authored garment mesh (MGN t-shirt template) onto
@@ -1028,6 +1104,44 @@ def generate_dressed_avatar_mesh_v2(
         num_iters=40,
     )
 
+    # ── PANTS category ──────────────────────────────────────────────────────
+    # Physics drape first (male only, behind MANIKAN_PANTS_DRAPE); any decline
+    # or failure falls through to the Tier-1 kinematic dress_pants().
+    if category == "pants":
+        if sex == "male":
+            try:
+                glb = _dressed_glb_physics_pants(
+                    model, betas, height_cm, waist_cm,
+                    garment_waist_cm, tshirt_color_hex, texture_image,
+                )
+                if glb is not None:
+                    return glb
+                logger.info("Pants physics drape declined; using Tier-1 dress_pants()")
+            except Exception:
+                logger.exception("Pants physics drape failed; falling back to dress_pants()")
+
+        with torch.no_grad():
+            output = model(
+                betas=betas.to(DEVICE),
+                global_orient=torch.zeros(1, 3, dtype=torch.float32, device=DEVICE),
+                body_pose=torch.zeros(1, 69, dtype=torch.float32, device=DEVICE),
+                return_verts=True,
+            )
+        body_verts = output.vertices.detach().cpu().numpy().squeeze().astype(np.float64)
+        faces = np.asarray(model.faces, dtype=np.int64)
+        return garment.dress_pants(
+            model=model,
+            gender=sex,
+            user_body_verts=body_verts,
+            body_faces=faces,
+            color_hex=tshirt_color_hex,
+            target_height_m=height_cm / 100.0,
+            garment_waist_cm=garment_waist_cm,
+            body_waist_cm=waist_cm,
+            texture_image=texture_image,
+        )["glb"]
+
+    # ── TSHIRT category (default) ───────────────────────────────────────────
     # Pipeline 2: physics-baked drape (relaxed pose + delta library). Male-only
     # for now; any failure falls through to the kinematic fit below so avatar
     # generation is never blocked.
@@ -1110,6 +1224,15 @@ async def generate_dressed_avatar(payload: DressedAvatarPayload):
                 garment_shoulder_cm=payload.garment_shoulder_cm,
                 product_id=payload.product_id,
                 product_image_url=payload.product_image_url,
+                # category + pants measurements only exist on the v2 engine;
+                # v1 predates categories and would reject them.
+                **({
+                    "category": payload.category,
+                    "garment_waist_cm": payload.garment_waist_cm,
+                    "garment_hip_cm": payload.garment_hip_cm,
+                    "garment_inseam_cm": payload.garment_inseam_cm,
+                    "garment_rise_cm": payload.garment_rise_cm,
+                } if USE_GARMENT_V2 else {}),
             ),
         )
     except FileNotFoundError as exc:

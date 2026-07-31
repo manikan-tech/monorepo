@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../lib/prisma";
 import { getCustomerFromCookies } from "../../lib/auth";
 import { authorizeWidgetRequest } from "../../lib/widget-auth";
+import { isProductTryOnEnabled, garmentFieldsFor } from "../../lib/tryon-status";
 
 // ─── POST /api/tryon ───
 // Orchestrator proxy for the embeddable widget's 3D virtual try-on.
@@ -127,14 +128,18 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    // Garment data must be present for a 3D try-on (only try-on-enabled products qualify)
-    if (
-        product.tshirtColorHex === null ||
-        variant.garmentChestCm === null ||
-        variant.garmentLengthCm === null ||
-        variant.garmentSleeveCm === null ||
-        variant.garmentShoulderCm === null
-    ) {
+    // Garment data must be present for a 3D try-on (only try-on-enabled products
+    // qualify). Category-aware: a tee needs chest/length/sleeve/shoulder, pants
+    // need waist/hip/inseam/rise. Both the required-field list and this gate come
+    // from lib/tryon-status so they cannot drift from the widget's own
+    // isTryOnEnabled flag. Checked on THIS variant, not just the product.
+    const requiredFields = garmentFieldsFor(product.category);
+    const variantHasGarmentData =
+        requiredFields.length > 0 &&
+        requiredFields.every(
+            (f) => (variant as unknown as Record<string, number | null>)[f] !== null
+        );
+    if (!isProductTryOnEnabled(product) || !variantHasGarmentData) {
         return NextResponse.json(
             { error: "This product is not enabled for virtual try-on" },
             { status: 422, headers: CORS_HEADERS }
@@ -164,11 +169,20 @@ export async function POST(request: NextRequest) {
                 chest_cm,
                 waist_cm,
                 hips_cm,
-                tshirt_color_hex: product.tshirtColorHex,
+                // Wire key stays tshirt_color_hex — that's body-service's existing
+                // Pydantic contract, unrelated to this DB column's name.
+                tshirt_color_hex: product.garmentColorHex,
+                // Category tells body-service which garment pipeline to run.
+                // Defaults to tshirt there, so tee callers are unaffected.
+                category: product.category,
                 garment_chest_cm: variant.garmentChestCm,
                 garment_length_cm: variant.garmentLengthCm,
                 garment_sleeve_cm: variant.garmentSleeveCm,
                 garment_shoulder_cm: variant.garmentShoulderCm,
+                garment_waist_cm: variant.garmentWaistCm,
+                garment_hip_cm: variant.garmentHipCm,
+                garment_inseam_cm: variant.garmentInseamCm,
+                garment_rise_cm: variant.garmentRiseCm,
                 product_id: product.id,
                 product_image_url: productImageUrl,
             }),

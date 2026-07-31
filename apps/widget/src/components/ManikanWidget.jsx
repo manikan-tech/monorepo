@@ -38,21 +38,32 @@ export default function ManikanWidget({ product, onClose }) {
   const [waist, setWaist] = useState(savedProfile?.waist_cm || 82)
   const [hips, setHips] = useState(savedProfile?.hips_cm || 96)
 
-  // Recommend best size based on user's chest measurement
+  // Recommend the best size from the measurement that actually drives fit for
+  // this category: chest for tops, WAIST for pants (the bake grid is
+  // waist-keyed). Reading chest_width_cm on a pants variant yields undefined,
+  // so `undefined * 2 - chest` is NaN, every comparison is false, and the
+  // default 'M' was being returned for every body regardless of size.
+  const SIZE_DRIVER = {
+    pants: { key: 'waist_width_cm', body: 'waist' },
+    default: { key: 'chest_width_cm', body: 'chest' },
+  }
   const recommendedSize = useMemo(() => {
-    const userChestCirc = chest
-    let best = 'M'
+    const driver = SIZE_DRIVER[product.category] || SIZE_DRIVER.default
+    const userCirc = driver.body === 'waist' ? waist : chest
+    let best = null
     let bestDiff = Infinity
     for (const [sz, specs] of Object.entries(product.sizes)) {
-      const garmentCirc = specs.chest_width_cm * 2
-      const diff = Math.abs(garmentCirc - userChestCirc)
+      const flat = specs?.[driver.key]
+      if (typeof flat !== 'number') continue // measurement missing for this size
+      const diff = Math.abs(flat * 2 - userCirc)
       if (diff < bestDiff) {
         bestDiff = diff
         best = sz
       }
     }
-    return best
-  }, [chest, product.sizes])
+    return best ?? Object.keys(product.sizes)[0] ?? 'M'
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chest, waist, product.sizes, product.category])
 
   const [selectedSize, setSelectedSize] = useState(() => isReturningUser ? recommendedSize : 'M')
   const [tryOnUrl, setTryOnUrl] = useState(null)
@@ -62,6 +73,22 @@ export default function ManikanWidget({ product, onClose }) {
 
   const sizeKeys = Object.keys(product.sizes)
   const currentSpecs = product.sizes[selectedSize]
+  // Which four measurements to show depends on the category — a pants variant
+  // has no chest/sleeve/shoulder, and rendering those printed four blanks.
+  const specRows = (product.category === 'pants'
+    ? [
+        ['Waist cm', 'waist_width_cm'],
+        ['Hip cm', 'hip_width_cm'],
+        ['Inseam cm', 'inseam_cm'],
+        ['Rise cm', 'rise_cm'],
+      ]
+    : [
+        ['Chest cm', 'chest_width_cm'],
+        ['Length cm', 'body_length_cm'],
+        ['Sleeve cm', 'sleeve_length_cm'],
+        ['Shoulder cm', 'shoulder_width_cm'],
+      ]
+  ).map(([label, key]) => ({ label, value: currentSpecs?.[key] ?? '—' }))
 
   // Generate dressed avatar
   const generateTryOn = useCallback(async (size) => {
@@ -88,8 +115,19 @@ export default function ManikanWidget({ product, onClose }) {
       setTryOnUrl(url)
     } catch (err) {
       if (err.name !== 'AbortError') {
-        console.error('Try-On Error:', err)
-        setError('Failed to generate virtual try-on. Please try again.')
+        // TOO_SMALL is a real fit verdict, not a transient failure: the body
+        // service refuses a garment more than 25cm smaller than the body.
+        // "Please try again" is useless advice for it -- retrying can never
+        // succeed. Name the actual problem and point at a size that fits.
+        if (err.message === 'TOO_SMALL') {
+          const suggestion = recommendedSize && recommendedSize !== size
+            ? ` Try ${recommendedSize}.`
+            : ''
+          setError(`Size ${size} is too small for your measurements.${suggestion}`)
+        } else {
+          console.error('Try-On Error:', err)
+          setError('Failed to generate virtual try-on. Please try again.')
+        }
       }
     } finally {
       setIsGenerating(false)
@@ -337,20 +375,20 @@ export default function ManikanWidget({ product, onClose }) {
                     <h4 className="mw-tryon-label">Size {selectedSize} Measurements</h4>
                     <div className="mw-tryon-spec-grid">
                       <div className="mw-tryon-spec">
-                        <span className="mw-tryon-spec-val">{currentSpecs.chest_width_cm}</span>
-                        <span className="mw-tryon-spec-label">Chest cm</span>
+                        <span className="mw-tryon-spec-val">{specRows[0].value}</span>
+                        <span className="mw-tryon-spec-label">{specRows[0].label}</span>
                       </div>
                       <div className="mw-tryon-spec">
-                        <span className="mw-tryon-spec-val">{currentSpecs.body_length_cm}</span>
-                        <span className="mw-tryon-spec-label">Length cm</span>
+                        <span className="mw-tryon-spec-val">{specRows[1].value}</span>
+                        <span className="mw-tryon-spec-label">{specRows[1].label}</span>
                       </div>
                       <div className="mw-tryon-spec">
-                        <span className="mw-tryon-spec-val">{currentSpecs.sleeve_length_cm}</span>
-                        <span className="mw-tryon-spec-label">Sleeve cm</span>
+                        <span className="mw-tryon-spec-val">{specRows[2].value}</span>
+                        <span className="mw-tryon-spec-label">{specRows[2].label}</span>
                       </div>
                       <div className="mw-tryon-spec">
-                        <span className="mw-tryon-spec-val">{currentSpecs.shoulder_width_cm}</span>
-                        <span className="mw-tryon-spec-label">Shoulder cm</span>
+                        <span className="mw-tryon-spec-val">{specRows[3].value}</span>
+                        <span className="mw-tryon-spec-label">{specRows[3].label}</span>
                       </div>
                     </div>
                   </div>

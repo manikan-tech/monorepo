@@ -6,7 +6,7 @@ import { prisma } from "../../../../../lib/prisma";
 // ─── /api/retailer/products/[id]/tryon-config ───────────────────────────
 // Retailer-facing endpoint to make one of their products 3D-try-on-enabled by
 // supplying the data a normal catalog/CSV import doesn't carry: the garment
-// colour (Product.tshirtColorHex) + the flat garment measurements per size
+// colour (Product.garmentColorHex) + the flat garment measurements per size
 // (ProductVariant.garment*Cm).
 //
 // Auth: retailer SESSION COOKIE (dashboard) via getAuthFromCookies. STRICT
@@ -73,7 +73,7 @@ export async function PUT(
 
   const { id } = await params;
 
-  let body: { tshirtColorHex?: unknown; variants?: unknown };
+  let body: { garmentColorHex?: unknown; variants?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -81,13 +81,13 @@ export async function PUT(
   }
 
   // ── Validate colour ──
-  if (typeof body.tshirtColorHex !== "string" || !HEX_COLOR.test(body.tshirtColorHex)) {
+  if (typeof body.garmentColorHex !== "string" || !HEX_COLOR.test(body.garmentColorHex)) {
     return NextResponse.json(
-      { error: "tshirtColorHex is required and must be a hex colour (e.g. #1a1a2e)" },
+      { error: "garmentColorHex is required and must be a hex colour (e.g. #1a1a2e)" },
       { status: 400 }
     );
   }
-  const tshirtColorHex = body.tshirtColorHex;
+  const garmentColorHex = body.garmentColorHex;
 
   // ── Validate variants ──
   if (!Array.isArray(body.variants) || body.variants.length === 0) {
@@ -135,7 +135,7 @@ export async function PUT(
 
   const variantBySize = new Map(product.variants.map((v) => [v.sizeLabel, v]));
   const updates: Prisma.PrismaPromise<unknown>[] = [
-    prisma.product.update({ where: { id: product.id }, data: { tshirtColorHex } }),
+    prisma.product.update({ where: { id: product.id }, data: { garmentColorHex } }),
   ];
 
   for (const input of variantInputs) {
@@ -185,7 +185,7 @@ function configResponse(
   // Mirrors the try-on gate: a product is try-on-ready only with a colour AND
   // every variant carrying all four garment measurements.
   const isTryOnEnabled =
-    product.tshirtColorHex !== null &&
+    product.garmentColorHex !== null &&
     variants.length > 0 &&
     variants.every(
       (v) =>
@@ -197,7 +197,7 @@ function configResponse(
 
   return {
     productId: product.id,
-    tshirtColorHex: product.tshirtColorHex,
+    garmentColorHex: product.garmentColorHex,
     isTryOnEnabled,
     variants,
   };

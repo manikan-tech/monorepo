@@ -147,7 +147,7 @@ export async function seedDemoTshirts(
         await prisma.product.upsert({
             where: { id: t.id },
             update: {
-                tshirtColorHex: t.colorHex,
+                garmentColorHex: t.colorHex,
                 priceEgp: t.priceEgp,
                 imageUrl: t.imageUrl,
                 isActive: true,
@@ -166,7 +166,7 @@ export async function seedDemoTshirts(
                 priceEgp: t.priceEgp,
                 imageUrl: t.imageUrl,
                 images: [t.imageUrl],
-                tshirtColorHex: t.colorHex,
+                garmentColorHex: t.colorHex,
                 stock: Object.keys(t.sizes).length * 50,
                 isActive: true,
             },
