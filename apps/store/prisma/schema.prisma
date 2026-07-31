@@ -65,8 +65,9 @@ model Retailer {
   hashedPassword String?
   isActivated    Boolean  @default(false)
   apiKey         String   @unique @default(cuid())
-  widgetSettings Json?
-  createdAt      DateTime @default(now())
+  widgetSettings         Json?
+  recommendationSettings Json?
+  createdAt              DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   products         Product[]
