@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import ManikanWidget from '../components/ManikanWidget'
 import { fetchProduct } from '../lib/products'
 
@@ -12,14 +12,28 @@ import { fetchProduct } from '../lib/products'
    turn shows the 3D try-on flow or a "coming soon" state depending on the
    product's `isTryOnEnabled` flag.
    ───────────────────────────────────────────────────────────────────────── */
-export default function EmbedWidget({ productId, retailerKey }) {
-  const [open, setOpen] = useState(false)
-  const [product, setProduct] = useState(null)
-  const [status, setStatus] = useState('idle') // idle | loading | ready | error
+export default function EmbedWidget({
+  productId,
+  retailerKey,
+  // Pre-resolved product, already in the /api/widget/products/[id] shape.
+  // When supplied the network fetch is skipped entirely. This is what a
+  // FIRST-PARTY host (our own storefront) passes: the page has already loaded
+  // the product, and a same-origin GET carries no Origin header, which
+  // widget-auth rejects fail-closed by design. Injecting sidesteps that
+  // without weakening the cross-origin security model retailers rely on.
+  product: injectedProduct = null,
+  // Open immediately and render no floating trigger. For hosts that supply
+  // their own button (see the store's Manikan3DTryOn launcher).
+  autoOpen = false,
+  // Notifies the host when the user closes the widget, so it can unmount.
+  onClose,
+}) {
+  const [open, setOpen] = useState(autoOpen)
+  const [product, setProduct] = useState(injectedProduct)
+  const [status, setStatus] = useState(injectedProduct ? 'ready' : 'idle') // idle | loading | ready | error
   const [error, setError] = useState(null)
 
-  const handleOpen = async () => {
-    setOpen(true)
+  const loadProduct = async () => {
     if (product) return // already loaded — reopen instantly
     setStatus('loading')
     setError(null)
@@ -32,7 +46,21 @@ export default function EmbedWidget({ productId, retailerKey }) {
     }
   }
 
-  const close = () => setOpen(false)
+  const handleOpen = async () => {
+    setOpen(true)
+    await loadProduct()
+  }
+
+  // autoOpen with no injected product still needs one fetch on mount.
+  useEffect(() => {
+    if (autoOpen && !injectedProduct) void loadProduct()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const close = () => {
+    setOpen(false)
+    onClose?.()
+  }
 
   if (open) {
     if (status === 'ready' && product) {
@@ -59,6 +87,9 @@ export default function EmbedWidget({ productId, retailerKey }) {
       </div>
     )
   }
+
+  // Host supplies its own trigger -> never render the floating bubble.
+  if (autoOpen) return null
 
   return (
     <button

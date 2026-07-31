@@ -46,7 +46,7 @@ function injectStyles(shadowRoot) {
  * @param {{ productId: string, retailerId?: string }} options
  * @returns {{ unmount: () => void } | null}
  */
-export function mount(target, { productId, retailerKey } = {}) {
+export function mount(target, { productId, retailerKey, product, autoOpen, onClose } = {}) {
   const host = typeof target === 'string' ? document.querySelector(target) : target
   if (!host) {
     console.error(`Manikan widget: mount target "${target}" not found`)
@@ -64,7 +64,15 @@ export function mount(target, { productId, retailerKey } = {}) {
   shadowRoot.appendChild(container)
 
   const root = createRoot(container)
-  root.render(<EmbedWidget productId={productId} retailerKey={retailerKey} />)
+  root.render(
+    <EmbedWidget
+      productId={productId}
+      retailerKey={retailerKey}
+      product={product}
+      autoOpen={autoOpen}
+      onClose={onClose}
+    />
+  )
 
   return { unmount: () => root.unmount() }
 }
