@@ -8,6 +8,7 @@ import SizeSelector from "../../../../components/product/SizeSelector";
 import { useCart } from "../../../../components/CartContext";
 import { useWishlist } from "../../../../components/WishlistContext";
 import Modal from "../../../../components/Modal";
+import Manikan3DTryOn from "../../../../components/product/Manikan3DTryOn";
 
 type Review = {
   id: string;
@@ -282,6 +283,12 @@ export default function ProductDetailPage() {
                 Virtual Try-On
               </Link>
             </div>
+
+            {/* 3D body-modelling try-on (body-service). Sits below the 2D
+                Virtual Try-On rather than beside it: full width gives the
+                flagship feature room, and avoids cramming three controls
+                into one row on narrow screens. */}
+            <Manikan3DTryOn product={product} />
           </div>
 
           {/* Shipping Info */}
