@@ -1,11 +1,11 @@
 import React from "react";
-import { getAuthFromCookies } from "../../lib/auth";
-import { prisma } from "../../lib/prisma";
+import { getAuthFromCookies } from "../../../lib/auth";
+import { prisma } from "../../../lib/prisma";
 import { redirect } from "next/navigation";
 import WidgetSettingsForm from "./WidgetSettingsForm";
 import WidgetKeyPanel from "./WidgetKeyPanel";
 
-export default async function WidgetPage() {
+export default async function BodyModelingPage() {
   const user = await getAuthFromCookies();
 
   if (!user) {
@@ -26,12 +26,12 @@ export default async function WidgetPage() {
       <div className="flex items-center justify-between animate-fade-up transition-all duration-500 hover:translate-x-1" style={{ animationDelay: "100ms" }}>
         <div className="flex flex-col gap-1">
           <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-gold-400/90 animate-pulse">
-            Integration Settings
+            3D Body Modeling
           </p>
           <h2 className="text-3xl font-display font-semibold text-forest-950 leading-tight">
-            Widget <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 to-gold-600">Customization</span>
+            API & <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 to-gold-600">Widget Settings</span>
           </h2>
-          <p className="text-forest-700/60 text-sm mt-1 max-w-2xl">Customize how the Manikan size recommendation widget appears on your store.</p>
+          <p className="text-forest-700/60 text-sm mt-1 max-w-2xl">Manage your API keys, allowed domains, and customize how the widget appears on your store.</p>
         </div>
       </div>
 
