@@ -45,8 +45,19 @@ PANTS_JOINT_IDS = [0, 1, 2, 4, 5, 7, 8]
 #   male   : fitted straight jean ("cut B") — snug seat/thigh, straight leg that
 #            stands a little off the shin, gentle boxy structure
 CONFIGS = {
-    "female": dict(offset=0.012, taper=0.86, leg_ease=1.00, boxify=0.00,
-                   seat_ease=1.00, waist_rise=0.06, smooth=4),
+    # seat_ease=1.15 (Phase 0 female silhouette check: seat_ease is the
+    # direct radial push-out for the hip/seat region -- Vk[:,1] >= crotch_y
+    # -- unlike leg_ease, whose ramp deliberately excludes the seat by
+    # design. 1.00 read as "painted on" at the hip/buttock in a real GLB
+    # viewer; 1.15 was visually approved front + rear 3/4). leg_ease=0.88
+    # (kinematic-only diagnostic on the normal body showed the excess volume
+    # was template-stage, not physics, and roughly proportional across the
+    # thigh rather than a sharp near-crotch spike -- 0.88 approved on a real
+    # kinematic-only GLB). taper/ramp_width are UNCHANGED from female's
+    # original values -- 0.86/default(0.10) are deliberately different from
+    # male's 0.80/0.18, not a placeholder.
+    "female": dict(offset=0.012, taper=0.86, leg_ease=0.88, boxify=0.00,
+                   seat_ease=1.15, waist_rise=0.06, smooth=4),
     # taper=0.80/leg_ease=1.00 (Phase 2 taper sweep, fixes the balloon
     # silhouette) + ramp_width=0.18 (Phase 2 round 9: widens the crotch
     # convergence from a sharp cone-like point into a softer, rounder curve --

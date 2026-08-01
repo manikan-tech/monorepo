@@ -18,6 +18,7 @@ At runtime we do NOT simulate. We:
 Validated end-to-end: holdout interpolation error 0.7-2.6 mm mean (80-93% of the
 drape signal captured), self-intersection ~0.
 """
+import math
 import os
 import time
 import logging
@@ -143,15 +144,63 @@ def get_draper() -> PhysicsDraper:
 # tools/drape_bake/phase4_correspondence_pants.py), i.e. larger than the
 # interpolation error the library exists to deliver.
 
-_PANTS_ASSET_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)), "models", "garments", "pants_physics")
+def _pants_asset_dir(gender: str) -> str:
+    return os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "models", "garments", f"pants_physics_{gender}")
 
-# Grid axes — MUST match tools/drape_bake/phase4_grid_pants.py exactly.
+
+# Grid axes — per-gender, MUST match tools/drape_bake/phase4_grid_pants.py (male)
+# / phase4_grid_pants_female.py (female) exactly. Size labels/list shared since
+# the catalog uses one flat-waist size scale across genders; build/height are
+# gender-specific body distributions (see phase4_grid_pants_female.py for the
+# female axis derivation — verified against solve_betas convergence, not
+# carried over from male's beta values).
 PANTS_SIZE_WAIST_CM = [38.0, 44.0, 50.0, 56.0, 62.0]    # garment flat waist
-PANTS_BUILD_WAIST_CM = [74.0, 86.0, 98.0, 110.0, 122.0]  # body waist per build node
-PANTS_HEIGHT_CM = [162.0, 169.0, 175.0, 181.0, 188.0]
 PANTS_SIZE_LABELS = ["S", "M", "L", "XL", "XXL"]
-PANTS_POSE_HIP_ABDUCTION_RAD = 0.12   # the grid's pose; runtime bodies must match
+
+PANTS_BUILD_WAIST_CM = {
+    "male":   [74.0, 86.0, 98.0, 110.0, 122.0],
+    "female": [60.0, 74.0, 88.0, 102.0, 112.0],
+}
+PANTS_HEIGHT_CM = {
+    "male":   [162.0, 169.0, 175.0, 181.0, 188.0],
+    "female": [151.0, 158.0, 165.0, 172.0, 179.0],
+}
+
+# Pose (hip-abduction angle, degrees -> radians). Canonical source of truth
+# for BOTH the offline bake grid (tools/drape_bake/phase4_grid_pants.py
+# imports pants_pose_hip_abduction_rad from here) and the runtime -- they
+# must never drift apart, since the runtime's kinematic-fit re-poses the
+# body before adding the interpolated delta, and that re-pose has to match
+# whatever pose the delta was actually baked against.
+#
+# male: single angle everywhere (6.9deg), matches the grid.
+#
+# female: height-conditional. Diagnosed via LOG_PER_VERTEX on the female
+# grid's failed nodes (crotch/inner-thigh oscillation on short bodies);
+# widening to 8.0deg converges short-height bodies, confirmed build-index-
+# independent (a build-4 node converged fine at 8.0deg while two other
+# build-4 nodes did not -- see docs/known-issues.md "female grid" section
+# for the full investigation). 168.5cm is the midpoint between the grid's
+# 165cm (short, 8.0deg) and 172cm (standard, 6.9deg) nodes -- the natural
+# continuous threshold for a runtime body that isn't sitting exactly on a
+# grid node.
+MALE_PANTS_POSE_DEG = 6.9
+FEMALE_PANTS_POSE_SHORT_DEG = 8.0
+FEMALE_PANTS_POSE_STANDARD_DEG = 6.9
+FEMALE_PANTS_POSE_HEIGHT_THRESHOLD_CM = 168.5
+
+
+def pants_pose_hip_abduction_rad(gender: str, height_cm: float) -> float:
+    """The single source of truth for which hip-abduction angle to pose a
+    pants body at -- offline bake and online runtime both call this, keyed
+    on the body's actual height in cm (not a grid index), so it works for
+    both a grid node's exact height and an arbitrary shopper's height."""
+    deg = MALE_PANTS_POSE_DEG
+    if gender == "female":
+        deg = (FEMALE_PANTS_POSE_SHORT_DEG if height_cm < FEMALE_PANTS_POSE_HEIGHT_THRESHOLD_CM
+               else FEMALE_PANTS_POSE_STANDARD_DEG)
+    return math.radians(deg)
 
 # Feature flag. "physics" enables the drape; anything else (or a missing/broken
 # library, or a body outside the grid) falls back to the Tier-1 kinematic fit.
@@ -181,12 +230,16 @@ class PantsPhysicsDraper:
     """Pants delta-library draper. Reproduces run_pilot_batch.kinematic_fit()
     exactly, then adds the interpolated physics delta."""
 
-    def __init__(self, model, gender: str = "male", asset_dir: str = _PANTS_ASSET_DIR):
+    def __init__(self, model, gender: str = "male", asset_dir: Optional[str] = None):
         tpl = G.load_pants_template(gender)
         self.template_verts = np.asarray(tpl["vertices"], dtype=np.float64)
         self.template_faces = np.asarray(tpl["faces"], dtype=np.int64)
         self.uv = tpl.get("uv")
         self.gender = gender
+        self.build_axis = PANTS_BUILD_WAIST_CM[gender]
+        self.height_axis = PANTS_HEIGHT_CM[gender]
+        if asset_dir is None:
+            asset_dir = _pants_asset_dir(gender)
 
         lib = np.load(os.path.join(asset_dir, "delta_library.npz"), allow_pickle=True)
         self.delta = lib["delta"].astype(np.float32)          # (5,5,5,V,3)
@@ -209,8 +262,8 @@ class PantsPhysicsDraper:
         slab -- a shopper picks a catalog size, so it is never interpolated
         across, matching the tee's proven behaviour."""
         size_idx = int(np.argmin([abs(garment_waist_cm - s) for s in PANTS_SIZE_WAIST_CM]))
-        return size_idx, _frac_index(PANTS_BUILD_WAIST_CM, body_waist_cm), \
-            _frac_index(PANTS_HEIGHT_CM, height_cm)
+        return size_idx, _frac_index(self.build_axis, body_waist_cm), \
+            _frac_index(self.height_axis, height_cm)
 
     def _interp_delta(self, size_idx, build_frac, height_frac):
         """Bilinear over build x height within the selected size slab. Also
@@ -255,11 +308,12 @@ class PantsPhysicsDraper:
               body_waist_cm: float, height_cm: float,
               garment_waist_cm: float):
         """Returns (draped_verts, faces, uv, info). body_verts MUST be posed with
-        hip abduction PANTS_POSE_HIP_ABDUCTION_RAD -- that is the pose the grid
-        was baked in. Returns None if the body falls outside the grid, so the
-        caller can fall back to Tier 1."""
-        waist_g = _clamp_to_grid(body_waist_cm, PANTS_BUILD_WAIST_CM)
-        height_g = _clamp_to_grid(height_cm, PANTS_HEIGHT_CM)
+        pants_pose_hip_abduction_rad(self.gender, height_cm) -- that is the
+        pose the grid was baked in at this body's height (gender/height-
+        conditional for female). Returns None if the body falls outside the
+        grid, so the caller can fall back to Tier 1."""
+        waist_g = _clamp_to_grid(body_waist_cm, self.build_axis)
+        height_g = _clamp_to_grid(height_cm, self.height_axis)
         if waist_g is None or height_g is None:
             logger.info("Pants drape declined: body too far outside grid "
                         "(waist=%.1f height=%.1f)", body_waist_cm, height_cm)

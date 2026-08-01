@@ -96,10 +96,13 @@ export default function AddProductPage() {
               className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow appearance-none"
             >
               <option value="">Select a category</option>
-              <option value="tops">Tops (Shirts, Blouses, T-Shirts)</option>
-              <option value="bottoms">Bottoms (Pants, Jeans, Shorts)</option>
-              <option value="dresses">Dresses & Jumpsuits</option>
-              <option value="outerwear">Outerwear (Jackets, Coats)</option>
+              <option value="tshirt">T-Shirt (3D try-on)</option>
+              <option value="pants">Pants (3D try-on)</option>
+              <option value="shirt">Shirt</option>
+              <option value="blouse">Blouse</option>
+              <option value="skirt">Skirt</option>
+              <option value="jacket">Jacket</option>
+              <option value="hoodie">Hoodie</option>
             </select>
           </div>
 

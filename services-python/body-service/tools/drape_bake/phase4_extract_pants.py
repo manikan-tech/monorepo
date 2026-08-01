@@ -23,7 +23,7 @@ the leave-one-out / leave-cluster-out validation that measured the fill cost
 implementation is deliberate: the shipped library must be the thing that was
 measured.
 
-Run:  .venv/bin/python tools/drape_bake/phase4_extract_pants.py
+Run:  .venv/bin/python tools/drape_bake/phase4_extract_pants.py [--gender=male|female]
 """
 import json
 import os
@@ -37,18 +37,17 @@ sys.path.insert(0, HERE)
 import phase4_grid_pants as G  # noqa: E402
 
 N = 5
-OUT_DIR = os.path.join(SVC, "models", "garments", "pants_physics")
 SIZE_LABELS = np.array(["S", "M", "L", "XL", "XXL"])
 NEIGH = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
 
 
-def name(s, b, h):
-    return f"g{s}{b}{h}"
+def name(s, b, h, prefix="g"):
+    return f"{prefix}{s}{b}{h}"
 
 
-def load_deltas():
+def load_deltas(manifest_path, prefix="g"):
     """-> deltas (5,5,5,V,3) float64, ok (5,5,5) bool, faces"""
-    manifest = json.load(open(os.path.join(HERE, "grid125_manifest.json")))
+    manifest = json.load(open(manifest_path))
     status = {m["name"]: m.get("convergence_status") for m in manifest}
     faces = None
     deltas = None
@@ -56,14 +55,20 @@ def load_deltas():
     for s in range(N):
         for b in range(N):
             for h in range(N):
-                nm = name(s, b, h)
+                nm = name(s, b, h, prefix)
                 d = np.load(os.path.join(HERE, f"_pilot_outputs/batch_{nm}.npz"), allow_pickle=True)
                 if deltas is None:
                     V = d["draped_verts"].shape[0]
                     deltas = np.zeros((N, N, N, V, 3), dtype=np.float64)
                     faces = d["garment_faces"]
                 deltas[s, b, h] = d["draped_verts"].astype(np.float64) - d["input_verts"].astype(np.float64)
-                ok[s, b, h] = (status.get(nm) == "converged")
+                # "converged-after-extend" is real, usable data (the guard's
+                # retry succeeded) -- male's own 125-grid never produced one
+                # (113 converged / 12 failed, no extends), so this distinction
+                # was never exercised before female's grid, which has 5.
+                # Treating it as "not ok" would discard real data and
+                # synthesize a fill in its place for no reason.
+                ok[s, b, h] = status.get(nm) in ("converged", "converged-after-extend")
     return deltas, ok, faces
 
 
@@ -109,7 +114,16 @@ def fill_node(deltas, avail, tgt):
 
 
 def main():
-    deltas, ok, faces = load_deltas()
+    gender = "male"
+    for a in sys.argv:
+        if a.startswith("--gender="):
+            gender = a.split("=", 1)[1]
+    assert gender in ("male", "female"), f"unknown gender {gender!r}"
+    suffix = "" if gender == "male" else f"_{gender}"
+    prefix = "g" if gender == "male" else "gf"
+    out_dir = os.path.join(SVC, "models", "garments", f"pants_physics_{gender}")
+
+    deltas, ok, faces = load_deltas(os.path.join(HERE, f"grid125{suffix}_manifest.json"), prefix)
     V = deltas.shape[3]
     holes = [(s, b, h) for s in range(N) for b in range(N) for h in range(N) if not ok[s, b, h]]
     print(f"loaded 125 nodes, V={V}, converged={int(ok.sum())}, holes={len(holes)}")
@@ -129,14 +143,14 @@ def main():
     for c in holes:
         nb = staged[c][1]
         how = f"bracketed x{nb}" if nb else "IDW (no bracketed axis)"
-        print(f"  {name(*c)}: {how}")
+        print(f"  {name(*c, prefix)}: {how}")
 
     filled_mask = np.zeros((N, N, N), dtype=bool)
     for c in holes:
         filled_mask[c] = True
 
-    os.makedirs(OUT_DIR, exist_ok=True)
-    out = os.path.join(OUT_DIR, "delta_library.npz")
+    os.makedirs(out_dir, exist_ok=True)
+    out = os.path.join(out_dir, "delta_library.npz")
     np.savez_compressed(
         out,
         delta=deltas.astype(np.float16),
@@ -146,8 +160,8 @@ def main():
         # self-describing about which nodes are real bakes vs neighbour fills
         filled=filled_mask,
         size_axis_cm=np.array(G.SIZE_GARMENT_WAIST_CM, dtype=np.float64),
-        height_axis_cm=np.array(G.HEIGHT_CM, dtype=np.float64),
-        build_axis=np.array(G.BUILDS, dtype=np.float64),
+        height_axis_cm=np.array(G.HEIGHT_CM[gender], dtype=np.float64),
+        build_axis=np.array(G.BUILDS[gender], dtype=np.float64),
     )
     mb = os.path.getsize(out) / 1e6
     print(f"\nwrote {out}  ({mb:.1f} MB)")

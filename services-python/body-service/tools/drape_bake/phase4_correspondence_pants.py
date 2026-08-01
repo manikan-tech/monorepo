@@ -37,7 +37,7 @@ from app import garment as G     # noqa: E402
 import phase4_grid_pants as GRID  # noqa: E402
 import run_pilot_batch as RPB     # noqa: E402
 
-LIB = os.path.join(SVC, "models", "garments", "pants_physics", "delta_library.npz")
+LIB = os.path.join(SVC, "models", "garments", "pants_physics_male", "delta_library.npz")
 NODE = "g222"   # mid-grid, converged, unremarkable -- a fair representative
 
 

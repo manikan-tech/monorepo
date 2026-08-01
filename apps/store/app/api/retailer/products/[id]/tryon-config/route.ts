@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getAuthFromCookies } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
+import { garmentFieldsFor, isProductTryOnEnabled } from "../../../../../lib/tryon-status";
 
 // ─── /api/retailer/products/[id]/tryon-config ───────────────────────────
 // Retailer-facing endpoint to make one of their products 3D-try-on-enabled by
@@ -24,13 +25,12 @@ import { prisma } from "../../../../../lib/prisma";
 
 const HEX_COLOR = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
-interface VariantConfigInput {
-  sizeLabel: string;
-  garmentChestCm: number;
-  garmentLengthCm: number;
-  garmentSleeveCm: number;
-  garmentShoulderCm: number;
-}
+// Variant garment measurements, keyed dynamically by the product's own
+// category (garmentFieldsFor) rather than a hardcoded tee-shaped interface --
+// this is what previously made pants un-configurable through this route: the
+// field list here was frozen to the tee's four fields no matter what
+// category the product actually was.
+type VariantConfigInput = { sizeLabel: string } & Record<string, number>;
 
 function isPositiveNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v) && v > 0;
@@ -97,40 +97,36 @@ export async function PUT(
     );
   }
 
-  const variantInputs: VariantConfigInput[] = [];
-  for (const v of body.variants) {
-    if (
-      !v ||
-      typeof v.sizeLabel !== "string" ||
-      !isPositiveNumber(v.garmentChestCm) ||
-      !isPositiveNumber(v.garmentLengthCm) ||
-      !isPositiveNumber(v.garmentSleeveCm) ||
-      !isPositiveNumber(v.garmentShoulderCm)
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Each variant needs a sizeLabel and positive garmentChestCm, garmentLengthCm, garmentSleeveCm, garmentShoulderCm",
-        },
-        { status: 400 }
-      );
-    }
-    variantInputs.push({
-      sizeLabel: v.sizeLabel,
-      garmentChestCm: v.garmentChestCm,
-      garmentLengthCm: v.garmentLengthCm,
-      garmentSleeveCm: v.garmentSleeveCm,
-      garmentShoulderCm: v.garmentShoulderCm,
-    });
-  }
-
-  // ── Fetch product (tenant isolation) + resolve sizeLabels → variant ids ──
+  // ── Fetch product (tenant isolation) first: which fields are required
+  //    depends on the product's own category, so this has to happen before
+  //    variant validation, not after it. ──
   const product = await prisma.product.findUnique({
     where: { id },
     include: { variants: true },
   });
   if (!product || product.retailerId !== user.sub) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  }
+
+  const fields = garmentFieldsFor(product.category ?? "");
+  if (fields.length === 0) {
+    return NextResponse.json(
+      { error: `Unsupported category "${product.category}" -- no garment fields defined for it` },
+      { status: 400 }
+    );
+  }
+
+  const variantInputs: VariantConfigInput[] = [];
+  for (const v of body.variants) {
+    if (!v || typeof v.sizeLabel !== "string" || !fields.every((f) => isPositiveNumber(v[f]))) {
+      return NextResponse.json(
+        { error: `Each variant needs a sizeLabel and positive ${fields.join(", ")}` },
+        { status: 400 }
+      );
+    }
+    const input: VariantConfigInput = { sizeLabel: v.sizeLabel };
+    for (const f of fields) input[f] = v[f];
+    variantInputs.push(input);
   }
 
   const variantBySize = new Map(product.variants.map((v) => [v.sizeLabel, v]));
@@ -146,16 +142,12 @@ export async function PUT(
         { status: 400 }
       );
     }
+    // Non-null: every `f` in `fields` was already validated as a positive
+    // number when `input` was constructed above.
+    const data: Record<string, number> = {};
+    for (const f of fields) data[f] = input[f]!;
     updates.push(
-      prisma.productVariant.update({
-        where: { id: variant.id },
-        data: {
-          garmentChestCm: input.garmentChestCm,
-          garmentLengthCm: input.garmentLengthCm,
-          garmentSleeveCm: input.garmentSleeveCm,
-          garmentShoulderCm: input.garmentShoulderCm,
-        },
-      })
+      prisma.productVariant.update({ where: { id: variant.id }, data })
     );
   }
 
@@ -173,30 +165,21 @@ export async function PUT(
 function configResponse(
   product: Prisma.ProductGetPayload<{ include: { variants: true } }>
 ) {
-  const variants = product.variants.map((v) => ({
-    id: v.id,
-    sizeLabel: v.sizeLabel,
-    garmentChestCm: v.garmentChestCm,
-    garmentLengthCm: v.garmentLengthCm,
-    garmentSleeveCm: v.garmentSleeveCm,
-    garmentShoulderCm: v.garmentShoulderCm,
-  }));
+  const fields = garmentFieldsFor(product.category ?? "");
+  const variants = product.variants.map((v) => {
+    const out: Record<string, unknown> = { id: v.id, sizeLabel: v.sizeLabel };
+    for (const f of fields) out[f] = (v as unknown as Record<string, unknown>)[f];
+    return out;
+  });
 
-  // Mirrors the try-on gate: a product is try-on-ready only with a colour AND
-  // every variant carrying all four garment measurements.
-  const isTryOnEnabled =
-    product.garmentColorHex !== null &&
-    variants.length > 0 &&
-    variants.every(
-      (v) =>
-        v.garmentChestCm !== null &&
-        v.garmentLengthCm !== null &&
-        v.garmentSleeveCm !== null &&
-        v.garmentShoulderCm !== null
-    );
+  // Single source of truth (app/lib/tryon-status.ts) -- was three independent
+  // hardcoded copies of the tee's four fields, which is exactly why this
+  // route never learned about pants when that category was added.
+  const isTryOnEnabled = isProductTryOnEnabled(product);
 
   return {
     productId: product.id,
+    category: product.category,
     garmentColorHex: product.garmentColorHex,
     isTryOnEnabled,
     variants,

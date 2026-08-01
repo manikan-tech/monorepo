@@ -1002,6 +1002,7 @@ def _dressed_glb_physics(
 
 def _dressed_glb_physics_pants(
     model,
+    gender: str,
     betas: torch.Tensor,
     height_cm: float,
     waist_cm: float,
@@ -1010,20 +1011,27 @@ def _dressed_glb_physics_pants(
     texture_image,
 ):
     """
-    Pipeline 2 runtime path for PANTS. Poses the body with hip abduction (the
-    feet-apart stance the pants grid was baked in -- NOT the tee's relaxed
-    shoulders), then adds the interpolated delta on top of a kinematic fit that
-    reproduces the bake's own pre-fit exactly.
+    Pipeline 2 runtime path for PANTS, either gender. Poses the body with hip
+    abduction (the feet-apart stance the pants grid was baked in -- NOT the
+    tee's relaxed shoulders), then adds the interpolated delta on top of a
+    kinematic fit that reproduces the bake's own pre-fit exactly.
+
+    The abduction angle is gender/height-conditional for female
+    (physics_drape.pants_pose_hip_abduction_rad) -- the female grid was baked
+    with a wider angle for short-height bodies (see docs/known-issues.md), so
+    reproducing the WRONG angle here would silently desync the kinematic
+    input from the delta it's being added to, even though nothing would
+    error or look obviously broken.
 
     Returns None when the drape is unavailable (flag off, missing library, or
     body outside the grid) so the caller falls through to dress_pants().
     """
-    draper = physics_drape.get_pants_draper(model, "male")
+    draper = physics_drape.get_pants_draper(model, gender)
     if draper is None:
         return None
 
     body_pose = torch.zeros(1, 69, dtype=torch.float32, device=DEVICE)
-    a = physics_drape.PANTS_POSE_HIP_ABDUCTION_RAD
+    a = physics_drape.pants_pose_hip_abduction_rad(gender, height_cm)
     body_pose[0, 0:3] = torch.tensor([0.0, 0.0, a], device=DEVICE)    # L_Hip
     body_pose[0, 3:6] = torch.tensor([0.0, 0.0, -a], device=DEVICE)   # R_Hip
     with torch.no_grad():
@@ -1105,13 +1113,17 @@ def generate_dressed_avatar_mesh_v2(
     )
 
     # ── PANTS category ──────────────────────────────────────────────────────
-    # Physics drape first (male only, behind MANIKAN_PANTS_DRAPE); any decline
-    # or failure falls through to the Tier-1 kinematic dress_pants().
+    # Physics drape first (both genders, behind MANIKAN_PANTS_DRAPE); any
+    # decline or failure falls through to the Tier-1 kinematic dress_pants().
+    # Female uses its own delta library (models/garments/pants_physics_female/)
+    # and its own height-conditional pose -- get_pants_draper(model, sex) and
+    # pants_pose_hip_abduction_rad(sex, height_cm) both dispatch on gender
+    # internally, so this call site itself needs no per-gender branching.
     if category == "pants":
-        if sex == "male":
+        if sex in ("male", "female"):
             try:
                 glb = _dressed_glb_physics_pants(
-                    model, betas, height_cm, waist_cm,
+                    model, sex, betas, height_cm, waist_cm,
                     garment_waist_cm, tshirt_color_hex, texture_image,
                 )
                 if glb is not None:
