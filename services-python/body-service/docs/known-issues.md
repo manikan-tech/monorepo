@@ -140,6 +140,56 @@ not settled, until re-checked the same way.
 
 ---
 
+## Pants: crotch-bridge droop, both genders (Phase 0 template, kinematic fit)
+
+**Status: confirmed real, not fixed. Accepted as known for both genders;
+proceeding with baking regardless. Distinct from the "crotch bulge" entry
+above** — that one was a rendering artifact from a discredited rasterizer,
+retracted after a proper Cycles render showed no defect. This one is measured
+directly on vertex positions and mesh topology, not by eye, and holds.
+
+### What's confirmed
+
+A band of garment fabric hangs below the body's actual crotch point, with
+mesh edges topologically bridging across the centreline in the gap between
+the legs — real, not a rendering artifact:
+
+| body | droop (mm) | bridging edges below crotch |
+|---|---:|---:|
+| male, average | 145–191 | 28–53 (varies by grid point) |
+| female, β=0 (seat_ease=1.15, current template) | 178 | 32 |
+
+Measured by: fitting the template through the exact kinematic fit
+(`run_pilot_batch.kinematic_fit`), locating the body's true crotch height
+(lowest point of a narrow band near the centreline, between 35–65% body
+height), then checking (a) how far below that height any centreline-band
+garment vertex sits, and (b) whether any mesh edge connects a vertex with
+positive X to one with negative X at a height below the crotch line. Confirmed
+present in the **kinematic fit alone**, before any physics runs — this is a
+template/carve-stage defect, not something the cloth sim introduces.
+
+### What's NOT confirmed
+
+- Root cause within the carve pipeline (which stage introduces the bridge)
+  has not been isolated for either gender this session.
+- Whether the defect's severity changes materially after physics (a partial
+  runtime-correction prototype was attempted for male — see the crotch-fix
+  prototype script — and left unresolved: it reduced droop but oscillated
+  rather than converging to zero bridging edges; not applied anywhere).
+- Whether female's `seat_ease=1.15` change affected the droop at all
+  (measured before and after: 188mm before, 178mm after — within the range
+  of noise/different query point, not evidence the seat push-out touches
+  this region; `seat_ease`'s mask is `y >= crotch_y`, entirely above where
+  the bridging happens).
+
+### Decision
+
+Bake both genders with this defect open, matching the precedent already set
+for male's production bake. Reassess after baking whether physics changes it
+materially, same open items as above.
+
+---
+
 ## Pants: 12 non-converging grid nodes, all in body builds 2 and 3 (Phase 3 bake)
 
 **Status: confirmed and characterised, not fixed. No shipped code changed,
@@ -352,3 +402,154 @@ clustered hole versus **2.40mm** for an isolated one — clustering costs about
 The 12 holes form 3 connected chains (4-node, 4-node T-shaped, 2-node) plus
 2 isolated nodes; `g021` and `g134` have no fully-bracketed axis and can only
 be extrapolated, measured at 2.69mm and 2.96mm respectively.
+
+---
+
+## Pants: female grid — 17 non-converging nodes, both heaviest builds, low/mid heights only
+
+**Status: confirmed and characterised at the same level as the male 12-hole
+entry above, not fixed. Full 125-point grid completed
+(`grid125_female_manifest.json`), 0 crashes. Supersedes the pilot-stage
+single-point entry this section used to contain — the pilot's one failure
+(`h165_s50_bheavy`) was an early, correct signal of this exact pattern, not
+an isolated fluke.**
+
+### What's confirmed
+
+125/125 completed with zero crashes: **103 converged cleanly, 5
+converged-after-extend (real, usable data), 17 caught by the convergence
+guard with no usable result.** Crossed-leg violations: **0/125**, including
+every guard-skipped node. Total wall time 7.24 hours (avg 208.5s/point).
+
+The 17 holes + 5 extends are, once again, concentrated in specific builds —
+even more sharply than male's pattern:
+
+| build | body (wt, chest, waist, hips) | converged | extend | failed |
+|:--|:--|--:|--:|--:|
+| 0 slim | 52, 86, 60, 92 | 25 | 0 | 0 |
+| 1 | 65, 92, 74, 100 | 25 | 0 | 0 |
+| 2 (real, Phase1 stress) | 78, 98, 88, 108 | 25 | 0 | 0 |
+| **3** | **91, 104, 102, 116** | 16 | **2** | **7** |
+| **4 heavy** | **98, 108, 112, 120** | 12 | **3** | **10** |
+
+Builds 0-2 are perfect, 75/75. Builds 3-4 alone carry all 22 problem nodes —
+a 22/50 = 44% guard-skip rate in exactly the two heaviest builds, nothing
+elsewhere. This matches male's own finding that the failures track a
+specific body, not a specific fit.
+
+**Ease is not the discriminator, same as male.** The 17 hard failures span
+the full fit range, from -36cm (badly too-small) to +22cm (very loose):
+`gf030`(-26) `gf040`(-36) `gf041`(-36) `gf130`(-14) `gf140`(-24) `gf141`(-24)
+`gf230`(-2) `gf231`(-2) `gf240`(-12) `gf242`(-12) `gf330`(+10) `gf331`(+10)
+`gf340`(0) `gf341`(0) `gf430`(+22) `gf440`(+12) `gf441`(+12).
+
+**New pattern, not present in male's data: every failure and every extend is
+at a low/mid height node.** All 22 problem nodes (17 failed + 5 extend) sit
+at height_idx 0, 1, or 2 (151/158/165cm) — **zero at height_idx 3 or 4
+(172/179cm)**, despite build/size being identical across height for a given
+size/build pair. A build-4/size-38 body fails at 151cm and 158cm
+(`gf040`/`gf041`) but converges cleanly at 172cm and 179cm — same body shape
+targets, same garment, only height differs. Male's 12-hole write-up above
+does not report this height-restriction; whether that's because male's
+pattern genuinely doesn't have it, or because it wasn't checked for, is not
+established.
+
+### What's NOT confirmed
+
+- Root cause — same open question as male's 12 holes: why heavy builds
+  specifically, and why (new for female) only at lower heights within those
+  builds.
+- Whether the height-restriction is a real mechanism (e.g. a shorter+heavier
+  body concentrates more starting interpenetration in the same crotch/thigh
+  region) or a grid-density coincidence — not tested against intermediate
+  heights.
+- Not compared against male's per-vertex oscillation diagnostic
+  (`LOG_PER_VERTEX=1`) — no per-vertex signature has been pulled for any of
+  the 17 female failures.
+- Bit-determinism of the female bake (male's 12 were confirmed to re-bake
+  byte-identical) has not been re-checked for female.
+
+### Decision (superseded — see Resolution below)
+
+Accept as 17 holes, fill from converged neighbours using the exact same
+single-pass, no-cascade fill `phase4_extract_pants.py` already implements
+for male (now gender-parameterised — `--gender=female` writes to
+`models/garments/pants_physics_female/`). No investigation beyond what's
+documented here before extraction. Revisit if holdout validation (Phase 4)
+shows the female fill cost is materially worse than male's measured
+2.40mm/2.77mm.
+
+### Resolution — root cause found for the height-restriction, 3 of 17 holes recovered
+
+**Root cause: pose angle, not garment/carve.** `LOG_PER_VERTEX=1` re-bakes of
+two failing nodes (`gf040` build 3, `gf030` build 4) showed the same
+epicentre signature male's 12 holes have: 100% of the top-40 oscillating
+vertices sit in the crotch/upper-thigh band (height fraction 0.55-0.80),
+within a few mm of the centreline against a ~177mm whole-garment median. A
+competing hypothesis (short bodies have less vertical slack between the
+waistband pin and the crotch, so `waist_rise` or a similar waistband change
+might fix it) was tested and **directly contradicted**: measured pin-to-crotch
+distance is *larger* at short heights, not smaller (49.0cm at 151cm vs.
+37.6cm at 179cm, same build). The actual fix targets the diagnosed region
+instead: `POSE_HIP_ABDUCTION_RAD`, which directly controls inner-thigh
+clearance. Widening it from male's baseline 6.9° to 8.0° for short-height
+female nodes (build-independent — this was tested and build index alone
+does NOT predict success, see below) converges most of them.
+
+**3 of the 6 originally-failing "both h151+h158 hole" pivot nodes now
+converge cleanly at 8.0°:**
+
+| node | baseline (6.9°) | at 8.0° |
+|---|---|---|
+| gf141 (size44/build4/h158) | failed, 7.10mm | **converged-after-extend, 0.38mm** |
+| gf231 (size50/build3/h158) | failed, 4.61mm | **converged, 0.10mm** |
+| gf331 (size56/build3/h158) | failed, 13.17mm | **converged, 0.11mm** |
+
+These are promoted into the real grid data (`grid125_female_manifest.json`,
+`_pilot_outputs/`), tagged `pose_hip_abduction_deg: 8.0` for provenance.
+
+**3 nodes tested at three angles (6.9°/7.5°/8.0°) each, none converge —
+accepted as permanent holes:**
+
+| node | 6.9° | 7.5° | 8.0° |
+|---|---|---|---|
+| gf041 (size38/build4/h158) | failed, 0.90mm | failed, 0.63mm | failed, 9.85mm (regressed) |
+| gf341 (size56/build4/h158) | failed, 0.90mm | failed, 0.63mm | failed, 9.85mm (regressed) |
+| gf441 (size62/build4/h158) | failed, 16.98mm | failed, 1.44mm | failed, 0.60mm (closest) |
+
+Build index alone does **not** discriminate these from the 3 that converged
+— `gf141` is build 4 (heaviest), same as all three permanent holes, and it
+converged fine at 8.0°. What actually separates `gf041`/`gf341` from the
+converging nodes: their bake inputs are **byte-identical** to each other
+despite different nominal sizes (38 vs 56) — confirmed via direct diff of
+`garment_verts`/`body_verts`/`pin_weights`. Both land on the exact same
+*unadjusted* raw kinematic-fit garment: `gf041` (ease -36cm) trips the
+`TOO_SMALL` guard so `apply_pants_looseness` never runs; `gf341` (ease 0cm)
+does run it, but the computed diff is exactly 0.0cm (`radius=0.0mm,
+mean|expansion|=0.0mm` — a real call that does nothing). Every node that DID
+converge at 8.0° received a real, non-zero fabric adjustment first. `gf441`
+got a real +12cm adjustment but still falls ~0.1mm short of the threshold at
+its best angle — a distinct, still-unexplained near-miss, not the same
+mechanism as the other two.
+
+**Config, not session notes**
+(`tools/drape_bake/phase4_grid_pants.py::pose_hip_abduction_deg()` +
+`POSE_HIP_ABDUCTION_DEG` + `FEMALE_POSE_UNRESOLVED_NODES`, wired into
+`run_pilot_batch.run_one_point` via each grid point's own
+`pose_hip_abduction_deg` field): standard heights (172/179cm) → 6.9°, all
+builds. Short heights (151/158/165cm) → 8.0°, all builds — build index does
+not gate this, per the `gf141` counter-example above. `gf041`/`gf341`/`gf441`
+(exact `(size_idx, build_idx, height_idx)` triples, not a general rule) are
+listed as permanently unresolved; their recorded angle (8.0°) is the best
+result found, not a working fix.
+
+**Final hole count after re-extraction: 14, not 17** (111/125 converged +
+extend). 13 of the 14 remaining holes are **not isolated** — they form one
+connected 13-node component (the builds-3/4 × h151/h158 slab, now 3 nodes
+smaller). Only `gf242` is isolated with a real 2-axis bracket. This does not
+create a cascade risk: `fill_node()` reads only the original converged/extend
+mask, never a previously-filled value, by construction — verified directly in
+code, not assumed. It does mean 13 of the 14 fills fall back to the
+distance-2 IDW estimate (typically sourced from build 2, a meaningfully
+different, lighter body) rather than a tight local bracket, so expect higher
+interpolation error for this cluster than male's isolated/small-chain holes.

@@ -36,7 +36,7 @@ sys.path.insert(0, HERE)
 import phase4_grid_pants as G   # noqa: E402
 import run_pilot_batch as RPB   # noqa: E402
 
-LIB = os.path.join(SVC, "models", "garments", "pants_physics", "delta_library.npz")
+LIB = os.path.join(SVC, "models", "garments", "pants_physics_male", "delta_library.npz")
 BUILD_WAISTS = [b[2] for b in G.BUILDS]           # [74, 86, 98, 110, 122]
 
 

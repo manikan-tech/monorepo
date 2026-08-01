@@ -14,6 +14,7 @@ will reuse unchanged.
 Run:  .venv/bin/python tools/drape_bake/run_pilot_batch.py
 """
 import json
+import math
 import os
 import subprocess
 import sys
@@ -68,7 +69,12 @@ POSE_HIP_ABDUCTION_RAD = 0.12
 
 
 def solve_posed_body(model, rings, h_cm, wt_kg, chest, waist, hips, hip_abduction_rad=POSE_HIP_ABDUCTION_RAD):
-    betas = M.solve_betas(model, rings, h_cm, wt_kg, chest, waist, hips, num_iters=40)
+    # num_iters=150 (was 40): verified against the female grid's extreme
+    # corners -- 40 iterations left the heaviest build 15cm off its waist
+    # target (beta not yet converged, not a shape-space limit); 150 gets
+    # every proposed grid node within ~2cm with beta clear of the +-5/-4
+    # clamp. Cost is negligible (~150ms/body) next to a ~200s bake.
+    betas = M.solve_betas(model, rings, h_cm, wt_kg, chest, waist, hips, num_iters=150)
     body_pose = torch.zeros(1, 69, dtype=torch.float32)
     if hip_abduction_rad != 0.0:
         body_pose[0, 0:3] = torch.tensor([0.0, 0.0, hip_abduction_rad])
@@ -142,8 +148,15 @@ def run_one_point(point):
             template = {"vertices": tpl_npz["verts"].astype(np.float64), "faces": tpl_npz["faces"]}
         else:
             template = G.load_pants_template(point["gender"])
+        # pose_hip_abduction_deg: set explicitly by phase4_grid_pants.build_grid_points
+        # (gender/height/build-conditional for female, see pose_hip_abduction_deg()
+        # there). Ad-hoc points (pilot scripts, one-off tests) that don't set it
+        # fall back to the module default (6.9deg) unchanged.
+        hip_abduction_rad = (math.radians(point["pose_hip_abduction_deg"])
+                              if "pose_hip_abduction_deg" in point else POSE_HIP_ABDUCTION_RAD)
         body_v, body_f = solve_posed_body(
             model, rings, point["h_cm"], point["wt_kg"], point["chest"], point["waist"], point["hips"],
+            hip_abduction_rad=hip_abduction_rad,
         )
         cache_key = f"pilot_batch_{point['gender']}" + ("_" + point["name"].split("_")[0]
                                                           if point.get("template_path") else "")

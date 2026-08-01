@@ -5,6 +5,8 @@ import pg from "pg";
 import fs from "fs";
 import path from "path";
 import { seedDemoTshirts } from "./demo-tshirts";
+import { seedDemoPants } from "./demo-pants";
+import { seedDemoPantsFemale } from "./demo-pants-female";
 
 const { Pool } = pg;
 
@@ -277,6 +279,15 @@ async function main() {
     // Seed the Manikan demo T-shirts (virtual try-on enabled) for the widget
     const tshirtCount = await seedDemoTshirts(prisma, retailer.id);
     console.log(`Seeded ${tshirtCount} demo t-shirts (virtual try-on enabled).`);
+
+    // Seed the Manikan demo pants (virtual try-on enabled), both genders --
+    // previously only ever run as one-off scripts, never part of the
+    // reproducible seed. Wired in so a dropped/reset database regenerates
+    // both catalogs automatically, same as the tees.
+    const pantsCount = await seedDemoPants(prisma, retailer.id);
+    console.log(`Seeded ${pantsCount} demo pants (virtual try-on enabled).`);
+    const pantsFemaleCount = await seedDemoPantsFemale(prisma, retailer.id);
+    console.log(`Seeded ${pantsFemaleCount} demo female pants (virtual try-on enabled).`);
 
     console.log("🌱 Database seeding complete!");
 }
