@@ -94,6 +94,11 @@
 .mw-tryon-product-thumb{width:48px;height:48px;border-radius:8px;object-fit:cover}
 .mw-tryon-product-name{font-size:14px;font-weight:600;color:var(--color-text-primary)}
 .mw-tryon-product-color{font-size:11px;color:var(--color-text-muted)}
+.mw-tryon-layer{padding:10px 12px;border-radius:10px;border:1px solid var(--color-border-subtle);background:var(--color-surface-elevated)}
+.mw-tryon-layer-row{display:flex;align-items:center;gap:9px;cursor:pointer;font-size:13px;color:var(--color-text-secondary)}
+.mw-tryon-layer-row input{width:15px;height:15px;accent-color:var(--color-success,#22c55e);cursor:pointer;flex-shrink:0}
+.mw-tryon-layer-row strong{color:var(--color-text-primary);font-weight:600}
+.mw-tryon-layer-hint{margin:5px 0 0 24px;font-size:11px;color:var(--color-text-muted)}
 .mw-tryon-size-section{margin-bottom:0}
 .mw-tryon-label{font-size:12px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
 .mw-tryon-size-pills{display:flex;gap:6px;flex-wrap:wrap}

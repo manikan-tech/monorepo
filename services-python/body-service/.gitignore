@@ -28,5 +28,6 @@ tools/drape_bake/_test_pose_inputs/
 tools/drape_bake/_test_pose_outputs/
 tools/drape_bake/_qa_*.npz
 tools/drape_bake/_qa_renders/
+tools/drape_bake/_combo_test/
 tools/drape_bake/_test_*.npz
 tools/drape_bake/_test_pose_*.py

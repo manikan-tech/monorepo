@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import MeasurementSlider from './MeasurementSlider'
 import TryOnViewer from './TryOnViewer'
 import { generateDressedAvatar } from '../lib/api'
+import { getLayerableGarment, wearGarment, removeGarment } from '../lib/outfit'
 
 /* ─────────────────────────────────────────────────────────────────────────
    Manikan Widget — Multi-step SDK integration modal
@@ -71,6 +72,14 @@ export default function ManikanWidget({ product, onClose }) {
   const [error, setError] = useState(null)
   const previousUrlRef = useRef(null)
 
+  // What the shopper already has on from an earlier product, if it can be
+  // layered with this one (a top with a bottom). Read once on mount so it
+  // can't change underneath an in-flight render.
+  const [wornGarment] = useState(() => getLayerableGarment(product.id, product.category))
+  // Default ON: the shopper put that garment on deliberately, so silently
+  // removing it when they open the next product is the surprising behaviour.
+  const [keepWearing, setKeepWearing] = useState(true)
+
   const sizeKeys = Object.keys(product.sizes)
   const currentSpecs = product.sizes[selectedSize]
   // Which four measurements to show depends on the category — a pants variant
@@ -91,11 +100,17 @@ export default function ManikanWidget({ product, onClose }) {
   ).map(([label, key]) => ({ label, value: currentSpecs?.[key] ?? '—' }))
 
   // Generate dressed avatar
-  const generateTryOn = useCallback(async (size) => {
+  // `layerOn` is passed EXPLICITLY rather than read from `keepWearing`.
+  // setState is async, so a handler that flips the checkbox and immediately
+  // regenerates would otherwise render with the PREVIOUS value -- which
+  // inverted the toggle: unchecking still showed both, re-checking showed one.
+  const generateTryOn = useCallback(async (size, layerOn) => {
+    const useLayer = layerOn === undefined ? keepWearing : layerOn
     setIsGenerating(true)
     setError(null)
 
     try {
+      const layerWith = useLayer && wornGarment ? wornGarment : null
       const url = await generateDressedAvatar({
         product_id: product.id,
         size,
@@ -106,6 +121,10 @@ export default function ManikanWidget({ product, onClose }) {
         waist_cm: waist,
         hips_cm: hips,
         recommended_size: recommendedSize,
+        // Only ids/sizes travel; the Store re-resolves the garment from the DB.
+        ...(layerWith
+          ? { also_wear: { product_id: layerWith.product_id, size: layerWith.size } }
+          : {}),
       })
 
       if (previousUrlRef.current) {
@@ -113,6 +132,22 @@ export default function ManikanWidget({ product, onClose }) {
       }
       previousUrlRef.current = url
       setTryOnUrl(url)
+      // Record what is now actually on the body, so the NEXT product can
+      // offer to layer with it. Both slots are updated, because a layered
+      // render means the shopper really is wearing both.
+      wearGarment(product.category, {
+        product_id: product.id, size, name: product.name,
+      })
+      if (layerWith) {
+        wearGarment(layerWith.category, {
+          product_id: layerWith.product_id,
+          size: layerWith.size,
+          name: layerWith.name,
+        })
+      } else if (wornGarment) {
+        // Rendered on its own -> that other garment is off.
+        removeGarment(wornGarment.category)
+      }
     } catch (err) {
       if (err.name !== 'AbortError') {
         // TOO_SMALL is a real fit verdict, not a transient failure: the body
@@ -132,7 +167,8 @@ export default function ManikanWidget({ product, onClose }) {
     } finally {
       setIsGenerating(false)
     }
-  }, [sex, height, weight, chest, waist, hips, product.id, recommendedSize])
+  }, [sex, height, weight, chest, waist, hips, product.id, product.category,
+      product.name, recommendedSize, keepWearing, wornGarment])
 
   // Handle "Generate My Body Model" click
   const handleGenerateBody = async () => {
@@ -343,6 +379,36 @@ export default function ManikanWidget({ product, onClose }) {
                       <p className="mw-tryon-product-color">{product.color_name}</p>
                     </div>
                   </div>
+
+                  {/* Layered outfit: what the shopper already has on, and an
+                      explicit way to take it off. Shown only when the other
+                      garment is a different category (a top with a bottom). */}
+                  {wornGarment && (
+                    <div className="mw-tryon-layer">
+                      <label className="mw-tryon-layer-row">
+                        <input
+                          type="checkbox"
+                          checked={keepWearing}
+                          disabled={isGenerating}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                            setKeepWearing(next)
+                            // pass `next` explicitly -- setKeepWearing has not
+                            // applied yet at this point
+                            generateTryOn(selectedSize, next)
+                          }}
+                          id="tryon-keep-wearing"
+                        />
+                        <span>
+                          Also wearing your <strong>{wornGarment.name}</strong>
+                          {' '}({wornGarment.size})
+                        </span>
+                      </label>
+                      <p className="mw-tryon-layer-hint">
+                        Uncheck to see this item on its own.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="mw-tryon-size-section">
                     <h4 className="mw-tryon-label">Select Size</h4>
