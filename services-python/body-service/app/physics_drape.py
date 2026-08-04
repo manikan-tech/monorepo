@@ -111,14 +111,18 @@ class PhysicsDraper:
                                              garment_chest_cm, body_chest_cm, self.ref_verts)
             except ValueError:
                 pass  # size tighter than body -> plain fit (matches grid)
-        kin, _ = G.resolve_interpenetration(kin, body_verts, body_faces, margin=0.006, iters=3)
+        # one collision mesh for both push-outs in this request (bit-identical)
+        body_mesh = G.body_proximity_mesh(body_verts, body_faces)
+        kin, _ = G.resolve_interpenetration(kin, body_verts, body_faces, margin=0.006, iters=3,
+                                            body_mesh=body_mesh)
 
         # 2) interpolate + apply the physics delta
         size_idx, build_frac, height_frac = self.grid_coords(chest_cm, height_cm, garment_chest_cm)
         draped = kin + self._interp_delta(size_idx, build_frac, height_frac)
 
         # 3) light cleanup for any interpolation-induced skin poke
-        draped, n_push = G.resolve_interpenetration(draped, body_verts, body_faces, margin=0.004, iters=2)
+        draped, n_push = G.resolve_interpenetration(draped, body_verts, body_faces, margin=0.004,
+                                                    iters=2, body_mesh=body_mesh)
         logger.info("Physics drape: size=%s build_frac=%.2f height_frac=%.2f, %d verts pushed",
                     SIZE_LABELS[size_idx], build_frac, height_frac, n_push)
         return draped, self.template_faces, self.uv
@@ -284,12 +288,18 @@ class PantsPhysicsDraper:
         return acc, touched_fills
 
     def kinematic_fit(self, body_verts, body_faces, lbs_weights,
-                      garment_waist_cm, body_waist_cm):
+                      garment_waist_cm, body_waist_cm, body_mesh=None):
         """EXACTLY run_pilot_batch.kinematic_fit(). Any divergence here silently
-        invalidates every delta in the library -- do not reorder these steps."""
+        invalidates every delta in the library -- do not reorder these steps.
+
+        `body_mesh` is a pure performance hint: the same collision mesh (and
+        therefore the same AABB tree) reused across all three push-out calls
+        instead of rebuilt each time. Output is bit-identical either way."""
         if self.binding is None:
             self.binding = G.bind_garment(
                 self.template_verts, self.ref_verts, body_faces, f"pants_physics_{self.gender}")
+        if body_mesh is None:
+            body_mesh = G.body_proximity_mesh(body_verts, body_faces)
         g = G.deform_garment(self.binding, body_verts, body_faces)
         if garment_waist_cm is not None and body_waist_cm is not None:
             try:
@@ -297,11 +307,14 @@ class PantsPhysicsDraper:
                                             lbs_weights, garment_waist_cm, body_waist_cm)
             except ValueError:
                 pass   # TOO_SMALL -> plain fit, matching the grid's own behaviour
-        g, _ = G.resolve_interpenetration(g, body_verts, body_faces, margin=0.006, iters=3)
+        g, _ = G.resolve_interpenetration(g, body_verts, body_faces, margin=0.006, iters=3,
+                                          body_mesh=body_mesh)
         g = G.smooth_garment(g, self.template_faces)
-        g, _ = G.resolve_interpenetration(g, body_verts, body_faces, margin=0.012, iters=3)
+        g, _ = G.resolve_interpenetration(g, body_verts, body_faces, margin=0.012, iters=3,
+                                          body_mesh=body_mesh)
         g = G.clamp_garment_curvature(g, self.template_faces)
-        g, _ = G.resolve_interpenetration(g, body_verts, body_faces, margin=0.012, iters=3)
+        g, _ = G.resolve_interpenetration(g, body_verts, body_faces, margin=0.012, iters=3,
+                                          body_mesh=body_mesh)
         return g
 
     def drape(self, body_verts, body_faces, lbs_weights,
@@ -323,8 +336,12 @@ class PantsPhysicsDraper:
                         body_waist_cm, waist_g, height_cm, height_g)
 
         t0 = time.perf_counter()
+        # One collision mesh for every push-out in this request (kinematic fit
+        # does 3, the post-blend cleanup below 1) -- saves rebuilding the AABB
+        # tree 3 extra times. Bit-identical output.
+        body_mesh = G.body_proximity_mesh(body_verts, body_faces)
         kin = self.kinematic_fit(body_verts, body_faces, lbs_weights,
-                                 garment_waist_cm, body_waist_cm)
+                                 garment_waist_cm, body_waist_cm, body_mesh=body_mesh)
         t_kin = time.perf_counter()
 
         # Delta lookup uses the CLAMPED body; the kinematic fit above used the
@@ -337,7 +354,8 @@ class PantsPhysicsDraper:
         t_blend = time.perf_counter()
 
         draped, n_push = G.resolve_interpenetration(draped, body_verts, body_faces,
-                                                    margin=0.004, iters=2)
+                                                    margin=0.004, iters=2,
+                                                    body_mesh=body_mesh)
         info = {
             "size": PANTS_SIZE_LABELS[size_idx],
             "build_frac": round(build_frac, 3),

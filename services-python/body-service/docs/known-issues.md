@@ -553,3 +553,335 @@ code, not assumed. It does mean 13 of the 14 fills fall back to the
 distance-2 IDW estimate (typically sourced from build 2, a meaningfully
 different, lighter body) rather than a tight local bracket, so expect higher
 interpolation error for this cluster than male's isolated/small-chain holes.
+
+---
+
+## Tee+pants combined outfit — investigated, no new bakes needed, reconciliation approach proven
+
+**Status: design validated with real measurements, not yet wired into the
+runtime endpoint. No grid changes required — this does not touch either
+category's 125-point delta library, ever.**
+
+### The question
+
+Can a shopper see a t-shirt and pants together (not just one garment at a
+time)? The obvious-looking wrong answer is "bake every tee-body-shape x
+every pants-body-shape combination" (125 x 125 = 15,625 bakes) — physically
+unnecessary and computationally impossible. Investigated whether the actual
+answer is much cheaper: compute each garment's already-existing independent
+physics drape, render both, and only add a lightweight geometric fix for
+where they actually touch.
+
+### What's confirmed
+
+**The two garments' poses don't conflict.** Checked directly against
+`app/main.py`: the tee's relaxed-shoulder pose writes `body_pose[0,45:51]`,
+the pants' hip-abduction pose writes `body_pose[0,0:6]`. Disjoint index
+ranges — SMPL per-joint poses are independent, so one body can be posed with
+both simultaneously and correctly serve as the kinematic-fit input for both
+garments' physics drapers in the same request.
+
+**Real clipping exists between two independently-draped garments, but it's
+small.** Measured directly (male, 3 body builds, both garments' real
+physics-drape output, zero reconciliation) using the pants' own measured
+waistband boundary height (`boundary_loops()`, not a guessed offset from the
+body's anatomical waist ring — see "what went wrong" below) as the overlap
+reference, with a locality filter on the nearest-point match (reject any
+match farther than 8cm, to exclude the open-mesh pathology described below).
+All figures are **real-world scale** (see the scale trap below):
+
+| build | tee vertices below the waistband | clipping into pants | max penetration | after fix |
+|---|--:|--:|--:|--:|
+| slim  | 629 | 14 | 2.7mm | 0, corrections ≤6.5mm |
+| avg   | 612 | 57 | 8.6mm | 0, corrections ≤11.6mm |
+| heavy | 570 | 38 | 8.0mm | 0, corrections ≤11.0mm |
+
+Present at every build tested, not just heavy ones — but small, sub-
+centimetre everywhere. Not zero, so not skippable, but not the "large
+combinatorial physics problem" originally feared either.
+
+**It is mostly a BACK-of-body effect, not front.** On the avg body, the 57
+clipping vertices split **49 back / 8 front**. (An earlier note in this
+section claimed "front-localized"; that came from the invalidated
+wrong-anchor pass described below and was wrong.) Front/back was resolved
+empirically, not assumed: on the canonical SMPL body the toes reach
+z=+0.178 and the heels only z=-0.070, so **FRONT = +z**.
+
+**A fix using existing code resolves it completely, cleanly, once built
+correctly.** `resolve_interpenetration()` (already used everywhere for
+garment-vs-body) is generic — it takes any `(verts, faces)` as the surface
+to push off, so pointing it at the *other garment's* mesh instead of the
+body needed no new algorithm, only a correctly-scoped call. Result after the
+fix (same 3 bodies, same measurement method): **0/N clipping on all three**,
+correction magnitude sane (mean 2.3-4.3mm, max 6.5-11.6mm — no outliers).
+The tee is pushed to the *outside* of the pants (untucked), which is the
+correct real-world drape for a hem worn over a waistband.
+
+Visual evidence: `tools/drape_bake/viz_tee_pants_seam.py` renders a sagittal
+cross-section through the densest clipping, before vs after. A cross-section
+rather than a 3D render on purpose — interpenetration of two cloth surfaces
+is invisible from outside, since the buried surface is simply hidden behind
+the one it is inside of.
+
+### The scale trap (bit us once, worth knowing)
+
+The drape pipeline works in **SMPL native units**, and
+`build_dressed_glb()` applies the real-world height scale only at export.
+Native units are NOT metres: a 175cm body spans ~1.65 native units
+(measured factor 1.058), so a millimetre figure measured pre-export
+understates what the shopper sees by ~6%. Any push-out margin or tolerance
+applied pre-export is likewise in native units. The first pass of this
+investigation reported native-unit millimetres as if they were real; the
+table above is corrected.
+
+### What went wrong on the way there (both are real pitfalls, not detours)
+
+1. **The overlap band can't be estimated from the body's own "waist ring"
+   landmark.** First attempt used `body waist ring Y - 2cm` as the band's
+   top edge. Measured consequence: that estimate sat *above* the pants
+   mesh's actual highest point by ~5-8cm (body waist ring Y=-0.114 vs. pants
+   actual max Y=-0.166 in one test case) — the pants waistband physically
+   rides below the anatomical waist landmark. Every number from that first
+   pass (including an apparent "31 vertices clipping, max 34mm, heavy build
+   only" result) was measuring the wrong region and is invalidated. Fixed by
+   reading the pants mesh's own real waistband height via `boundary_loops()`
+   instead of inferring it from the body.
+
+2. **A raw nearest-point search is not safe to reuse against an open,
+   non-watertight garment mesh.** Pants have 3 open boundaries (waistband +
+   2 hems; confirmed `trimesh` reports `is_watertight=False`). Near an open
+   edge, "nearest point on the mesh" can jump to a topologically unrelated,
+   distant region — measured directly: several tee-hem vertices sitting just
+   above the pants opening got matched to points ~20-24cm away, down near
+   the *ankle*, and "corrected" by being moved there (237mm displacement on
+   one vertex). A magnitude cap alone does not fix this — the vertices that
+   need the cap are the same ones that need the real fix, capping just
+   reverts both. The actual fix: crop the reference mesh to faces within a
+   local Y-band before searching, so a distant match is structurally
+   impossible rather than merely discouraged.
+
+### Acceptance checks (heavy stress body, latency, female)
+
+Run via `tools/drape_bake/test_combo_acceptance.py`. All figures real-world scale.
+
+**Heavy stress body (172cm, 128kg, chest 128, waist 138, hips 124).**
+Reconciliation works — 88/745 clipping, max 20.0mm → **0**, corrections
+≤23.0mm. But note *which paths actually fired*: **pants physics DECLINED**
+for this body (`waist=138` is 16cm past the male grid's top build node of
+122, beyond `_clamp_to_grid`'s one-step allowance) and fell back to Tier-1,
+while tee physics *did* fire (the tee draper's `_frac_index` clamps instead
+of declining — an inconsistency between the two categories worth knowing).
+So this case validates reconciliation against a Tier-1 pants mesh, not
+against a physics-draped one.
+
+**Latency.** The pass itself: ~88-143ms at `iters=1`, ~180ms at `iters=2`
+(the new default), ~330-450ms at `iters=4`. Iteration count was chosen from
+measurement: 1 pass removes all interpenetration but leaves the tightest
+vertex 1.9-2.8mm off the pants (under the 3mm target → z-fighting risk); 2
+passes reach the full 3.00mm; 3-4 add nothing.
+
+A KD-tree prefilter on candidate vertices was implemented and verified
+byte-identical, but gives **no speedup** — the tee genuinely has ~600-870
+vertices below the waistband, essentially all of them near the pants, so
+nothing filters out. The cost is entirely
+`trimesh.proximity.closest_point` (~39ms per call for 612 points against a
+2790-face cropped mesh); anything faster needs a different proximity
+structure, not a smarter filter.
+
+**Caveat on the endpoint budget:** measured end-to-end, one combined outfit
+is **~7.5s**, not the ~340ms this pass was being compared against —
+`pants_drape` 3.9s (52%), `tee_drape` 1.8s (24%), `solve_betas` 1.5s (20%),
+reconciliation 0.24s (3.2%). So reconciliation is a rounding error against
+the real pipeline cost, but the pipeline itself is seconds, not
+milliseconds, on this hardware. The ~340ms figure is unverified and does not
+match anything measured here — worth reconciling before any latency
+commitment is made.
+
+**Female combination.** The algorithm is confirmed gender-agnostic (it only
+touches garment meshes), and reaches 0 clipping on both female bodies. But
+the composition differs from male, because **tee physics is male-only**:
+
+| case | tee path | pants path | before | after |
+|---|---|---|--:|--:|
+| male avg | physics | physics | 57/612, 8.6mm | 0, ≤11.6mm |
+| male heavy stress | physics | Tier-1 | 88/745, 20.0mm | 0, ≤23.0mm |
+| female normal | **Tier-1** | physics | 279/622, 20.3mm | 0, ≤23.3mm |
+| female stress | **Tier-1** | physics | 409/873, 21.8mm | 0, ≤24.8mm |
+
+Female shows ~5x more clipping vertices than male (45-47% of the
+below-waistband tee vs 9%) and needs ~2x larger corrections. That is a
+direct consequence of the female tee being a Tier-1 kinematic fit rather
+than a physics drape — it hangs against the body differently. The
+reconciliation absorbs it, but a 23-25mm correction is large enough that
+the corrected hem shape should get a human visual review before this is
+called finished for female.
+
+### Ragged/torn hem at the BACK — reported from a real GLB review, root-caused and fixed
+
+**Symptom** (spotted by eye on `acceptance_*.glb`, front view fine, back
+view visibly torn): the tee hem showed a ragged slit / bitten-out look where
+it crosses the pants waistband, on the **back** of the body.
+
+**Root cause — a known failure mode of this codebase's own push-out.**
+`resolve_interpenetration()` snaps each offending vertex independently to
+its own nearest point with no neighbour averaging. That is already
+documented for the pants crotch ("stair-steps visibly in the pants crotch's
+tighter concavity", Phase 2), and the same thing happens here. Measured
+neighbour-to-neighbour displacement jump after a bare push:
+
+| body | corrected verts (front/back) | mean jump | max jump |
+|---|---|--:|--:|
+| male heavy | 131 (46 / **85**) | 3.43mm | 12.5mm |
+| female stress | 473 (228 / **245**) | 4.17mm | **23.7mm** |
+
+A 12-24mm step between *adjacent* vertices is exactly the visible tear. It
+concentrates at the back because that is where the clipping is (49 back / 8
+front on the avg body), which is why the front looked fine.
+
+**The dark slivers were INVERTED TRIANGLES, not the raggedness itself.**
+A second review round (after a first smoothing attempt) still showed small
+dark slits, on female especially. Cause found by checking face-normal
+orientation before vs after: the correction was flipping triangles, and a
+flipped face renders as a backface — a dark sliver. Ruled out first, by
+measurement, rather than assumed: tee-inside-BODY interpenetration was
+**0 on every body** both before and after, so the body showing through was
+not the cause.
+
+| body | flipped faces, bare push | where |
+|---|--:|---|
+| male heavy | 0 | — |
+| female normal | **23** | all FRONT, 1.4-4.9cm below the waistband |
+| female stress | **22** | all FRONT |
+
+Note this is a *different* defect from the ragged back hem: male heavy had
+ragged-back-but-no-flips, female had flips-on-the-front. Both had to be
+fixed, and a fix for one is not a fix for the other.
+
+**Why the obvious remedy does not work.** Production's standard fix for
+push-out terracing is `smooth_garment()` + a light re-push. But
+`smooth_garment()` **pins boundary-loop vertices** (neckline, hem, cuffs)
+back to their pre-smoothing positions — and the tee hem *is* a boundary
+loop, and *is* precisely where the correction lives. It would pin back the
+very vertices that are ragged.
+
+**The fix (`reconcile()`): one proximity query, then an analytic depth
+field.**
+
+1. A single `closest_point` call yields the signed distance, closest point
+   and normal for every candidate vertex.
+2. The correction is built as a scalar **depth field**, then **dilated** (a
+   max-filter over the 1-ring) so each vertex is guaranteed to move at least
+   as far as it needs to, then smoothed, then clamped with an elementwise
+   `max` against the original requirement. Dilate-then-smooth is what lets
+   the field be smooth *without* letting anything sink back inside — plain
+   averaging does not have that property.
+3. Any remaining inverted triangle is repaired locally (Laplacian relaxation
+   restricted to the offending vertices, a few passes).
+
+| body | clipping | mean jump (bare → fixed) | max jump | flipped faces |
+|---|--:|--:|--:|--:|
+| male avg | 0 | 2.32 → **0.66mm** | 8.4 → 4.8mm | 0 → **0** |
+| male heavy | 0 | 3.43 → **1.21mm** | 12.5 → 12.3mm | 0 → **0** |
+| female normal | 0 | 3.40 → **1.77mm** | 14.6 → 15.2mm | 23 → **0** |
+| female stress | 0 | 4.17 → **1.96mm** | 23.7 → 17.2mm | 22 → **0** |
+
+Zero interpenetration, zero inverted faces, on all four bodies.
+
+**Cost: ~150-300ms**, i.e. no slower than the naive single push it replaces,
+despite doing considerably more — everything after the one proximity query
+is numpy over the 1-ring. An intermediate multi-push/smooth schedule was
+tried first and rejected: it reached ~420-860ms (2-3x slower) *and* still
+left 1-4 clipping vertices and 5-6 flipped faces.
+
+**Parameters were swept, not guessed** (`margin=4mm, dilate=3, smooth=6`).
+Counter-intuitively, raising the margin or the smoothing count makes results
+*worse* — a larger displacement produces steeper gradients and flipped faces
+reappear.
+
+**Residual, stated plainly:** the max neighbour-to-neighbour jump is not
+much improved (12-17mm on the harder bodies) even though the mean drops
+2-4x. With zero flipped faces that reads as a crease rather than a tear, but
+it is a crease, and the correction magnitude on female (up to ~26mm) is
+still large because the female tee is a Tier-1 kinematic fit rather than a
+physics drape.
+
+### Push-out performance: 2x faster, bit-identical output
+
+Profiling the combined-outfit pipeline (at production's `num_iters=40`, not
+the inflated 150 an earlier note used) showed the seam reconciliation was
+never the bottleneck at all:
+
+| stage | before | after |
+|---|--:|--:|
+| pants drape | 3901ms | **2490ms** |
+| tee drape | 1787ms | **1447ms** |
+| solve_betas | ~1400ms | ~1400ms |
+| seam reconcile | 237ms | **123ms** |
+
+**92.6% of the pants kinematic fit was three `resolve_interpenetration`
+calls** (9 proximity queries at ~282ms each). Two exact optimisations, both
+verified byte-for-byte — mandatory here, because every delta in both physics
+libraries was baked against this function's exact output:
+
+1. **Only re-check vertices that actually moved.** An unmoved vertex has an
+   unchanged position tested against an unchanged body, so its closest
+   point, signed distance and `signed < margin` result are all identical to
+   the previous pass — re-querying cannot change anything. A pass typically
+   moves ~130 of ~4900 vertices, so passes 2+ query ~35x fewer points.
+   Measured 1.5-2.3x faster per call.
+2. **Share one collision mesh.** The AABB tree costs ~127ms and was rebuilt
+   on every call; a single dressed avatar runs push-out 4-6 times against
+   the *same* body. `body_proximity_mesh()` builds it once and callers pass
+   it via the new optional `body_mesh=` argument (default `None` keeps the
+   old behaviour, so no caller is forced to change).
+
+Verified with SHA-1 hashes of the full physics-drape output for pants and
+tee, across 4 bodies and both genders: **identical before and after both
+changes**. The delta libraries remain valid; no re-bake needed.
+
+### Shipped into the engine
+
+Promoted out of `tools/` into **`app/layering.py`** (`reconcile_seam()`,
+`waistband_height()`, `build_layered_glb()`), verified to reproduce the
+validated tooling implementation bit-for-bit across both genders and four
+body builds. `tools/drape_bake/test_tee_pants_reconcile.py` now delegates to
+it, so the tooling and the engine cannot drift apart.
+
+Exposed on `/generate-dressed-avatar` via an optional **`also_wear`** object
+(category + colour + its own sizing). Omit it and the request behaves exactly
+as before — the single-garment path is untouched, verified byte-identical.
+Requesting the same category twice returns 400. Verified over real HTTP:
+
+| request | result |
+|---|---|
+| pants only (female) | 200, 2 nodes (body+garment) — unchanged |
+| tshirt only (female) | 200, 2 nodes — unchanged |
+| pants + `also_wear` tee (female) | 200, **3 nodes** (body/pants/tshirt), **0 clipping** |
+| tee + `also_wear` pants (male) | 200, **3 nodes**, **0 clipping** |
+| pants + `also_wear` pants | **400** with a clear message |
+
+`_fit_one_layer()` reuses the existing per-garment drape paths (physics where
+a library exists for that category+gender, Tier-1 otherwise) rather than a
+parallel copy, so a layered outfit can never diverge from what the same
+garment renders as on its own.
+
+### What's NOT yet done
+
+- The store/widget do not send `also_wear` yet — the engine supports layered
+  outfits but nothing requests one. That is the remaining integration work,
+  plus the product decision about whether trying a second garment keeps the
+  first ("continue in your clothes") or starts bare.
+- Only tee+pants. A third category would need its own overlap-band
+  identification; the seam logic is not automatically general.
+- Only tested at a handful of body builds and heights, not across either
+  grid's full range.
+- The reconciliation pass only handles tee-hem-vs-pants-waistband. A third
+  category (jacket, etc.) would need its own overlap-band identification the
+  same way, not necessarily the same code path.
+- Cross-section evidence reviewed (see `viz_tee_pants_seam.py`); a 3D
+  human eyeball pass on the GLBs is still outstanding. GLBs + the seam
+  figure are written to `tools/drape_bake/_combo_test/` (gitignored,
+  local-only).
+- The correction is applied to the tee only (pants held fixed). Whether the
+  seam looks better splitting the correction between both garments has not
+  been tested.

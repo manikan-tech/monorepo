@@ -37,6 +37,59 @@ export async function OPTIONS() {
     return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
 }
 
+/**
+ * Resolve a product+variant for try-on, applying EVERY gate the primary
+ * garment gets: existence, active, tenant isolation (404 not 403, so another
+ * tenant's ids stay unguessable), the size existing, and category-correct
+ * garment measurements actually being present on that variant.
+ *
+ * Shared by the primary garment and by `also_wear` deliberately — a layered
+ * request must not be able to reach a product the caller could not request
+ * on its own.
+ */
+async function resolveGarment(
+    productId: string,
+    size: string,
+    retailerId: string,
+    origin: string
+) {
+    const product = await prisma.product.findUnique({
+        where: { id: productId },
+        include: { variants: true },
+    });
+    if (!product || !product.isActive || product.retailerId !== retailerId) {
+        return { ok: false as const, status: 404, error: "Product not found" };
+    }
+    const variant = product.variants.find((v) => v.sizeLabel === size);
+    if (!variant) {
+        return {
+            ok: false as const,
+            status: 400,
+            error: `Size "${size}" not available for this product`,
+        };
+    }
+    const requiredFields = garmentFieldsFor(product.category);
+    const variantHasGarmentData =
+        requiredFields.length > 0 &&
+        requiredFields.every(
+            (f) => (variant as unknown as Record<string, number | null>)[f] !== null
+        );
+    if (!isProductTryOnEnabled(product) || !variantHasGarmentData) {
+        return {
+            ok: false as const,
+            status: 422,
+            error: "This product is not enabled for virtual try-on",
+        };
+    }
+    // Body-service has no DB/catalog access, so the photo must be absolute.
+    const imageUrl = product.imageUrl
+        ? product.imageUrl.startsWith("http")
+            ? product.imageUrl
+            : new URL(product.imageUrl, origin).toString()
+        : null;
+    return { ok: true as const, product, variant, imageUrl };
+}
+
 export async function POST(request: NextRequest) {
     // ── 0. Security gate (key + fail-closed Origin + allowlist + rate limit) ──
     const auth = await authorizeWidgetRequest(request, CORS_HEADERS, "BODY_MODELING");
@@ -57,6 +110,11 @@ export async function POST(request: NextRequest) {
         hips_cm?: number;
         recommended_size?: string;
         shopper_ref?: string;
+        // Optional second garment worn at the same time (e.g. keep your pants
+        // on while trying a tee). Only ids/sizes come from the client — the
+        // garment's colour and measurements are resolved from the DB exactly
+        // like the primary one, so a layered request cannot smuggle in values.
+        also_wear?: { product_id?: string; size?: string };
     };
     try {
         body = await request.json();
@@ -99,63 +157,56 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 3. Resolve product + variant (DB is source of truth for garment data) ──
-    const product = await prisma.product.findUnique({
-        where: { id: product_id },
-        include: { variants: true },
-    });
-
-    if (!product || !product.isActive) {
+    const primary = await resolveGarment(
+        product_id, size, retailer.id, request.nextUrl.origin);
+    if (!primary.ok) {
         return NextResponse.json(
-            { error: "Product not found" },
-            { status: 404, headers: CORS_HEADERS }
+            { error: primary.error },
+            { status: primary.status, headers: CORS_HEADERS }
         );
     }
+    const { product, variant, imageUrl: productImageUrl } = primary;
 
-    // Tenant isolation: the product must belong to the authenticated retailer.
-    // 404 (not 403) so we don't reveal that another tenant's product exists.
-    if (product.retailerId !== retailer.id) {
-        return NextResponse.json(
-            { error: "Product not found" },
-            { status: 404, headers: CORS_HEADERS }
-        );
-    }
-
-    const variant = product.variants.find((v) => v.sizeLabel === size);
-    if (!variant) {
-        return NextResponse.json(
-            { error: `Size "${size}" not available for this product` },
-            { status: 400, headers: CORS_HEADERS }
-        );
-    }
-
-    // Garment data must be present for a 3D try-on (only try-on-enabled products
-    // qualify). Category-aware: a tee needs chest/length/sleeve/shoulder, pants
-    // need waist/hip/inseam/rise. Both the required-field list and this gate come
-    // from lib/tryon-status so they cannot drift from the widget's own
-    // isTryOnEnabled flag. Checked on THIS variant, not just the product.
-    const requiredFields = garmentFieldsFor(product.category);
-    const variantHasGarmentData =
-        requiredFields.length > 0 &&
-        requiredFields.every(
-            (f) => (variant as unknown as Record<string, number | null>)[f] !== null
-        );
-    if (!isProductTryOnEnabled(product) || !variantHasGarmentData) {
-        return NextResponse.json(
-            { error: "This product is not enabled for virtual try-on" },
-            { status: 422, headers: CORS_HEADERS }
-        );
+    // ── 3b. Optional second garment (layered outfit) ──
+    // Same resolution path, so it inherits every gate above. Must be a
+    // different category: body-service layers exactly one upper over one
+    // lower, and two of the same category has no meaningful drape.
+    //
+    // A malformed/partial `also_wear` (missing id or size, or not an object)
+    // is deliberately IGNORED rather than rejected: the request then renders
+    // the primary garment exactly as it always did. Failing the whole try-on
+    // because an optional extra was malformed would turn a cosmetic problem
+    // into a broken feature for the shopper. A well-formed one that cannot be
+    // used (unknown product, wrong tenant, wrong size, not try-on-enabled)
+    // still errors loudly below, so genuine mistakes are not hidden.
+    let alsoWear: Record<string, unknown> | null = null;
+    if (body.also_wear?.product_id && body.also_wear?.size) {
+        const second = await resolveGarment(
+            body.also_wear.product_id, body.also_wear.size,
+            retailer.id, request.nextUrl.origin);
+        if (!second.ok) {
+            return NextResponse.json(
+                { error: `Second garment: ${second.error}` },
+                { status: second.status, headers: CORS_HEADERS }
+            );
+        }
+        if (second.product.category === product.category) {
+            return NextResponse.json(
+                { error: "The second garment must be a different category" },
+                { status: 400, headers: CORS_HEADERS }
+            );
+        }
+        alsoWear = {
+            category: second.product.category,
+            color_hex: second.product.garmentColorHex,
+            garment_chest_cm: second.variant.garmentChestCm,
+            garment_waist_cm: second.variant.garmentWaistCm,
+            product_id: second.product.id,
+            product_image_url: second.imageUrl,
+        };
     }
 
     // ── 4. Proxy to the Body Service ──
-    // Resolve the product photo to an ABSOLUTE URL so the Body Service (which has
-    // no catalog/DB access) can fetch it for garment texturing. Demo t-shirts use
-    // a relative path served from this app's /public; the rest of the catalog uses
-    // absolute Supabase Storage URLs — normalize both to absolute here.
-    const productImageUrl = product.imageUrl
-        ? product.imageUrl.startsWith("http")
-            ? product.imageUrl
-            : new URL(product.imageUrl, request.nextUrl.origin).toString()
-        : null;
 
     let glb: ArrayBuffer;
     try {
@@ -185,6 +236,10 @@ export async function POST(request: NextRequest) {
                 garment_rise_cm: variant.garmentRiseCm,
                 product_id: product.id,
                 product_image_url: productImageUrl,
+                // Omitted entirely when there is no second garment, so the
+                // body-service request is byte-identical to before for every
+                // existing single-garment caller.
+                ...(alsoWear ? { also_wear: alsoWear } : {}),
             }),
         });
 

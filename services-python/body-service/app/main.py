@@ -40,6 +40,7 @@ from pydantic import BaseModel, Field
 
 from . import garment  # Pipeline 1 / Tier 1 garment engine (real garment mesh)
 from . import physics_drape  # Pipeline 2 physics-baked drape (delta library)
+from . import layering  # layered outfits (tee + pants on one body)
 from .config import (
     CORS_ORIGINS,
     DEVICE,
@@ -277,6 +278,26 @@ def _measure_ring_circumference(
 #  DIFFERENTIABLE OPTIMISATION LOOP
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _shape_only_vertices(model, betas: torch.Tensor) -> torch.Tensor:
+    """SMPL vertices for a given β **at zero pose**: v_template + shapedirs·β.
+
+    Only valid when global_orient and body_pose are both zero, which is
+    exactly the case inside solve_betas (it optimises SHAPE against an
+    A-pose; the pose tensors it builds are all-zeros and never change).
+
+    At zero pose the pose blend shapes vanish and every LBS joint rotation is
+    the identity, so the full skinning pipeline reduces to the shape term
+    alone. Verified against the real `model(...)` forward: max difference
+    1.19e-07 m (~0.0001 mm — float32 rounding), while being ~25x cheaper per
+    call and cheaper again to differentiate through. Over a 40-iteration
+    solve that is ~430ms -> ~120ms.
+
+    Do NOT use this anywhere a non-zero pose is involved -- it would silently
+    return the rest-pose body.
+    """
+    return (model.v_template + torch.einsum("bl,mkl->bmk", betas, model.shapedirs)).squeeze(0)
+
+
 def solve_betas(
     model,
     rings: Dict[str, List[int]],
@@ -310,9 +331,9 @@ def solve_betas(
     )
     optimizer = torch.optim.Adam([betas], lr=lr)
 
-    # ── Fixed pose tensors (A-pose = all zeros) ───────────────────────
-    global_orient = torch.zeros(1, 3, dtype=torch.float32, device=DEVICE)
-    body_pose = torch.zeros(1, 69, dtype=torch.float32, device=DEVICE)
+    # ── Pose is fixed at A-pose (all zeros) for the whole solve ───────
+    # Nothing here ever poses the body, which is what makes the shape-only
+    # forward below valid; see _shape_only_vertices().
 
     # ── Target values ─────────────────────────────────────────────────
     target_height_m = target_height_cm / 100.0
@@ -329,14 +350,8 @@ def solve_betas(
     for i in range(num_iters):
         optimizer.zero_grad()
 
-        # ── Forward pass through SMPL ─────────────────────────────────
-        output = model(
-            betas=betas,
-            global_orient=global_orient,
-            body_pose=body_pose,
-            return_verts=True,
-        )
-        verts = output.vertices.squeeze(0)  # (6890, 3)
+        # ── Forward pass (shape only — pose is zero, see helper) ──────
+        verts = _shape_only_vertices(model, betas)  # (6890, 3)
 
         # ── GLOBAL SCALING: height is guaranteed, not optimised ───────
         mesh_height = _measure_height(verts)
@@ -648,6 +663,21 @@ async def generate_avatar(payload: MeasurementsPayload):
 # ---------------------------------------------------------------------------
 # Dressed Avatar Payload
 # ---------------------------------------------------------------------------
+class GarmentLayerPayload(BaseModel):
+    """A second garment worn simultaneously with the primary one.
+
+    Carries only what identifies and sizes a garment -- the body measurements
+    stay on the parent payload, because both layers are worn by the SAME body.
+    """
+    category: str = Field(..., description="'tshirt' or 'pants' -- must differ "
+                                            "from the primary category")
+    color_hex: str = Field(..., description="Hex colour for this garment")
+    garment_chest_cm: Optional[float] = Field(None, description="tshirt sizing")
+    garment_waist_cm: Optional[float] = Field(None, description="pants sizing")
+    product_id: Optional[str] = Field(None)
+    product_image_url: Optional[str] = Field(None)
+
+
 class DressedAvatarPayload(BaseModel):
     """Generate a body mesh wearing a t-shirt."""
     sex: Sex
@@ -686,6 +716,14 @@ class DressedAvatarPayload(BaseModel):
                           "present and loadable, the garment is textured with it "
                           "(recoloured to tshirt_color_hex, shading preserved); "
                           "otherwise it falls back to a flat colour fill."
+    )
+    also_wear: Optional["GarmentLayerPayload"] = Field(
+        None,
+        description="OPTIONAL second garment, worn at the same time as the "
+                    "primary one (e.g. request pants while already wearing a "
+                    "tee). Must be a different category. Omit it and the "
+                    "response is exactly as before -- this adds a layered "
+                    "outfit without changing any existing caller's behaviour.",
     )
 
 
@@ -1065,6 +1103,155 @@ def _dressed_glb_physics_pants(
     return glb
 
 
+def _fit_one_layer(model, sex, category, body_verts, body_faces, lbs_weights,
+                   chest_cm, waist_cm, height_cm,
+                   garment_chest_cm, garment_waist_cm, body_mesh):
+    """Fit ONE garment onto an already-posed body, physics if available for
+    that (category, gender) and Tier-1 otherwise.
+
+    Split out of the single-garment paths so a layered outfit reuses the exact
+    same fitting code rather than a parallel copy that could drift from it.
+    Returns (verts, faces, uv).
+    """
+    if category == "pants":
+        draper = physics_drape.get_pants_draper(model, sex)
+        if draper is not None:
+            res = draper.drape(body_verts, body_faces, lbs_weights,
+                               body_waist_cm=waist_cm, height_cm=height_cm,
+                               garment_waist_cm=garment_waist_cm if garment_waist_cm
+                               else waist_cm / 2.0)
+            if res is not None:
+                v, f, uv, _info = res
+                return v, f, uv
+        tpl = garment.load_pants_template(sex)
+        ref = garment.get_reference_body(model, sex)
+        binding = garment.bind_garment(tpl["vertices"], ref, body_faces, f"pants_{sex}")
+        g = garment.deform_garment(binding, body_verts, body_faces)
+        if garment_waist_cm is not None:
+            try:
+                g = garment.apply_pants_looseness(g, binding, body_verts, body_faces,
+                                                  lbs_weights, garment_waist_cm, waist_cm)
+            except ValueError:
+                pass
+        g = garment.smooth_garment(g, tpl["faces"])
+        # Shared with dress_pants() so pants worn alone and pants worn under a
+        # tee cannot diverge -- they previously did (6mm vs the 4mm default on
+        # the first push-out).
+        g, _ = garment.settle_pants_against_body(g, tpl["faces"], body_verts, body_faces)
+        return g, tpl["faces"], tpl["uv"]
+
+    # ── tshirt ──
+    if USE_PHYSICS_DRAPE and sex == "male":
+        try:
+            d = physics_drape.get_draper()
+            v, f, uv = d.drape(body_verts, body_faces, lbs_weights,
+                               chest_cm=chest_cm, height_cm=height_cm,
+                               garment_chest_cm=garment_chest_cm if garment_chest_cm
+                               else chest_cm / 2.0,
+                               body_chest_cm=chest_cm)
+            return v, f, uv
+        except Exception:
+            logger.exception("Layered tee physics drape failed; using Tier-1")
+    tpl = garment.load_garment_template(sex)
+    ref = garment.get_reference_body(model, sex)
+    binding = garment.bind_garment(tpl["vertices"], ref, body_faces, sex)
+    g = garment.deform_garment(binding, body_verts, body_faces)
+    if garment_chest_cm is not None:
+        try:
+            g = garment.apply_size_looseness(g, binding, body_verts, body_faces,
+                                             lbs_weights, garment_chest_cm, chest_cm, ref)
+        except ValueError:
+            pass
+    g = garment.smooth_garment(g, tpl["faces"])
+    g, _ = garment.resolve_interpenetration(g, body_verts, body_faces, body_mesh=body_mesh)
+    return g, tpl["faces"], tpl["uv"]
+
+
+def generate_layered_avatar_mesh(
+    sex: str,
+    height_cm: float,
+    weight_kg: float,
+    chest_cm: float,
+    waist_cm: float,
+    hips_cm: float,
+    upper: dict,
+    lower: dict,
+) -> bytes:
+    """Render an upper (tee) AND a lower (pants) garment on one body.
+
+    No combined physics bake exists or is needed -- each garment uses its own
+    already-baked delta library independently, and only the tee-hem /
+    pants-waistband overlap is reconciled afterwards (see app/layering.py for
+    why that decomposition is correct and what goes wrong without it).
+
+    The body carries BOTH grids' poses at once: the tee grid's relaxed
+    shoulders and the pants grid's hip abduction write to disjoint SMPL joint
+    ranges, so neither garment's kinematic input is compromised by the other.
+    """
+    model, rings = _load_smpl_model(sex)
+    betas = solve_betas(
+        model=model, rings=rings,
+        target_height_cm=height_cm, target_weight_kg=weight_kg,
+        target_chest_cm=chest_cm, target_waist_cm=waist_cm,
+        target_hips_cm=hips_cm, num_iters=40,
+    )
+
+    body_pose = torch.zeros(1, 69, dtype=torch.float32, device=DEVICE)
+    a = physics_drape.pants_pose_hip_abduction_rad(sex, height_cm)
+    body_pose[0, 0:3] = torch.tensor([0.0, 0.0, a], device=DEVICE)      # L_Hip
+    body_pose[0, 3:6] = torch.tensor([0.0, 0.0, -a], device=DEVICE)     # R_Hip
+    if USE_PHYSICS_DRAPE and sex == "male":
+        s = physics_drape.RELAXED_SHOULDER_ANGLE
+        body_pose[0, 45:48] = torch.tensor([0.0, 0.0, -s], device=DEVICE)   # L_Shoulder
+        body_pose[0, 48:51] = torch.tensor([0.0, 0.0, s], device=DEVICE)    # R_Shoulder
+    with torch.no_grad():
+        out = model(betas=betas.to(DEVICE),
+                    global_orient=torch.zeros(1, 3, dtype=torch.float32, device=DEVICE),
+                    body_pose=body_pose, return_verts=True)
+    body_verts = out.vertices.detach().cpu().numpy().squeeze().astype(np.float64)
+    body_faces = np.asarray(model.faces, dtype=np.int64)
+    lbs_weights = model.lbs_weights.detach().cpu().numpy()
+    # one collision mesh shared by every push-out in both garments' fits
+    body_mesh = garment.body_proximity_mesh(body_verts, body_faces)
+
+    fitted = {}
+    for role, spec in (("upper", upper), ("lower", lower)):
+        v, f, uv = _fit_one_layer(
+            model, sex, spec["category"], body_verts, body_faces, lbs_weights,
+            chest_cm, waist_cm, height_cm,
+            spec.get("garment_chest_cm"), spec.get("garment_waist_cm"), body_mesh,
+        )
+        fitted[role] = {"verts": v, "faces": f, "uv": uv, "spec": spec}
+
+    # ── reconcile the one place the two garments actually meet ──
+    lo = fitted["lower"]
+    waistband_y = layering.waistband_height(lo["verts"], lo["faces"])
+    if waistband_y is not None:
+        up = fitted["upper"]
+        up["verts"], info = layering.reconcile_seam(
+            up["verts"], up["faces"], lo["verts"], lo["faces"], waistband_y)
+        logger.info("Layered outfit seam reconciled: %s", info)
+    else:
+        logger.warning("Lower garment has no open boundary; skipping seam reconciliation")
+
+    layers = []
+    for role in ("lower", "upper"):      # lower first so the tee draws over it
+        item = fitted[role]
+        spec = item["spec"]
+        tex = _load_product_texture(spec.get("product_image_url"), spec["color_hex"])
+        layers.append({
+            "name": spec["category"],
+            "verts": item["verts"], "faces": item["faces"],
+            "color_hex": spec["color_hex"],
+            "uv": item["uv"] if tex is not None else None,
+            "texture_image": tex,
+        })
+    glb = layering.build_layered_glb(body_verts, body_faces, layers, height_cm / 100.0)
+    logger.info("Layered avatar served: %s over %s, %d bytes",
+                upper["category"], lower["category"], len(glb))
+    return glb
+
+
 def generate_dressed_avatar_mesh_v2(
     sex: str,
     height_cm: float,
@@ -1215,6 +1402,64 @@ async def generate_dressed_avatar(payload: DressedAvatarPayload):
     Runs in a thread pool to avoid blocking the async event loop.
     """
     loop = asyncio.get_event_loop()
+
+    # ── Layered outfit (optional `also_wear`) ──
+    # Only on the v2 engine, and only for two DIFFERENT categories; anything
+    # else falls through to the normal single-garment path untouched.
+    if USE_GARMENT_V2 and payload.also_wear is not None:
+        second = payload.also_wear
+        if second.category == payload.category:
+            raise HTTPException(
+                status_code=400,
+                detail=f"also_wear.category must differ from category "
+                       f"(both were '{payload.category}')",
+            )
+        specs = {
+            payload.category: {
+                "category": payload.category,
+                "color_hex": payload.tshirt_color_hex,
+                "garment_chest_cm": payload.garment_chest_cm,
+                "garment_waist_cm": payload.garment_waist_cm,
+                "product_image_url": payload.product_image_url,
+            },
+            second.category: {
+                "category": second.category,
+                "color_hex": second.color_hex,
+                "garment_chest_cm": second.garment_chest_cm,
+                "garment_waist_cm": second.garment_waist_cm,
+                "product_image_url": second.product_image_url,
+            },
+        }
+        roles = layering.split_by_role(list(specs.keys()))
+        if roles is None:
+            raise HTTPException(
+                status_code=400,
+                detail="A layered outfit needs one upper-body and one "
+                       f"lower-body garment; got {sorted(specs.keys())}.",
+            )
+        upper_cat, lower_cat = roles
+        try:
+            glb_bytes = await loop.run_in_executor(
+                None,
+                lambda: generate_layered_avatar_mesh(
+                    sex=payload.sex.value,
+                    height_cm=payload.height_cm,
+                    weight_kg=payload.weight_kg,
+                    chest_cm=payload.chest_cm,
+                    waist_cm=payload.waist_cm,
+                    hips_cm=payload.hips_cm,
+                    upper=specs[upper_cat],
+                    lower=specs[lower_cat],
+                ),
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+        return Response(
+            content=glb_bytes,
+            media_type="model/gltf-binary",
+            headers={"Content-Disposition": 'inline; filename="layered-avatar.glb"'},
+        )
+
     engine_fn = (
         generate_dressed_avatar_mesh_v2 if USE_GARMENT_V2
         else generate_dressed_avatar_mesh
