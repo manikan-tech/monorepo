@@ -71,7 +71,11 @@ async function main() {
     // ── Seed Plan Tiers ──────────────────────────────────────────────────
     // ⚠️  PRODUCT OWNER: these quotas/prices are placeholders. Confirm
     //     actual go-to-market pricing before deploying to production.
-    const plans = [
+    //
+    // Each service is subscribed to, billed, and keyed independently -- a
+    // retailer may subscribe to just one, some, or all three -- so each tier
+    // is a separate Plan row per service, not one row bundling all three.
+    const tiers = [
         {
             name: "Free",
             priceEgpMonthly: 0,
@@ -87,16 +91,26 @@ async function main() {
             priceEgpMonthly: 2499,
             quotas: { BODY_MODELING: 5000, VTON_2D: 1000, RECOMMENDATION: 20000 },
         },
-    ];
+    ] as const;
+    const services = ["BODY_MODELING", "VTON_2D", "RECOMMENDATION"] as const;
 
-    for (const plan of plans) {
-        await prisma.plan.upsert({
-            where: { name: plan.name },
-            update: { priceEgpMonthly: plan.priceEgpMonthly, quotas: plan.quotas },
-            create: plan,
-        });
+    let planCount = 0;
+    for (const tier of tiers) {
+        for (const service of services) {
+            await prisma.plan.upsert({
+                where: { name_service: { name: tier.name, service } },
+                update: { priceEgpMonthly: tier.priceEgpMonthly, quota: tier.quotas[service] },
+                create: {
+                    name: tier.name,
+                    service,
+                    priceEgpMonthly: tier.priceEgpMonthly,
+                    quota: tier.quotas[service],
+                },
+            });
+            planCount++;
+        }
     }
-    console.log(`Seeded ${plans.length} pricing plans (Free / Starter / Growth).`);
+    console.log(`Seeded ${planCount} pricing plans (Free / Starter / Growth × 3 services).`);
 
 
     // Locating the catalog CSV file
