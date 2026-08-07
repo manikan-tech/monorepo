@@ -1,9 +1,13 @@
 # Temporary image validation, storage, download, and cleanup utilities.
+import io
+import ipaddress
 import logging
 import os
 import shutil
+import socket
 import uuid
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 from fastapi import UploadFile
@@ -40,7 +44,18 @@ def _decode_and_validate_image(
     return image
 
 
-def save_upload_to_temp(upload_file: UploadFile, temp_dir: str) -> str:
+def _read_capped(stream: object, max_bytes: int, *, label: str) -> bytes:
+    """Read a stream up to max_bytes+1 bytes and reject anything larger,
+    instead of decoding an unbounded payload into memory to find out only
+    afterward. Matches body-service's identical guard on its own image
+    fetches (resp.read(cap + 1))."""
+    data = stream.read(max_bytes + 1)  # type: ignore[attr-defined]
+    if len(data) > max_bytes:
+        raise ValueError(f"{label} exceeds the {max_bytes} byte size limit.")
+    return data
+
+
+def save_upload_to_temp(upload_file: UploadFile, temp_dir: str, max_bytes: int) -> str:
     """Validate and save an uploaded image as a temporary RGB JPEG."""
     content_type = upload_file.content_type or ""
     if not content_type.startswith("image/"):
@@ -48,8 +63,9 @@ def save_upload_to_temp(upload_file: UploadFile, temp_dir: str) -> str:
 
     destination = Path(temp_dir) / f"{uuid.uuid4()}.jpg"
     try:
+        data = _read_capped(upload_file.file, max_bytes, label="human_image")
         _save_as_rgb_jpeg(
-            upload_file.file,
+            io.BytesIO(data),
             destination,
             label="human_image",
             min_width=MIN_HUMAN_IMAGE_WIDTH,
@@ -64,10 +80,29 @@ def save_upload_to_temp(upload_file: UploadFile, temp_dir: str) -> str:
     return str(destination)
 
 
-def download_url_to_temp(url: str, temp_dir: str) -> str:
+def _reject_disallowed_host(url: str) -> None:
+    """Reject a URL whose host resolves to a private/loopback/link-local
+    address, so a retailer-supplied garment_image_url cannot be turned into a
+    request against an internal service or cloud metadata endpoint. Same
+    guard as body-service applies to its own retailer-supplied image URLs."""
+    hostname = urlparse(url).hostname
+    if not hostname:
+        raise ValueError("garment_image_url is missing a host.")
+    try:
+        addresses = socket.getaddrinfo(hostname, None)
+    except OSError as error:
+        raise ValueError("garment_image_url host could not be resolved.") from error
+    for _family, _type, _proto, _canonname, sockaddr in addresses:
+        ip = ipaddress.ip_address(sockaddr[0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            raise ValueError("garment_image_url resolves to a disallowed address.")
+
+
+def download_url_to_temp(url: str, temp_dir: str, max_bytes: int) -> str:
     """Download an image URL to a UUID-named temporary file."""
     if not url.startswith(("https://", "http://")):
         raise ValueError("garment_image_url must be an HTTP(S) image URL.")
+    _reject_disallowed_host(url)
 
     try:
         response = requests.get(url, stream=True, timeout=10)
@@ -82,8 +117,9 @@ def download_url_to_temp(url: str, temp_dir: str) -> str:
 
     destination = Path(temp_dir) / f"{uuid.uuid4()}.jpg"
     try:
+        data = _read_capped(response.raw, max_bytes, label="garment_image_url")
         _save_as_rgb_jpeg(
-            response.raw,
+            io.BytesIO(data),
             destination,
             label="garment_image_url",
             min_width=MIN_GARMENT_IMAGE_WIDTH,
