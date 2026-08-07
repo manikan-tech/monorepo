@@ -3,6 +3,7 @@ import { getAuthFromCookies } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { redirect } from "next/navigation";
 import RecommendationSettingsForm from "./RecommendationSettingsForm";
+import ServiceKeyPanel from "../_components/ServiceKeyPanel";
 
 export default async function RecommendationsPage() {
   const user = await getAuthFromCookies();
@@ -39,17 +40,7 @@ export default async function RecommendationsPage() {
           <RecommendationSettingsForm initialSettings={retailer?.recommendationSettings || {}} />
         </div>
         <div className="animate-fade-up" style={{ animationDelay: "300ms" }}>
-          <div className="bg-cream-50 rounded-3xl shadow-soft border border-manikan-border p-8">
-            <h3 className="text-xl font-display font-semibold text-forest-900 mb-4">Live Usage</h3>
-            <p className="text-manikan-text-secondary text-sm mb-6">
-              Usage metrics for the recommendation engine are now tracked in the Overview tab of this Services Hub.
-            </p>
-            <div className="flex items-center justify-center p-6 bg-white/50 rounded-xl border border-cream-100/50">
-              <svg className="w-8 h-8 text-emerald-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-          </div>
+          <ServiceKeyPanel service="RECOMMENDATION" scriptSrc="https://widget.manikan.tech/v1/recommend.js" />
         </div>
       </div>
     </div>

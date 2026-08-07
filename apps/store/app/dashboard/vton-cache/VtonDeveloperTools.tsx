@@ -81,7 +81,7 @@ export default function VtonDeveloperTools() {
       const [cache, allowlist, key] = await Promise.all([
         readJson<{ cacheEntries: CacheEntry[] }>("/api/vton/cache"),
         readJson<{ origins: OriginEntry[] }>("/api/vton/allowlist"),
-        readJson<{ apiKey: string }>("/api/retailer/widget-key"),
+        readJson<{ apiKey: string }>("/api/retailer/widget-key/VTON_2D"),
       ]);
 
       setCacheEntries(cache.cacheEntries);
