@@ -9,6 +9,7 @@ import { useCart } from "../../../../components/CartContext";
 import { useWishlist } from "../../../../components/WishlistContext";
 import Modal from "../../../../components/Modal";
 import Manikan3DTryOn from "../../../../components/product/Manikan3DTryOn";
+import ManikanRecommendWidget from "../../../../components/product/ManikanRecommendWidget";
 
 type Review = {
   id: string;
@@ -238,58 +239,94 @@ export default function ProductDetailPage() {
             {cartError && (
               <p className="text-sm text-red-500 bg-red-50 rounded-xl px-4 py-2.5 border border-red-100">{cartError}</p>
             )}
-            <button
-              onClick={handleAddToCart}
-              disabled={isAdding || (selectedVariant && selectedVariant.stock === 0)}
-              className="flex items-center justify-center gap-2 w-full bg-forest-900 text-white rounded-2xl py-4 font-medium shadow-soft hover:bg-forest-800 transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-80 disabled:cursor-not-allowed"
-            >
-              {isAdding ? (
-                <span className="inline-block w-5 h-5 border-[2px] border-white/30 border-t-white rounded-full animate-spin" />
-              ) : selectedVariant && selectedVariant.stock === 0 ? (
-                "Out of Stock"
-              ) : (
-                <>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-                    <path d="M3 6h18" />
-                    <path d="M16 10a4 4 0 0 1-8 0" />
-                  </svg>
-                  Add to Cart
-                </>
-              )}
-            </button>
             <div className="flex gap-3">
               <button
-                onClick={() => toggle(product.id)}
-                className={`flex items-center justify-center gap-2 py-3 px-5 border-2 rounded-2xl font-medium text-sm transition-all duration-300 hover:-translate-y-0.5 ${wishlisted ? "border-gold-500 bg-gold-50 text-gold-600" : "border-forest-200 text-forest-700 hover:border-gold-400 hover:text-gold-600"}`}
+                onClick={handleAddToCart}
+                disabled={isAdding || (selectedVariant && selectedVariant.stock === 0)}
+                className="flex-1 flex items-center justify-center gap-2 bg-forest-900 text-white rounded-2xl py-4 font-medium shadow-soft hover:bg-forest-800 transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-80 disabled:cursor-not-allowed"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill={wishlisted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {isAdding ? (
+                  <span className="inline-block w-5 h-5 border-[2px] border-white/30 border-t-white rounded-full animate-spin" />
+                ) : selectedVariant && selectedVariant.stock === 0 ? (
+                  "Out of Stock"
+                ) : (
+                  <>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+                      <path d="M3 6h18" />
+                      <path d="M16 10a4 4 0 0 1-8 0" />
+                    </svg>
+                    Add to Cart
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => toggle(product.id)}
+                aria-label={wishlisted ? "Remove from wishlist" : "Save to wishlist"}
+                className={`flex items-center justify-center px-5 border-2 rounded-2xl transition-all duration-300 hover:-translate-y-0.5 ${wishlisted ? "border-gold-500 bg-gold-50 text-gold-600" : "border-forest-200 text-forest-700 hover:border-gold-400 hover:text-gold-600"}`}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill={wishlisted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
                 </svg>
-                {wishlisted ? "Wishlisted" : "Save"}
               </button>
-              <Link
-                href={`/visualize?productId=${product.id}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  void handleVirtualTryOn();
-                }}
-                aria-busy={isTryOnRouting}
-                className="flex-1 flex items-center justify-center gap-3 py-3 px-6 border-2 border-gold-400 text-gold-600 rounded-2xl font-medium text-sm hover:bg-gold-50 hover:text-gold-700 transition-all duration-300 hover:-translate-y-0.5 animate-pulse-glow hover:animate-none"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-                </svg>
-                Virtual Try-On
-              </Link>
             </div>
 
-            {/* 3D body-modelling try-on (body-service). Sits below the 2D
-                Virtual Try-On rather than beside it: full width gives the
-                flagship feature room, and avoids cramming three controls
-                into one row on narrow screens. */}
-            <Manikan3DTryOn product={product} />
+            {/* AI-powered fit tools — 2D photo try-on (VTON service) and 3D
+                body-modelling try-on (body-service) grouped as one premium
+                capability, not two disconnected buttons. Distinct icon +
+                copy per tool so shoppers know these are two different
+                features, not a duplicate control. */}
+            <div className="relative rounded-3xl border border-gold-200/70 bg-gradient-to-br from-gold-50 via-cream-50 to-white p-5 shadow-soft overflow-hidden">
+              <div aria-hidden className="pointer-events-none absolute -top-20 -right-20 w-48 h-48 rounded-full bg-gold-200/40 blur-3xl" />
+
+              <div className="relative flex items-center gap-2 mb-4">
+                <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-forest-900 text-gold-300">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2Z" />
+                  </svg>
+                </span>
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-forest-700/70">
+                  AI-Powered Fit Tools
+                </p>
+              </div>
+
+              <div className="relative flex flex-col gap-3">
+                <Link
+                  href={`/visualize?productId=${product.id}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void handleVirtualTryOn();
+                  }}
+                  aria-busy={isTryOnRouting}
+                  className="group relative flex items-center justify-center gap-3 py-3 px-6 rounded-2xl font-medium text-sm border-2 border-gold-400 text-gold-700 bg-white/60 hover:bg-gold-50 hover:text-gold-800 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98] overflow-hidden"
+                >
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-[radial-gradient(120%_120%_at_50%_0%,rgba(212,155,99,0.25),transparent_60%)]"
+                  />
+                  {isTryOnRouting ? (
+                    <span className="relative w-4 h-4 border-[2px] border-gold-400/40 border-t-gold-600 rounded-full animate-spin" />
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="relative">
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                      <circle cx="12" cy="13" r="4" />
+                    </svg>
+                  )}
+                  <span className="relative">{isTryOnRouting ? "Preparing preview…" : "2D Try-On"}</span>
+                  <span className="relative text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-forest-900/10 text-forest-700 border border-forest-900/10">
+                    Photo
+                  </span>
+                </Link>
+
+                <Manikan3DTryOn product={product} />
+              </div>
+            </div>
           </div>
+
+          {/* Recommendation chat widget (recommendation-service). Floating,
+              fixed-position bubble — renders nowhere in this column's flow,
+              it just needs to exist once per product page. */}
+          <ManikanRecommendWidget productId={product.id} />
 
           {/* Shipping Info */}
           <div className="flex items-center gap-6 mt-4 pt-6 border-t border-forest-900/5 animate-fade-in-up" style={{ animationDelay: '300ms' }}>

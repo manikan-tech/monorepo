@@ -37,9 +37,12 @@ const WIDGET_SRC = "/manikan-widget.js";
 
 // Public by design — it lives in retailer page HTML and is paired with an
 // Origin allowlist server-side. Configurable per deployment; falls back to the
-// local demo retailer so dev works out of the box.
+// local demo retailer's BODY_MODELING ServiceApiKey so dev works out of the
+// box. NOTE: this fallback goes stale if that key is ever rotated from the
+// dashboard (Services > Body Modeling > Regenerate Key) -- for anything past
+// local dev, set NEXT_PUBLIC_MANIKAN_WIDGET_KEY instead of relying on this.
 const RETAILER_KEY =
-  process.env.NEXT_PUBLIC_MANIKAN_WIDGET_KEY || "cms73igx50004vlf0v2il41qc";
+  process.env.NEXT_PUBLIC_MANIKAN_WIDGET_KEY || "pk_live_618be0c3849d6587048cc81bb490c4d10aaf2c72e9e04330";
 
 type MountResult = { unmount: () => void } | null;
 type WidgetProduct = {
