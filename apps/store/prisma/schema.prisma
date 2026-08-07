@@ -64,7 +64,6 @@ model Retailer {
   storeName      String
   hashedPassword String?
   isActivated    Boolean  @default(false)
-  apiKey         String   @unique @default(cuid())
   widgetSettings         Json?
   recommendationSettings Json?
   createdAt              DateTime @default(now())
@@ -72,6 +71,7 @@ model Retailer {
 
   products         Product[]
   sessions         MeasurementSession[]
+  serviceApiKeys   ServiceApiKey[]
   subscriptions    Subscription[]
   billingCheckouts BillingCheckout[]
   originAllowlist  OriginAllowlist[]
@@ -81,26 +81,58 @@ model Retailer {
 
 // ─── SaaS billing ──────────────────────────────────────────────
 
-// Pricing tiers define the quota limits each retailer receives per month.
-// The `quotas` JSON shape: { BODY_MODELING: number, VTON_2D: number, RECOMMENDATION: number }
+// Each service (BODY_MODELING / VTON_2D / RECOMMENDATION) is subscribed to,
+// keyed, and billed completely independently -- a retailer may use just one,
+// some, or all three. One retailer-wide key (the old Retailer.apiKey) made it
+// impossible to tell which service a request was for, or to gate a service
+// on that service's own subscription. This is the widget-facing PUBLIC key
+// (not a secret) sent as X-Manikan-Key; see app/lib/service-auth.ts for the
+// separate, private, server-to-server keys the Python services verify.
+model ServiceApiKey {
+  id         String   @id @default(cuid())
+  retailerId String
+  service    String // "BODY_MODELING" | "VTON_2D" | "RECOMMENDATION"
+  apiKey     String   @unique @default(cuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+
+  @@unique([retailerId, service])
+}
+
+// Pricing tiers. A plan belongs to exactly one service -- e.g. "Growth" for
+// BODY_MODELING and "Growth" for RECOMMENDATION are two separate rows, which
+// can carry different prices/quotas per service. A same-name bundle discount
+// for subscribing to all three is a future checkout-flow/pricing decision on
+// top of this, not a schema concern.
 model Plan {
   id              String   @id @default(cuid())
-  name            String   @unique
+  name            String
+  service         String // "BODY_MODELING" | "VTON_2D" | "RECOMMENDATION"
   priceEgpMonthly Float
-  quotas          Json
+  quota           Int
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  subscriptions Subscription[]
+  subscriptions    Subscription[]
+  billingCheckouts BillingCheckout[]
+
+  @@unique([name, service])
 }
 
 // Stripe identifiers are only written by verified Stripe webhooks. Historical
 // rows are retained so delayed events cannot overwrite a newer subscription.
 // `planId` and `currentPeriodEnd` are nullable so legacy/webhook-created rows
 // (which predate Plan selection) remain valid until fully migrated.
+//
+// One row per (retailer, service): independent subscriptions, so a retailer
+// subscribed to BODY_MODELING only has no RECOMMENDATION row at all (not a
+// row with a zero quota) until they subscribe to that service too.
 model Subscription {
   id                   String             @id @default(cuid())
   retailerId           String
+  service              String // "BODY_MODELING" | "VTON_2D" | "RECOMMENDATION"
   planId               String?
   stripeCustomerId     String
   // Legacy rows may not have a Stripe subscription ID. New webhook-created
@@ -108,9 +140,9 @@ model Subscription {
   stripeSubscriptionId String?            @unique
   status               SubscriptionStatus @default(PAST_DUE)
   currentPeriodEnd     DateTime?
-  // Running tally of usage per service scope in the current billing period.
-  // Shape: { BODY_MODELING: number, VTON_2D: number, RECOMMENDATION: number }
-  currentPeriodUsage   Json               @default("{}")
+  // Usage count for THIS service in the current billing period (a
+  // subscription is already single-service, so no per-scope keying needed).
+  currentPeriodUsage   Int                @default(0)
   lastStripeEventAt    Int                @default(0)
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
@@ -119,6 +151,7 @@ model Subscription {
   plan     Plan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
 
   @@index([retailerId, status])
+  @@index([retailerId, service, status])
   @@index([stripeCustomerId])
 }
 
@@ -146,13 +179,25 @@ model ServiceUsageDailyRollup {
 model BillingCheckout {
   stripeCheckoutSessionId String   @id
   retailerId              String
+  service                 String // "BODY_MODELING" | "VTON_2D" | "RECOMMENDATION" -- which independent subscription this checkout is for.
+  planId                  String // The exact plan tier the retailer selected -- the webhook reads this (not Stripe metadata) to activate the subscription on the right plan.
   createdAt               DateTime @default(now())
 
   retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  plan     Plan     @relation(fields: [planId], references: [id])
 }
 
 // Tenant-owned Origins used by VTON developer tooling. Origin values are
 // normalized before persistence so equivalent values cannot bypass the limit.
+//
+// NOT CURRENTLY ENFORCED ANYWHERE: the real security gate (widget-auth.ts's
+// origin check, and the VTON storefront proxy's same-origin check) both read
+// Retailer.widgetSettings.allowedOrigins instead -- a separate, actually-
+// enforced mechanism. This table is only read/written by the dashboard CRUD
+// at app/api/vton/allowlist, with no consumer checking it on the request
+// path. Before building anything on top of this table, either wire it into
+// a real enforcement point or retire it -- don't assume populating it
+// restricts anything today.
 model OriginAllowlist {
   id         String   @id @default(cuid())
   retailerId String
