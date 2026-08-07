@@ -23,6 +23,7 @@ References:
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 import math
 from contextlib import asynccontextmanager
@@ -33,7 +34,7 @@ import numpy as np
 import torch
 import trimesh
 from PIL import Image
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -42,6 +43,8 @@ from . import garment  # Pipeline 1 / Tier 1 garment engine (real garment mesh)
 from . import physics_drape  # Pipeline 2 physics-baked drape (delta library)
 from . import layering  # layered outfits (tee + pants on one body)
 from .config import (
+    BODY_SERVICE_KEY,
+    BODY_SERVICE_KEY_PREVIOUS,
     CORS_ORIGINS,
     DEVICE,
     MODEL_DIR,
@@ -590,6 +593,22 @@ app.add_middleware(
 )
 
 
+def verify_internal_key(x_manikan_internal_key: str = Header(default="")) -> None:
+    """
+    body-service has no other authentication of its own (see README) -- CORS
+    only constrains browsers, not server-to-server or direct callers. This is
+    what actually stops anything other than the Store's proxy from reaching
+    these routes and bypassing its API-key/subscription/quota checks. Fails
+    closed if no key is configured, so an unconfigured secret never means
+    "open"; accepts BODY_SERVICE_KEY_PREVIOUS too for zero-downtime rotation.
+    """
+    candidates = [key for key in (BODY_SERVICE_KEY, BODY_SERVICE_KEY_PREVIOUS) if key]
+    if not candidates or not any(
+        hmac.compare_digest(x_manikan_internal_key, key) for key in candidates
+    ):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
 @app.get("/health")
 async def health():
     """Liveness probe."""
@@ -606,6 +625,7 @@ async def health():
             "description": "Binary GLB file containing the generated 3D avatar mesh.",
         }
     },
+    dependencies=[Depends(verify_internal_key)],
 )
 async def generate_avatar(payload: MeasurementsPayload):
     """
@@ -642,10 +662,11 @@ async def generate_avatar(payload: MeasurementsPayload):
     except ValueError as exc:
         if str(exc) == "TOO_SMALL":
             raise HTTPException(status_code=400, detail="TOO_SMALL") from exc
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Avatar generation failed with invalid input")
+        raise HTTPException(status_code=500, detail="Avatar generation failed.") from exc
     except Exception as exc:
         logger.exception("Avatar generation failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Avatar generation failed.") from exc
 
     return Response(
         content=glb_bytes,
@@ -931,13 +952,33 @@ _TEXTURE_MAX_BYTES = 20 * 1024 * 1024  # cap download size (defensive)
 
 
 def _fetch_image_bytes(url: str) -> bytes:
-    """GET an image over http(s) with a timeout and a size cap. Scheme-checked
-    to keep this from being turned into an arbitrary-URL fetcher."""
+    """GET an image over http(s) with a timeout and a size cap. Scheme- and
+    resolved-address-checked to keep this from being turned into an
+    arbitrary-URL / internal-network fetcher: product_image_url ultimately
+    comes from retailer-uploaded catalog data (CSV product upload in the
+    Store), so a malicious or compromised retailer account could otherwise
+    point it at an internal service or a cloud metadata endpoint.
+
+    Note: this checks the address(es) DNS resolves to right before connecting,
+    not the address urlopen ultimately connects to -- it narrows the window
+    for a DNS-rebinding attack but doesn't eliminate it. Acceptable here since
+    a failure just falls back to a flat-colour texture (see caller)."""
+    import ipaddress
+    import socket
     import urllib.request
     from urllib.parse import urlparse
 
-    if urlparse(url).scheme not in ("http", "https"):
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
         raise ValueError(f"unsupported image URL scheme: {url!r}")
+    if not parsed.hostname:
+        raise ValueError(f"missing host in image URL: {url!r}")
+
+    for family, _, _, _, sockaddr in socket.getaddrinfo(parsed.hostname, None):
+        ip = ipaddress.ip_address(sockaddr[0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            raise ValueError(f"image URL resolves to a disallowed address: {url!r}")
+
     req = urllib.request.Request(url, headers={"User-Agent": "manikan-body-service"})
     with urllib.request.urlopen(req, timeout=_TEXTURE_FETCH_TIMEOUT) as resp:
         return resp.read(_TEXTURE_MAX_BYTES + 1)
@@ -1394,6 +1435,7 @@ def generate_dressed_avatar_mesh_v2(
             "description": "Binary GLB file with the body mesh wearing a t-shirt.",
         }
     },
+    dependencies=[Depends(verify_internal_key)],
 )
 async def generate_dressed_avatar(payload: DressedAvatarPayload):
     """
@@ -1453,7 +1495,10 @@ async def generate_dressed_avatar(payload: DressedAvatarPayload):
                 ),
             )
         except FileNotFoundError as exc:
-            raise HTTPException(status_code=503, detail=str(exc))
+            logger.exception("SMPL model file not found (layered outfit)")
+            raise HTTPException(
+                status_code=503, detail="SMPL model files not available."
+            ) from exc
         return Response(
             content=glb_bytes,
             media_type="model/gltf-binary",
@@ -1498,10 +1543,11 @@ async def generate_dressed_avatar(payload: DressedAvatarPayload):
     except ValueError as exc:
         if str(exc) == "TOO_SMALL":
             raise HTTPException(status_code=400, detail="TOO_SMALL") from exc
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Dressed avatar generation failed with invalid input")
+        raise HTTPException(status_code=500, detail="Dressed avatar generation failed.") from exc
     except Exception as exc:
         logger.exception("Dressed avatar generation failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Dressed avatar generation failed.") from exc
 
     return Response(
         content=glb_bytes,
