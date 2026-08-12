@@ -2,13 +2,24 @@
 -- RECOMMENDATION are now billed, keyed, and quota-tracked independently. A
 -- retailer may subscribe to one, some, or all three.
 --
--- The only pre-existing data in Plan/Subscription (2 dev/test retailers, one
--- "Pro" plan, one bundled subscription) is removed here and re-created in the
--- new per-service shape by prisma/scripts/backfill-per-service.ts, run
+-- Whatever is currently in Plan/Subscription is removed here and re-created
+-- in the new per-service shape by prisma/scripts/backfill-per-service.ts, run
 -- immediately after this migration. Their old values (usage count, Stripe
--- ids, etc) are preserved -- see that script for the exact mapping.
-DELETE FROM "Subscription" WHERE id = 'cms74gsc800004yf0f5t5otop';
-DELETE FROM "Plan" WHERE id = 'cms7r2owu0000djf0mab5jkqo';
+-- ids, etc) are preserved -- see that script for the exact mapping, and
+-- /tmp .../pre-migration-snapshot.json for the pre-delete values captured
+-- from the live DB right before this ran.
+--
+-- Originally this deleted two specific hardcoded dev/test ids. Those ids no
+-- longer matched anything in the live database by the time this was actually
+-- applied (see the review discussion in the size-chart-ingestion work) --
+-- Plan/Subscription had real, current-shape rows under different ids, and
+-- deleting by stale id was a silent no-op that left the tables non-empty,
+-- which made the ADD COLUMN ... NOT NULL below fail outright (confirmed via
+-- a dry run in a rolled-back transaction). Changed to unconditional deletes,
+-- matching this migration's actual intent: empty both tables before adding
+-- the NOT NULL columns, then let the backfill script fully repopulate them.
+DELETE FROM "Subscription";
+DELETE FROM "Plan";
 
 -- DropIndex
 DROP INDEX "Plan_name_key";
