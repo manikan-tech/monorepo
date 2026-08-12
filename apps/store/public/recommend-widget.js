@@ -24,8 +24,13 @@
     }
 
     let conversationHistory = [];
-    const activeSizeChartCSV = `size_label,chest_cm,waist_cm,hip_cm,length_cm\nS,86,68,90,58\nM,90,72,94,59\nL,94,76,98,60\nXL,98,80,102,61`;
-    let activeUserBetas = null; 
+    // The size chart is no longer sent from here -- the Store builds it
+    // server-side from the product's own ingested measurements (same
+    // "server resolves it, never trusts the client" rule as retailer_id
+    // above). A client-supplied chart was the exact data the server used to
+    // compute a recommendation for that same client, so nothing stopped a
+    // fabricated one from steering its own result.
+    let activeUserBetas = null;
 
     // Inject Modern Premium & Luxurious CSS Styling (Monochrome with subtle Gold Accents)
     const style = document.createElement('style');
@@ -435,8 +440,7 @@
             session_id: sessionId,
             messages: conversationHistory,
             product_id: PRODUCT_ID,
-            betas: activeUserBetas,
-            size_chart: activeSizeChartCSV
+            betas: activeUserBetas
         };
 
         try {
