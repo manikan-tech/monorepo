@@ -7,6 +7,10 @@ import { createClient } from "../lib/supabase/client";
 
 export default function SidebarNav({ isActivated = true }: { isActivated?: boolean }) {
   const pathname = usePathname();
+
+  const isSizeChartsActive = pathname.startsWith("/dashboard/products/size-charts");
+  const isProductsActive =
+    pathname.startsWith("/dashboard/products") && !isSizeChartsActive;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -38,17 +42,32 @@ export default function SidebarNav({ isActivated = true }: { isActivated?: boole
 
         {isActivated && (
           <>
+            {/* Size Charts lives under /dashboard/products/*, so Products has
+                to exclude it or both entries highlight at once. */}
             <Link
               href="/dashboard/products"
-              className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors duration-200 ${pathname.startsWith("/dashboard/products")
+              className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors duration-200 ${isProductsActive
                   ? "bg-forest-800 text-white shadow-soft"
                   : "text-forest-50 hover:bg-forest-800 hover:text-white"
                 }`}
             >
-              <svg className={`w-5 h-5 ${pathname.startsWith("/dashboard/products") ? "text-gold-400" : "opacity-70"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-5 h-5 ${isProductsActive ? "text-gold-400" : "opacity-70"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
               <span className="font-medium">Products</span>
+            </Link>
+
+            <Link
+              href="/dashboard/products/size-charts"
+              className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors duration-200 ${isSizeChartsActive
+                  ? "bg-forest-800 text-white shadow-soft"
+                  : "text-forest-50 hover:bg-forest-800 hover:text-white"
+                }`}
+            >
+              <svg className={`w-5 h-5 ${isSizeChartsActive ? "text-gold-400" : "opacity-70"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+              </svg>
+              <span className="font-medium">Size Charts</span>
             </Link>
 
             <Link

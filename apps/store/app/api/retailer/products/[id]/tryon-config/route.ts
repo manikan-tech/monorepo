@@ -3,6 +3,10 @@ import { Prisma } from "@prisma/client";
 import { getAuthFromCookies } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
 import { garmentFieldsFor, isProductTryOnEnabled } from "../../../../../lib/tryon-status";
+import {
+  commitGarmentConfig,
+  type CommitErrorCode,
+} from "../../../../../lib/commit-measurements";
 
 // ─── /api/retailer/products/[id]/tryon-config ───────────────────────────
 // Retailer-facing endpoint to make one of their products 3D-try-on-enabled by
@@ -23,18 +27,27 @@ import { garmentFieldsFor, isProductTryOnEnabled } from "../../../../../lib/tryo
 //   variant). See docs/enterprise-roadmap.md § Catalog.
 // ───────────────────────────────────────────────────────────────────────
 
-const HEX_COLOR = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+// The write itself lives in app/lib/commit-measurements.ts so that this route,
+// the CSV ingestion pipeline, and any later automated extraction all share one
+// implementation -- validation cannot drift between a human filling in a form
+// and a machine producing the same rows. This route is now just auth, JSON
+// parsing, and mapping the commit result onto HTTP.
+//
+// Garment measurements are keyed dynamically by the product's own category
+// (garmentFieldsFor) rather than a hardcoded tee-shaped interface -- a frozen
+// tee-shaped field list here is what previously made pants un-configurable
+// through this route.
 
-// Variant garment measurements, keyed dynamically by the product's own
-// category (garmentFieldsFor) rather than a hardcoded tee-shaped interface --
-// this is what previously made pants un-configurable through this route: the
-// field list here was frozen to the tee's four fields no matter what
-// category the product actually was.
-type VariantConfigInput = { sizeLabel: string } & Record<string, number>;
-
-function isPositiveNumber(v: unknown): v is number {
-  return typeof v === "number" && Number.isFinite(v) && v > 0;
-}
+/** Commit failures -> the exact status + message this route has always
+ *  returned. Kept as a table so the mapping is auditable at a glance. */
+const ERROR_STATUS: Record<CommitErrorCode, number> = {
+  INVALID_COLOR: 400,
+  EMPTY_VARIANTS: 400,
+  PRODUCT_NOT_FOUND: 404,
+  UNSUPPORTED_CATEGORY: 400,
+  INVALID_VARIANT: 400,
+  UNKNOWN_SIZE: 400,
+};
 
 // ─── GET: current try-on config for a product ───
 export async function GET(
@@ -80,85 +93,21 @@ export async function PUT(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  // ── Validate colour ──
-  if (typeof body.garmentColorHex !== "string" || !HEX_COLOR.test(body.garmentColorHex)) {
-    return NextResponse.json(
-      { error: "garmentColorHex is required and must be a hex colour (e.g. #1a1a2e)" },
-      { status: 400 }
-    );
-  }
-  const garmentColorHex = body.garmentColorHex;
-
-  // ── Validate variants ──
-  if (!Array.isArray(body.variants) || body.variants.length === 0) {
-    return NextResponse.json(
-      { error: "variants must be a non-empty array" },
-      { status: 400 }
-    );
-  }
-
-  // ── Fetch product (tenant isolation) first: which fields are required
-  //    depends on the product's own category, so this has to happen before
-  //    variant validation, not after it. ──
-  const product = await prisma.product.findUnique({
-    where: { id },
-    include: { variants: true },
+  const result = await commitGarmentConfig({
+    productId: id,
+    retailerId: user.sub,
+    garmentColorHex: body.garmentColorHex,
+    variants: body.variants,
   });
-  if (!product || product.retailerId !== user.sub) {
-    return NextResponse.json({ error: "Product not found" }, { status: 404 });
-  }
 
-  const fields = garmentFieldsFor(product.category ?? "");
-  if (fields.length === 0) {
+  if (!result.ok) {
     return NextResponse.json(
-      { error: `Unsupported category "${product.category}" -- no garment fields defined for it` },
-      { status: 400 }
+      { error: result.message },
+      { status: ERROR_STATUS[result.code] }
     );
   }
 
-  const variantInputs: VariantConfigInput[] = [];
-  for (const v of body.variants) {
-    if (!v || typeof v.sizeLabel !== "string" || !fields.every((f) => isPositiveNumber(v[f]))) {
-      return NextResponse.json(
-        { error: `Each variant needs a sizeLabel and positive ${fields.join(", ")}` },
-        { status: 400 }
-      );
-    }
-    const input: VariantConfigInput = { sizeLabel: v.sizeLabel };
-    for (const f of fields) input[f] = v[f];
-    variantInputs.push(input);
-  }
-
-  const variantBySize = new Map(product.variants.map((v) => [v.sizeLabel, v]));
-  const updates: Prisma.PrismaPromise<unknown>[] = [
-    prisma.product.update({ where: { id: product.id }, data: { garmentColorHex } }),
-  ];
-
-  for (const input of variantInputs) {
-    const variant = variantBySize.get(input.sizeLabel);
-    if (!variant) {
-      return NextResponse.json(
-        { error: `Unknown size "${input.sizeLabel}" for this product` },
-        { status: 400 }
-      );
-    }
-    // Non-null: every `f` in `fields` was already validated as a positive
-    // number when `input` was constructed above.
-    const data: Record<string, number> = {};
-    for (const f of fields) data[f] = input[f]!;
-    updates.push(
-      prisma.productVariant.update({ where: { id: variant.id }, data })
-    );
-  }
-
-  // Atomic — colour + all variant rows update together, or none do.
-  await prisma.$transaction(updates);
-
-  const updated = await prisma.product.findUnique({
-    where: { id: product.id },
-    include: { variants: true },
-  });
-  return NextResponse.json(configResponse(updated!));
+  return NextResponse.json(configResponse(result.product));
 }
 
 // ─── Shared response shape ───

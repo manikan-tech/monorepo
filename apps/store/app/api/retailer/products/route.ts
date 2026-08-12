@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { getAuthFromCookies } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { isProductTryOnEnabled } from "../../../lib/tryon-status";
+import { isPositiveNumber, isNonNegativeInt } from "../../../lib/validation";
 
 // ─── /api/retailer/products ─────────────────────────────────────────────
 // Retailer-facing CRUD for the retailer's OWN catalog (dashboard, session
@@ -20,12 +21,6 @@ function slugify(text: string): string {
     .replace(/-+/g, "-");
 }
 
-function isPositiveNumber(v: unknown): v is number {
-  return typeof v === "number" && Number.isFinite(v) && v > 0;
-}
-function isNonNegativeInt(v: unknown): v is number {
-  return typeof v === "number" && Number.isInteger(v) && v >= 0;
-}
 
 // ─── GET: list the retailer's own products (paginated) ───
 export async function GET(request: NextRequest) {

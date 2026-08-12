@@ -45,6 +45,24 @@ enum AuditAction {
   PLAN_CHANGED
 }
 
+// Which measurement chart a retailer is uploading. BODY_FIT is the retailer's
+// published size guide ("what body does our M fit") and is a fixed 5 fields
+// regardless of category; GARMENT_TECHPACK is the garment's own flat
+// tech-pack measurements, whose field list varies by category
+// (CATEGORY_GARMENT_FIELDS in app/lib/tryon-status.ts).
+enum ChartType {
+  BODY_FIT
+  GARMENT_TECHPACK
+}
+
+enum IngestionStatus {
+  PENDING // row created, not yet parsed
+  PROCESSING // parsing/validating/committing
+  ACTION_REQUIRED // parsed, but some rows failed validation -- retailer must fix
+  COMPLETE // all rows committed
+  FAILED // unrecoverable (unparseable file, no readable rows)
+}
+
 // ─── B2B: Retailer (existing) ───────────────────────────────────
 
 model PlatformAdmin {
@@ -69,14 +87,55 @@ model Retailer {
   createdAt              DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  products         Product[]
-  sessions         MeasurementSession[]
-  serviceApiKeys   ServiceApiKey[]
-  subscriptions    Subscription[]
-  billingCheckouts BillingCheckout[]
-  originAllowlist  OriginAllowlist[]
-  vtonCacheEntries VtonCacheEntry[]
-  auditLogs        RetailerAuditLog[]
+  products            Product[]
+  sessions            MeasurementSession[]
+  serviceApiKeys      ServiceApiKey[]
+  subscriptions       Subscription[]
+  billingCheckouts    BillingCheckout[]
+  originAllowlist     OriginAllowlist[]
+  vtonCacheEntries    VtonCacheEntry[]
+  auditLogs           RetailerAuditLog[]
+  sizeChartIngestions SizeChartIngestion[]
+}
+
+// ─── Size chart ingestion ──────────────────────────────────────
+
+// One retailer-uploaded measurement chart, from upload through to commit.
+// Deliberately independent of whatever dispatches the work: the handler takes
+// only an id (app/lib/ingestion/process-job.ts) and runs inline today, so
+// putting a real queue in front of it later changes nothing here.
+model SizeChartIngestion {
+  id         String          @id @default(cuid())
+  retailerId String
+  chartType  ChartType
+  status     IngestionStatus @default(PENDING)
+
+  fileName    String
+  storagePath String? // Supabase Storage object key; null when the upload failed
+  rowCount    Int     @default(0)
+
+  // Parsed rows + per-row errors, so the fix screen renders without re-reading
+  // the CSV and a resubmit only touches the rows that changed.
+  // Non-blocking warnings are NOT a third column -- they hang off each
+  // ParsedRow as `warnings`, so they stay attached to the row they describe.
+  rows   Json? // ParsedRow[]  (each row may carry its own warnings)
+  errors Json? // RowError[]
+
+  committedRows Int     @default(0)
+  // Persisted rather than computed: the list endpoint deliberately does not
+  // select `rows`, so deriving this there would undo that.
+  hasWarnings   Boolean @default(false)
+  failureReason String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+
+  @@index([retailerId, status])
+  @@index([retailerId, createdAt])
 }
 
 // ─── SaaS billing ──────────────────────────────────────────────
