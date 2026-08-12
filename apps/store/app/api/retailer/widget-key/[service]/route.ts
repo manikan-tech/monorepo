@@ -1,35 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomBytes } from "crypto";
 import { Prisma } from "@prisma/client";
-import { getAuthFromCookies } from "../../../lib/auth";
-import { prisma } from "../../../lib/prisma";
+import { getAuthFromCookies } from "../../../../lib/auth";
+import { prisma } from "../../../../lib/prisma";
+import { generatePublicKey, isService, Service } from "../../../../lib/service-keys";
 
-// ─── /api/retailer/widget-key ───────────────────────────────────────────
-// Retailer-facing management of the PUBLIC widget key + widget credentials.
-// The dashboard uses these to (a) show the retailer their embed key, (b) rotate
-// it, and (c) manage which Origins are allowed to run their widget + toggle
-// activation.
+// ─── /api/retailer/widget-key/[service] ─────────────────────────────────
+// Retailer-facing management of ONE service's PUBLIC widget key + widget
+// credentials. Each of BODY_MODELING, VTON_2D, and RECOMMENDATION has its own
+// independent key and subscription -- a retailer may use just one, some, or
+// all three, and a key minted for one service can never authorize another
+// (enforced in app/lib/widget-auth.ts).
 //
 // Auth: retailer SESSION COOKIE (getAuthFromCookies) — this is the DASHBOARD
 // side (a logged-in retailer managing their own account). It is NOT the widget
 // gate: the public widget requests are authorised separately by
 // app/lib/widget-auth.ts (X-Manikan-Key header + Origin allowlist).
 //
-// FRONTEND TEAM — this is your backend for the "Widget" settings page:
-//   GET    /api/retailer/widget-key   → { apiKey, isActivated, allowedOrigins }
-//   POST   /api/retailer/widget-key   → rotate key → { apiKey }   (no body)
-//   PATCH  /api/retailer/widget-key   → { allowedOrigins?, isActivated? }
-//                                        → { isActivated, allowedOrigins }
+//   GET    /api/retailer/widget-key/:service   → { apiKey, isActivated, allowedOrigins, subscription }
+//   POST   /api/retailer/widget-key/:service   → rotate key → { apiKey }   (no body)
+//   PATCH  /api/retailer/widget-key/:service   → { allowedOrigins?, isActivated? }
+//                                                 → { isActivated, allowedOrigins }
 // All are retailer-scoped to the caller's own account; no ids in the path.
-
-// `allowedOrigins` is stored INSIDE Retailer.widgetSettings (JSON) because that
-// is exactly where the deployed widget auth gate reads it from. We therefore
-// always MERGE into widgetSettings so we never clobber the UI team's
-// colour/language keys.
-// ─── ENTERPRISE NOTE (future): promote `allowedOrigins` to a dedicated
-//     `Retailer.allowedOrigins String[]` column. A security-critical array
-//     living inside a shared JSON blob is fragile — any non-merging write to
-//     widgetSettings wipes it. See docs/enterprise-roadmap.md § Security. ───
+//
+// `allowedOrigins` is shared account-wide (stored inside Retailer.widgetSettings)
+// rather than per-service: it's the same storefront domain regardless of which
+// services that retailer has subscribed to. Editing it from any service's panel
+// updates the same underlying list. We always MERGE into widgetSettings so we
+// never clobber the UI team's colour/language keys.
 
 interface WidgetSettings {
   allowedOrigins?: string[];
@@ -42,56 +39,94 @@ function readSettings(value: unknown): WidgetSettings {
     : {};
 }
 
-// Public keys are recognizable (Stripe-style `pk_live_…`) so they can never be
-// mistaken for a secret. Keys minted/rotated here use this format; pre-existing
-// cuid keys keep working until rotated.
-// ─── ENTERPRISE NOTE (future): signup still mints a bare `cuid` default
-//     (schema @default(cuid()), owned by the auth/UI team). Ideally signup is
-//     switched to mint this same `pk_live_` format for consistency. ───
-function generatePublicKey(): string {
-  return `pk_live_${randomBytes(24).toString("hex")}`;
-}
-
-// Normalise an origin to `scheme://host[:port]` (lowercased host, no trailing
-// slash) — same shape the widget auth gate compares against.
 function normalizeOrigin(raw: string): string {
   const u = new URL(raw);
   const port = u.port ? `:${u.port}` : "";
   return `${u.protocol}//${u.hostname.toLowerCase()}${port}`;
 }
 
-// ─── GET: current key + activation + allowed origins (for display) ───
-export async function GET() {
+async function resolveService(
+  params: Promise<{ service: string }>
+): Promise<{ ok: true; service: Service } | { ok: false; response: NextResponse }> {
+  const { service } = await params;
+  if (!isService(service)) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Unknown service" }, { status: 404 }),
+    };
+  }
+  return { ok: true, service };
+}
+
+// ─── GET: current key + activation + allowed origins + subscription status ───
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ service: string }> }
+) {
   const user = await getAuthFromCookies();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const resolved = await resolveService(params);
+  if (!resolved.ok) return resolved.response;
+  const { service } = resolved;
+
   const retailer = await prisma.retailer.findUnique({
     where: { id: user.sub },
-    select: { apiKey: true, isActivated: true, widgetSettings: true },
+    select: { isActivated: true, widgetSettings: true },
   });
   if (!retailer) {
     return NextResponse.json({ error: "Retailer not found" }, { status: 404 });
   }
 
+  // Lazily provision this service's key on first access -- no separate
+  // signup-time step needed, and it's idempotent for retailers who already
+  // have one.
+  const serviceKey = await prisma.serviceApiKey.upsert({
+    where: { retailerId_service: { retailerId: user.sub, service } },
+    update: {},
+    create: { retailerId: user.sub, service, apiKey: generatePublicKey() },
+  });
+
+  const subscription = await prisma.subscription.findFirst({
+    where: { retailerId: user.sub, service, status: "ACTIVE" },
+    include: { plan: true },
+    orderBy: { createdAt: "desc" },
+  });
+
   const settings = readSettings(retailer.widgetSettings);
   return NextResponse.json({
-    apiKey: retailer.apiKey,
+    service,
+    apiKey: serviceKey.apiKey,
     isActivated: retailer.isActivated,
     allowedOrigins: settings.allowedOrigins ?? [],
+    subscription: subscription && subscription.plan
+      ? {
+          planName: subscription.plan.name,
+          quota: subscription.plan.quota,
+          usage: subscription.currentPeriodUsage,
+        }
+      : null,
   });
 }
 
-// ─── POST: regenerate (rotate) the public key ───
+// ─── POST: regenerate (rotate) this service's public key ───
 // Rotating immediately invalidates the old key (apiKey is @unique), so any
 // <script> tag still using the old key starts failing the widget gate. The
 // dashboard should warn the retailer to update their embed snippet.
-export async function POST() {
+export async function POST(
+  _request: NextRequest,
+  { params }: { params: Promise<{ service: string }> }
+) {
   const user = await getAuthFromCookies();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const resolved = await resolveService(params);
+  if (!resolved.ok) return resolved.response;
+  const { service } = resolved;
 
   const retailer = await prisma.retailer.findUnique({
     where: { id: user.sub },
@@ -102,23 +137,29 @@ export async function POST() {
     return NextResponse.json({ error: "Forbidden: Account is pending activation." }, { status: 403 });
   }
 
-  const updated = await prisma.retailer.update({
-    where: { id: user.sub },
-    data: { apiKey: generatePublicKey() },
-    select: { apiKey: true },
+  const updated = await prisma.serviceApiKey.upsert({
+    where: { retailerId_service: { retailerId: user.sub, service } },
+    update: { apiKey: generatePublicKey() },
+    create: { retailerId: user.sub, service, apiKey: generatePublicKey() },
   });
 
   return NextResponse.json({ apiKey: updated.apiKey });
 }
 
 // ─── PATCH: update widget credentials (allowedOrigins) + activation ───
-export async function PATCH(request: NextRequest) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ service: string }> }
+) {
   const user = await getAuthFromCookies();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { allowedOrigins?: unknown; isActivated?: unknown };
+  const resolved = await resolveService(params);
+  if (!resolved.ok) return resolved.response;
+
+  let body: { allowedOrigins?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -136,7 +177,6 @@ export async function PATCH(request: NextRequest) {
 
   const data: Prisma.RetailerUpdateInput = {};
 
-  // ── allowedOrigins (validated, then MERGED into widgetSettings) ──
   if (body.allowedOrigins !== undefined) {
     if (!Array.isArray(body.allowedOrigins)) {
       return NextResponse.json(
@@ -165,7 +205,6 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // MERGE — never overwrite the UI team's colour/language keys.
     const merged = { ...readSettings(current.widgetSettings), allowedOrigins: normalized };
     data.widgetSettings = merged as Prisma.InputJsonValue;
   }

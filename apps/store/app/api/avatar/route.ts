@@ -11,6 +11,9 @@ import { authorizeWidgetRequest, consumeQuota } from "../../lib/widget-auth";
 // The widget may include `shopper_ref` in the payload for uniformity; ignored.
 
 const BODY_SERVICE_URL = process.env.BODY_SERVICE_URL || "http://localhost:8001";
+// Shared secret body-service verifies on every call — proves this request
+// came from this proxy, not just from something that can reach the URL.
+const BODY_SERVICE_KEY = process.env.BODY_SERVICE_KEY || "";
 
 const CORS_HEADERS: Record<string, string> = {
     "Access-Control-Allow-Origin": "*",
@@ -61,7 +64,10 @@ export async function POST(request: NextRequest) {
     try {
         const upstream = await fetch(`${BODY_SERVICE_URL}/generate-avatar`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "X-Manikan-Internal-Key": BODY_SERVICE_KEY,
+            },
             body: JSON.stringify({ sex, height_cm, weight_kg, chest_cm, waist_cm, hips_cm }),
         });
 

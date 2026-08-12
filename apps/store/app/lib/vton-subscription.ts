@@ -8,7 +8,10 @@ const SUBSCRIPTION_REQUIRED_RESPONSE = {
 };
 
 /**
- * Authenticates the retailer and confirms their newest subscription is active.
+ * Authenticates the retailer and confirms their newest VTON_2D subscription
+ * specifically is active -- a subscription to BODY_MODELING or RECOMMENDATION
+ * alone does not unlock VTON developer tools, since the three services are
+ * independently subscribed to.
  * The returned ID is always the database Retailer ID, never an untrusted value
  * from a route parameter or request body.
  */
@@ -21,7 +24,7 @@ export async function requireActiveVtonSubscription(): Promise<
   }
 
   const latestSubscription = await prisma.subscription.findFirst({
-    where: { retailerId: retailer.sub },
+    where: { retailerId: retailer.sub, service: "VTON_2D" },
     orderBy: { createdAt: "desc" },
     select: { status: true },
   });

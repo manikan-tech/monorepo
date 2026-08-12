@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 // Inline SVGs to replace lucide-react
 const Zap = ({ className }: { className?: string }) => (
@@ -29,164 +29,209 @@ const Box = ({ className }: { className?: string }) => (
   </svg>
 );
 
-type SubscriptionType = {
-  plan: {
-    name: string;
-    priceEgpMonthly: number;
-    quotas: any;
-  } | null;
-  currentPeriodUsage: any;
-} | null;
+type ServiceId = "VTON_2D" | "BODY_MODELING" | "RECOMMENDATION";
 
-const SCOPES = [
-  {
-    id: "VTON_2D",
+type Plan = { id: string; name: string; priceEgpMonthly: number; quota: number };
+
+type SubscriptionForService = {
+  service: ServiceId;
+  subscription: {
+    plan: Plan | null;
+    currentPeriodUsage: number;
+  } | null;
+  plans: Plan[];
+};
+
+const SCOPES: Record<ServiceId, { label: string; description: string; icon: typeof Zap; color: string }> = {
+  VTON_2D: {
     label: "2D Virtual Try-On",
     description: "Generate AI overlays of garments on human photos.",
     icon: ImageIcon,
     color: "bg-blue-500",
   },
-  {
-    id: "BODY_MODELING",
+  BODY_MODELING: {
     label: "3D Body Modeling",
     description: "Synthesize 3D avatars based on shopper measurements.",
     icon: Box,
     color: "bg-purple-500",
   },
-  {
-    id: "RECOMMENDATION",
+  RECOMMENDATION: {
     label: "Size Recommendations",
     description: "API calls for calculating the best fitting size.",
     icon: Activity,
     color: "bg-emerald-500",
   },
-];
+};
 
+// Each service is subscribed to, billed, and quota-tracked independently --
+// a retailer may have an active plan on some services and none on others, so
+// each card below manages its own plan choice and checkout call rather than
+// sharing one account-wide plan/quota.
 export default function ServicesClient({
-  subscription,
+  subscriptions,
 }: {
-  subscription: SubscriptionType;
+  subscriptions: SubscriptionForService[];
 }) {
   const router = useRouter();
-  const [isUpgrading, setIsUpgrading] = useState(false);
+  const [busyService, setBusyService] = useState<ServiceId | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<Record<ServiceId, string>>(() => {
+    const initial = {} as Record<ServiceId, string>;
+    for (const { service, subscription, plans } of subscriptions) {
+      initial[service] = subscription?.plan?.id ?? plans[0]?.id ?? "";
+    }
+    return initial;
+  });
+  const [error, setError] = useState<{ service: ServiceId; message: string } | null>(null);
 
-  const plan = subscription?.plan;
-  const quotas = (plan?.quotas as Record<string, number>) || {};
-  const usage = (subscription?.currentPeriodUsage as Record<string, number>) || {};
+  const handleCheckout = async (service: ServiceId) => {
+    const planId = selectedPlan[service];
+    if (!planId) return;
 
-  const handleUpgrade = async () => {
-    setIsUpgrading(true);
-    // Real implementation would call a server action or API route to create a Stripe checkout session
-    // For now, we simulate and route to billing (if it exists) or just show a loading state
-    setTimeout(() => {
-      setIsUpgrading(false);
-      alert("Redirecting to Stripe checkout... (Not yet implemented)");
-    }, 1000);
+    setBusyService(service);
+    setError(null);
+    try {
+      const res = await fetch("/api/retailer/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to start checkout");
+      }
+
+      if (data.url) {
+        // Paid plan: Stripe redirects back to /dashboard/services when done.
+        window.location.href = data.url;
+        return;
+      }
+
+      // Free plan: activated immediately, nothing to redirect to.
+      router.refresh();
+    } catch (err) {
+      setError({
+        service,
+        message: err instanceof Error ? err.message : "Something went wrong.",
+      });
+    } finally {
+      setBusyService(null);
+    }
   };
 
-  if (!plan) {
-    return (
-      <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center shadow-sm">
-        <Zap className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-        <h3 className="text-xl font-medium text-gray-900 mb-2">No Active Plan</h3>
-        <p className="text-gray-500 mb-6">
-          You need an active subscription to use the AI services.
-        </p>
-        <button
-          onClick={handleUpgrade}
-          className="bg-gray-900 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
-        >
-          View Plans
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-medium text-gray-900">
-            Current Plan: <span className="font-bold">{plan.name}</span>
-          </h2>
-          <p className="text-gray-500 text-sm mt-1">
-            {plan.priceEgpMonthly > 0
-              ? `${plan.priceEgpMonthly} EGP / month`
-              : "Free Tier"}
-          </p>
-        </div>
-        <button
-          onClick={handleUpgrade}
-          disabled={isUpgrading}
-          className="bg-blue-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-70"
-        >
-          <Zap className="w-4 h-4" />
-          {isUpgrading ? "Loading..." : "Upgrade Plan"}
-        </button>
-      </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {subscriptions.map(({ service, subscription, plans }) => {
+        const { label, description, icon: Icon, color } = SCOPES[service];
+        const plan = subscription?.plan ?? null;
+        const used = subscription?.currentPeriodUsage ?? 0;
+        const limit = plan?.quota ?? 0;
+        const percentage = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
+        const isWarning = percentage >= 80;
+        const isDanger = percentage >= 100;
+        const isBusy = busyService === service;
+        const hasOtherTiers = plans.length > 1;
+        const chosenPlanIsCurrent = selectedPlan[service] === plan?.id;
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {SCOPES.map((scope) => {
-          const limit = quotas[scope.id] || 0;
-          const used = usage[scope.id] || 0;
-          const percentage = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
-          const isWarning = percentage >= 80;
-          const isDanger = percentage >= 100;
-
-          const Icon = scope.icon;
-
-          return (
-            <div
-              key={scope.id}
-              className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm flex flex-col"
-            >
-              <div className="flex items-start gap-4 mb-4">
-                <div className={`p-2.5 rounded-xl bg-gray-50 text-gray-700`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900 leading-tight">
-                    {scope.label}
-                  </h3>
-                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                    {scope.description}
-                  </p>
-                </div>
+        return (
+          <div
+            key={service}
+            className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm flex flex-col"
+          >
+            <div className="flex items-start gap-4 mb-4">
+              <div className="p-2.5 rounded-xl bg-gray-50 text-gray-700">
+                <Icon className="w-5 h-5" />
               </div>
-
-              <div className="mt-auto pt-4 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 font-medium">
-                    {used.toLocaleString()} <span className="text-gray-400 font-normal">used</span>
-                  </span>
-                  <span className="text-gray-900 font-medium">
-                    {limit > 0 ? limit.toLocaleString() : "∞"}
-                  </span>
-                </div>
-                
-                <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ease-out ${
-                      isDanger
-                        ? "bg-red-500"
-                        : isWarning
-                        ? "bg-yellow-500"
-                        : scope.color
-                    }`}
-                    style={{ width: `${percentage}%` }}
-                  />
-                </div>
-                
-                {isDanger && (
-                  <p className="text-xs text-red-600 font-medium text-center">
-                    Quota exceeded. Please upgrade.
-                  </p>
-                )}
+              <div>
+                <h3 className="font-medium text-gray-900 leading-tight">{label}</h3>
+                <p className="text-xs text-gray-500 mt-1 line-clamp-2">{description}</p>
               </div>
             </div>
-          );
-        })}
-      </div>
+
+            {plan ? (
+              <>
+                <div className="mb-4">
+                  <p className="text-sm text-gray-900">
+                    <span className="font-semibold">{plan.name}</span>
+                    <span className="text-gray-500">
+                      {" "}
+                      &middot; {plan.priceEgpMonthly > 0 ? `${plan.priceEgpMonthly} EGP / month` : "Free Tier"}
+                    </span>
+                  </p>
+                </div>
+
+                <div className="mb-4 space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 font-medium">
+                      {used.toLocaleString()} <span className="text-gray-400 font-normal">used</span>
+                    </span>
+                    <span className="text-gray-900 font-medium">
+                      {limit > 0 ? limit.toLocaleString() : "∞"}
+                    </span>
+                  </div>
+
+                  <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ease-out ${
+                        isDanger ? "bg-red-500" : isWarning ? "bg-yellow-500" : color
+                      }`}
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
+
+                  {isDanger && (
+                    <p className="text-xs text-red-600 font-medium text-center">
+                      Quota exceeded. Please upgrade.
+                    </p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-gray-500 text-sm mb-4">Not subscribed to this service yet.</p>
+            )}
+
+            <div className="mt-auto pt-2 space-y-3">
+              {hasOtherTiers && (
+                <select
+                  value={selectedPlan[service] ?? ""}
+                  onChange={(e) =>
+                    setSelectedPlan((prev) => ({ ...prev, [service]: e.target.value }))
+                  }
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                >
+                  {plans.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} — {p.priceEgpMonthly > 0 ? `${p.priceEgpMonthly} EGP/mo` : "Free"}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <button
+                onClick={() => handleCheckout(service)}
+                disabled={isBusy || (chosenPlanIsCurrent && !!plan)}
+                className={`w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-60 ${
+                  plan
+                    ? "bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100"
+                    : "bg-gray-900 text-white hover:bg-gray-800"
+                }`}
+              >
+                {!plan && <Zap className="w-4 h-4" />}
+                {isBusy
+                  ? "Loading..."
+                  : plan
+                    ? chosenPlanIsCurrent
+                      ? "Current plan"
+                      : "Change plan"
+                    : "Subscribe"}
+              </button>
+
+              {error?.service === service && (
+                <p className="text-xs text-red-600 text-center">{error.message}</p>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

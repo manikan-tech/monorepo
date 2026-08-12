@@ -3,7 +3,7 @@ import { getAuthFromCookies } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { redirect } from "next/navigation";
 import WidgetSettingsForm from "./WidgetSettingsForm";
-import WidgetKeyPanel from "./WidgetKeyPanel";
+import ServiceKeyPanel from "../_components/ServiceKeyPanel";
 
 export default async function BodyModelingPage() {
   const user = await getAuthFromCookies();
@@ -40,7 +40,7 @@ export default async function BodyModelingPage() {
           <WidgetSettingsForm initialSettings={retailer?.widgetSettings || {}} />
         </div>
         <div className="animate-fade-up" style={{ animationDelay: "300ms" }}>
-          <WidgetKeyPanel />
+          <ServiceKeyPanel service="BODY_MODELING" scriptSrc="https://widget.manikan.tech/v1/embed.js" />
         </div>
       </div>
     </div>

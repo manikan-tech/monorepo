@@ -1,6 +1,7 @@
+import hmac
 import httpx
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from .agent import FitState, recommendation_graph, ProductRecommendation
@@ -14,11 +15,31 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=get_settings().cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+def verify_internal_key(x_manikan_internal_key: str = Header(default="")) -> None:
+    """
+    recommendation-service has no other authentication of its own -- CORS
+    only constrains browsers, not server-to-server or direct callers. Fails
+    closed if no key is configured, so an unconfigured secret never means
+    "open"; accepts recommendation_service_key_previous too for zero-downtime
+    rotation. Same pattern as body-service and tryon-service.
+    """
+    settings = get_settings()
+    candidates = [
+        key
+        for key in (settings.recommendation_service_key, settings.recommendation_service_key_previous)
+        if key
+    ]
+    if not candidates or not any(
+        hmac.compare_digest(x_manikan_internal_key, key) for key in candidates
+    ):
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 # --- API Models ---
@@ -73,7 +94,12 @@ async def health_check() -> dict:
 
 # --- Recommendation Endpoint ---
 
-@app.post("/recommend", response_model=ChatRecommendResponse, tags=["recommendation"])
+@app.post(
+    "/recommend",
+    response_model=ChatRecommendResponse,
+    tags=["recommendation"],
+    dependencies=[Depends(verify_internal_key)],
+)
 async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
     if body.betas is not None and len(body.betas) != 10:
         raise HTTPException(

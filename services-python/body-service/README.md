@@ -88,8 +88,12 @@ All settings live in [`app/config.py`](app/config.py) and are env-overridable:
 | `PORT` | `8001` | Server port |
 | `BODY_MODEL_DIR` | `<service>/models` | Where `smpl/*.pkl` live |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins (set explicitly in prod) |
+| `BODY_SERVICE_KEY` | *(unset)* | Shared secret the Store's proxy must send as `X-Manikan-Internal-Key`. **Required in every non-local deployment** — this service has no other auth of its own, so an unset key means every `/generate-*` request is rejected (fails closed), not open. |
+| `BODY_SERVICE_KEY_PREVIOUS` | *(unset)* | Optional second accepted value, for zero-downtime key rotation. |
 | `OPT_ITERATIONS` | `80` | Adam optimisation iterations |
 | `OPT_LR` | `0.05` | Optimiser learning rate |
+
+⚠️ **This service must never be exposed on a public/internet-reachable address.** CORS only constrains browsers; `BODY_SERVICE_KEY` is what actually stops a direct server-to-server or curl caller from bypassing the Store's API-key/subscription/quota checks entirely.
 
 ## Docker
 

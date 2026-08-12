@@ -4,6 +4,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
 import { requireActiveVtonSubscription } from "../../../lib/vton-subscription";
 
+// NOTE: this manages OriginAllowlist rows, which nothing on the actual
+// request path currently checks -- see the model comment in schema.prisma.
+// The real origin gate for VTON traffic is the same-origin check in
+// app/api/vton/2d/proxy/route.ts (storefront-only) and, for the other two
+// widget-embedded services, Retailer.widgetSettings.allowedOrigins via
+// app/lib/widget-auth.ts. This CRUD is safe to keep (it doesn't grant
+// anything), but don't build new enforcement logic assuming it's consulted.
+
 const MAX_ALLOWED_ORIGINS = 5;
 
 function normalizeOrigin(value: string): string | null {

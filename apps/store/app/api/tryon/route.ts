@@ -22,6 +22,9 @@ import { isProductTryOnEnabled, garmentFieldsFor } from "../../lib/tryon-status"
 //   5. Stream the .glb back to the widget with CORS headers.
 
 const BODY_SERVICE_URL = process.env.BODY_SERVICE_URL || "http://localhost:8001";
+// Shared secret body-service verifies on every call — proves this request
+// came from this proxy, not just from something that can reach the URL.
+const BODY_SERVICE_KEY = process.env.BODY_SERVICE_KEY || "";
 
 // Embeddable widget runs cross-origin on retailer sites → CORS must allow the
 // key header. NOTE: CORS is NOT the security boundary (it's browser-enforced);
@@ -212,7 +215,10 @@ export async function POST(request: NextRequest) {
     try {
         const upstream = await fetch(`${BODY_SERVICE_URL}/generate-dressed-avatar`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "X-Manikan-Internal-Key": BODY_SERVICE_KEY,
+            },
             body: JSON.stringify({
                 sex,
                 height_cm,

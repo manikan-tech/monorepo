@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { getCustomerFromCookies } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
 import { checkRateLimit } from "../../../../lib/rate-limit";
+import { checkServiceQuota, consumeQuota } from "../../../../lib/widget-auth";
 
 const MAX_HUMAN_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 const CUSTOMER_RATE_LIMIT_MAX = 5;
@@ -82,35 +83,17 @@ export async function POST(request: NextRequest) {
             return jsonError(requestId, 404, "Product not found.");
         }
 
-        // ── Enforce Retailer Quota ──
-        const subscription = await prisma.subscription.findFirst({
-            where: { retailerId: product.retailerId, status: "ACTIVE" },
-            include: { plan: true },
-            orderBy: { createdAt: "desc" },
-        });
-
-        if (!subscription || !subscription.plan) {
-            return jsonError(requestId, 429, "The store does not have an active subscription for this feature.");
+        // ── Enforce Retailer Quota (VTON_2D specifically -- independent of
+        //     any BODY_MODELING/RECOMMENDATION subscription this retailer
+        //     may or may not also have). Shared with the widget gate's
+        //     identical check (app/lib/widget-auth.ts) rather than a second
+        //     hand-rolled copy -- this route just arrives via a different
+        //     auth model (customer session, not a retailer X-Manikan-Key).
+        const quotaCheck = await checkServiceQuota(product.retailerId, "VTON_2D");
+        if (!quotaCheck.ok) {
+            return quotaCheck.response;
         }
-
-        const quotas = (subscription.plan.quotas ?? {}) as Record<string, number>;
-        const maxAllowed = quotas["VTON_2D"] ?? 0;
-        const usage = (subscription.currentPeriodUsage ?? {}) as Record<string, number>;
-        const currentUsage = usage["VTON_2D"] ?? 0;
-
-        if (currentUsage >= maxAllowed) {
-            return NextResponse.json(
-                {
-                    error: "Quota exceeded. Upgrade your plan to continue using this service.",
-                    code: "QUOTA_EXCEEDED",
-                    usage: currentUsage,
-                    limit: maxAllowed,
-                    scope: "VTON_2D",
-                    requestId
-                },
-                { status: 429 }
-            );
-        }
+        const subscription = quotaCheck.subscription;
 
         const serviceKey = process.env.VTON_2D_SERVICE_KEY;
         if (!serviceKey) {
@@ -134,7 +117,6 @@ export async function POST(request: NextRequest) {
 
         if (upstream.ok) {
             // Deduct quota on success
-            const { consumeQuota } = await import("../../../../lib/widget-auth");
             await consumeQuota(subscription.id, "VTON_2D");
         }
 
