@@ -3,6 +3,38 @@
 import React, { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+// measurementErrors (a real validation failure -- these rows need fixing)
+// and noMeasurementData (a product simply had no measurement columns at
+// all, normal for a catalog-only CSV) are kept as two separate, differently
+// worded lines so the common no-measurement-data case never reads as an
+// alarm the retailer learns to ignore.
+function buildResultMessage(data: {
+  count: number;
+  measurementErrors?: Array<{ productCode: string }>;
+  noMeasurementData?: string[];
+}): string {
+  const lines = [`Successfully imported ${data.count} products!`];
+
+  const errors = data.measurementErrors ?? [];
+  if (errors.length > 0) {
+    const codes = errors.map((e) => e.productCode);
+    const shown = codes.slice(0, 5).join(", ");
+    const rest = codes.length > 5 ? ` and ${codes.length - 5} more` : "";
+    lines.push(
+      `${errors.length} product${errors.length === 1 ? "" : "s"}' measurements need attention: ${shown}${rest}.`
+    );
+  }
+
+  const noData = data.noMeasurementData ?? [];
+  if (noData.length > 0) {
+    lines.push(
+      `(${noData.length} product${noData.length === 1 ? "" : "s"} had no measurement data)`
+    );
+  }
+
+  return lines.join("\n\n");
+}
+
 export default function CsvUploadButton() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -28,7 +60,7 @@ export default function CsvUploadButton() {
       }
 
       const data = await res.json();
-      alert(`Successfully imported ${data.count} products!`);
+      alert(buildResultMessage(data));
       router.refresh();
     } catch (error: any) {
       console.error(error);
