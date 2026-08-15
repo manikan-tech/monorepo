@@ -9,13 +9,13 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json();
     } catch {
-      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Invalid JSON" }, { status: 200 });
     }
 
     const { email, password } = body ?? {};
 
     if (!email || !password || typeof email !== "string" || typeof password !== "string") {
-      return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Email and password are required" }, { status: 200 });
     }
 
     const supabase = await createClient();
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (error || !data.user || !data.user.email) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+      return NextResponse.json({ success: false, error: "Invalid credentials" }, { status: 200 });
     }
 
     // Verify they are actually in PlatformAdmin
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     if (!admin) {
       // Clean up Supabase session since they aren't an admin
       await supabase.auth.signOut();
-      return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
+      return NextResponse.json({ success: false, error: "Unauthorized access" }, { status: 200 });
     }
 
     const response = NextResponse.json({ success: true });
@@ -51,6 +51,6 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("[admin/login]", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 200 });
   }
 }

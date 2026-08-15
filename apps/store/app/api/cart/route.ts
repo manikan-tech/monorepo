@@ -6,7 +6,7 @@ import { getCustomerFromCookies } from "../../lib/auth";
 export async function GET() {
     const customer = await getCustomerFromCookies();
     if (!customer) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ cartItems: [], subtotal: 0 }, { status: 200 });
     }
 
     const cartItems = await prisma.cartItem.findMany({

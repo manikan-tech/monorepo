@@ -44,11 +44,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const res = await fetch("/api/cart");
-      if (res.status === 401) {
-        // Not logged in — clear items
-        setItems([]);
-        return;
-      }
       if (!res.ok) return;
       const data = await res.json();
       const mapped: CartItem[] = (data.cartItems ?? []).map((ci: any) => ({
@@ -75,8 +70,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refreshCart();
-    // Re-fetch cart whenever auth state changes (login / logout)
+    void refreshCart();
     const supabase = createClient();
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       void refreshCart();

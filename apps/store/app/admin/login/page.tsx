@@ -23,11 +23,12 @@ export default function AdminLoginPage() {
           body: JSON.stringify({ email, password }),
         });
 
-        if (res.ok) {
+        const data = await res.json();
+
+        if (data.success) {
           router.push("/admin");
           router.refresh();
         } else {
-          const data = await res.json();
           setError(data.error ?? "Invalid credentials");
           setPassword("");
         }
@@ -60,11 +61,12 @@ export default function AdminLoginPage() {
           }}
         >
           <div className="flex flex-col items-center mb-10">
-            <div className="relative w-56 h-16 group">
+            <div className="group">
               <Image
                 src="/logo.png"
                 alt="Manikan Admin Logo"
-                fill
+                width={224}
+                height={64}
                 className="object-contain transition-transform duration-500 group-hover:scale-105 brightness-0 invert opacity-90"
                 priority
               />

@@ -36,7 +36,6 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
         setLoading(true);
         try {
             const res = await fetch("/api/wishlist");
-            if (res.status === 401) { setItems([]); return; }
             if (!res.ok) return;
             const data = await res.json();
             const mapped: WishlistItem[] = (data.wishlist ?? []).map((w: any) => ({
@@ -59,14 +58,13 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     }, []);
 
     useEffect(() => {
-    refresh();
-    // Re-fetch wishlist whenever auth state changes (login / logout)
-    const supabase = createClient();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      void refresh();
-    });
-    return () => subscription.unsubscribe();
-  }, [refresh]);
+        void refresh();
+        const supabase = createClient();
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+            void refresh();
+        });
+        return () => subscription.unsubscribe();
+    }, [refresh]);
 
     const isWishlisted = (productId: string) => items.some((i) => i.productId === productId);
 

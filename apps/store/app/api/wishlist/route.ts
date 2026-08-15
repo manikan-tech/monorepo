@@ -6,7 +6,7 @@ import { getCustomerFromCookies } from "../../lib/auth";
 export async function GET() {
     const customer = await getCustomerFromCookies();
     if (!customer) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ wishlist: [] }, { status: 200 });
     }
 
     const wishlist = await prisma.wishlist.findMany({
