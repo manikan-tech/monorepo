@@ -4,13 +4,13 @@ import logging
 import typing_extensions
 from typing import Optional, List
 
-import httpx
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph, END
 
 from .config import get_settings
 from .schemas import ActionType, RecommendationOutput, MeasurementInput
+from .Bedrock import _call_bedrock_gateway
 
 logger = logging.getLogger("manikan.agent")
 
@@ -38,14 +38,10 @@ class SizeMatchResult:
     is_out_of_range: bool
 
 
-# Beyond this combined chest+waist distance (cm), the "closest" size is no
-# longer a meaningful fit - the measurements are genuinely outside what
-# this product's size chart covers.
 OUT_OF_RANGE_THRESHOLD_CM = 15.0
 
 
 def _confidence_phrase(score: Optional[float]) -> str:
-    """Turns a 0-1 confidence score into a short, honest, natural phrase."""
     if score is None:
         return ""
     pct = round(score * 100)
@@ -57,16 +53,6 @@ def _confidence_phrase(score: Optional[float]) -> str:
 
 
 def compute_recommended_size(betas: MeasurementInput, size_chart_raw: str) -> SizeMatchResult:
-    """
-    Compares user measurements against a product's size chart.
-
-    NOTE: this is a placeholder nearest-match calculation. Replace with
-    the real measurement algorithm used by the 3D model once available.
-    Expected size_chart_raw shape: JSON list of
-    {"size": str, "chest_cm": float, "waist_cm": float, ...}
-    (retailer-specific field names should be normalized to this shape
-    by the Next.js API before this service ever sees them)
-    """
     try:
         size_chart = json.loads(size_chart_raw)
     except (json.JSONDecodeError, TypeError):
@@ -86,9 +72,6 @@ def compute_recommended_size(betas: MeasurementInput, size_chart_raw: str) -> Si
                 (entry["chest_cm"] - betas.chest_cm) ** 2
                 + (entry["waist_cm"] - betas.waist_cm) ** 2
             )
-            # Include hip in the match when this chart entry has it -
-            # not every retailer's variant data includes hip_cm, so this
-            # degrades gracefully to chest+waist only when it's missing.
             hip_value = entry.get("hip_cm")
             if isinstance(hip_value, (int, float)):
                 squared_diff += (hip_value - betas.hips_cm) ** 2
@@ -100,16 +83,11 @@ def compute_recommended_size(betas: MeasurementInput, size_chart_raw: str) -> Si
             best_size = entry.get("size")
 
     if best_size is None:
-        # size_chart entries didn't have usable chest_cm/waist_cm fields
         return SizeMatchResult(None, None, None, available_sizes, True)
 
     if best_distance > OUT_OF_RANGE_THRESHOLD_CM:
-        # A "nearest" size technically exists, but it's not a real fit -
-        # be honest about that instead of silently recommending it.
         return SizeMatchResult(None, None, None, available_sizes, True)
 
-    # Rough placeholder confidence: closer match -> higher confidence.
-    # Replace with a real confidence model once the 3D algorithm is available.
     confidence = max(0.0, 1.0 - (best_distance / OUT_OF_RANGE_THRESHOLD_CM))
     explanation = (
         f"Closest match based on chest ({betas.chest_cm}cm), waist ({betas.waist_cm}cm), "
@@ -122,56 +100,12 @@ def _build_gemini_client(api_key: str) -> ChatGoogleGenerativeAI:
     return ChatGoogleGenerativeAI(
         model="gemini-2.0-flash",
         google_api_key=api_key,
-        # Google's API rejects any deadline below 10s outright (400
-        # INVALID_ARGUMENT) - this is a hard minimum, not tunable lower.
         timeout=10,
-        # Quota/auth errors should fall through to the next provider
-        # immediately instead of the client silently retrying for up to
-        # a minute+, which is what made /recommend look "stuck" in the
-        # Network tab.
         max_retries=0,
     )
 
 
-async def _call_bedrock_gateway(messages: list[dict]) -> RecommendationOutput:
-    """
-    Actual attempt at calling the ITI Bedrock gateway. The exact request/
-    response shape was never confirmed, so this uses a best-guess
-    OpenAI-compatible chat completions format. If this shape is wrong,
-    the raw error response is logged so the real shape can be worked out
-    from what the server actually says back.
-    """
-    settings = get_settings()
-    if not settings.bedrock_full_url or not settings.bedrock_api_key:
-        raise RuntimeError("Bedrock gateway not configured (missing base_url or api_key)")
-
-    async with httpx.AsyncClient(timeout=4, follow_redirects=True) as client:
-        response = await client.post(
-            settings.bedrock_full_url,
-            headers={
-                "Authorization": f"Bearer {settings.bedrock_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "anthropic.claude-haiku-4-5-20251001",
-                "messages": messages,
-            },
-        )
-        response.raise_for_status()
-        data = response.json()
-        logger.info(f"Bedrock gateway raw response: {data}")
-
-        # Best-guess parsing (OpenAI-style). Adjust once the real shape is known.
-        content = data["choices"][0]["message"]["content"]
-        return RecommendationOutput.model_validate_json(content)
-
-
 async def call_llm_with_fallback(messages: list[dict]) -> tuple[RecommendationOutput, str]:
-    """
-    Tries providers in order: Gemini key 1 -> Gemini key 2 -> Bedrock -> Ollama.
-    Each attempt wraps the actual invoke call, since auth/quota errors
-    only surface at call time, not at client construction time.
-    """
     settings = get_settings()
     attempts = []
 
@@ -190,7 +124,6 @@ async def call_llm_with_fallback(messages: list[dict]) -> tuple[RecommendationOu
             last_error = e
             continue
 
-    # Real Bedrock attempt - not commented out anymore
     try:
         response = await _call_bedrock_gateway(messages)
         response.provider = "BEDROCK"
@@ -202,9 +135,6 @@ async def call_llm_with_fallback(messages: list[dict]) -> tuple[RecommendationOu
     try:
         ollama_llm = ChatOllama(model=settings.ollama_model, base_url=settings.ollama_base_url)
         structured_llm = ollama_llm.with_structured_output(RecommendationOutput)
-        # Ollama had no timeout at all before this - if the local model was
-        # ever slow (e.g. a longer prompt), this call could hang
-        # indefinitely with nothing left in the chain to catch it.
         response = await asyncio.wait_for(structured_llm.ainvoke(messages), timeout=10)
         response.provider = "OLLAMA-FALLBACK"
         return response, "OLLAMA-FALLBACK"
@@ -216,8 +146,6 @@ async def call_llm_with_fallback(messages: list[dict]) -> tuple[RecommendationOu
 
 
 async def check_all_providers() -> list[dict]:
-    """Pings each configured provider individually and reports whether
-    it responded, so /health can show exactly which one is active."""
     settings = get_settings()
     results = []
 
@@ -230,8 +158,7 @@ async def check_all_providers() -> list[dict]:
         except Exception as e:
             results.append({"provider": provider_name, "status": "failed", "error": str(e)})
 
-    # Real Bedrock ping - reports the actual error if the request shape is wrong
-    if settings.bedrock_full_url and settings.bedrock_api_key:
+    if settings.bedrock_base_url and settings.bedrock_api_key:
         try:
             await _call_bedrock_gateway([{"role": "user", "content": "ping"}])
             results.append({"provider": "BEDROCK", "status": "ok"})
@@ -297,12 +224,6 @@ def _last_user_message(messages: list[dict]) -> str:
 
 
 def _is_descriptive_question(messages: list[dict]) -> bool:
-    """
-    Heuristic: does the latest user message read like a question about the
-    product (e.g. "what's the max chest size?") rather than a submission of
-    the user's own body measurements? Our own auto-generated measurement
-    message always starts with "my measurements:", so that's excluded here.
-    """
     text = _last_user_message(messages)
     if text.startswith("my measurements:"):
         return False
@@ -310,13 +231,6 @@ def _is_descriptive_question(messages: list[dict]) -> bool:
 
 
 def _try_answer_from_size_chart_locally(question: str, size_chart_raw: str) -> Optional[str]:
-    """
-    Answers simple, recognizable numeric questions about a size chart
-    directly from the parsed data - no LLM call involved, so this is
-    instant and can never time out.
-    Returns None if the question doesn't match a recognizable pattern,
-    so the caller can fall back to an LLM-grounded answer.
-    """
     try:
         size_chart = json.loads(size_chart_raw)
     except (json.JSONDecodeError, TypeError):
@@ -333,10 +247,6 @@ def _try_answer_from_size_chart_locally(question: str, size_chart_raw: str) -> O
         field = "hip_cm"
 
     if not field:
-        # No specific dimension mentioned - if this still reads like a
-        # generic "what sizes/what's the biggest size" question, answer
-        # with the list of available sizes instead of falling through
-        # to the (slower, less reliable) LLM path.
         available_sizes = [e.get("size") for e in size_chart if e.get("size")]
         if not available_sizes:
             return None
@@ -366,9 +276,6 @@ async def call_conversational_agent(state: FitState) -> FitState:
     size_chart = state.get("size_chart")
     is_question = _is_descriptive_question(state["messages"])
 
-    # A sizing question with no product AND no category context at all -
-    # "max size" means nothing store-wide (it varies by item), so ask
-    # which category instead of guessing or going to the LLM.
     if is_question and not size_chart and not product_id:
         available_categories = state.get("available_categories") or []
         if available_categories:
@@ -383,10 +290,6 @@ async def call_conversational_agent(state: FitState) -> FitState:
         )
         return state
 
-    # The user is asking something descriptive about this product's size
-    # chart (e.g. "what's the max chest size?") rather than submitting
-    # their own measurements - answer using the LLM, grounded in the real
-    # chart data, instead of running the measurement-matching calculation.
     if size_chart and is_question:
         last_message = _last_user_message(state["messages"])
         local_answer = _try_answer_from_size_chart_locally(last_message, size_chart)
@@ -398,8 +301,6 @@ async def call_conversational_agent(state: FitState) -> FitState:
             )
             return state
 
-        # Not a recognizable numeric pattern (e.g. "does this run small?") -
-        # fall back to the LLM, still grounded in the real chart data.
         instruction = {
             "role": "system",
             "content": (
@@ -418,8 +319,6 @@ async def call_conversational_agent(state: FitState) -> FitState:
         state["structured_response"] = response
         return state
 
-    # Deterministic case: measurements + a size chart are both available ->
-    # compute the real recommendation directly, no LLM needed.
     if betas and size_chart:
         result = compute_recommended_size(betas, size_chart)
 
@@ -435,11 +334,6 @@ async def call_conversational_agent(state: FitState) -> FitState:
                 explanation=result.explanation,
             )
         elif result.available_sizes:
-            # Measurements don't closely match any size for this item.
-            # Be upfront about it and immediately surface what's actually
-            # available, instead of a vague error or a yes/no round-trip
-            # (which could loop, since the same measurements would be
-            # re-evaluated the same way on the next message).
             sizes_str = ", ".join(result.available_sizes)
             state["structured_response"] = RecommendationOutput(
                 action=ActionType.FETCH_PRODUCTS,
@@ -460,10 +354,6 @@ async def call_conversational_agent(state: FitState) -> FitState:
             )
         return state
 
-    # Fast path: the user gave measurements, but there's no size chart yet
-    # (e.g. they're on the general Size Assistant chat with no product or
-    # category selected). There's nothing to compute against, so respond
-    # immediately instead of falling through to the slower LLM chain.
     if betas and not size_chart:
         available_categories = state.get("available_categories") or []
         if available_categories:
@@ -484,10 +374,6 @@ async def call_conversational_agent(state: FitState) -> FitState:
         )
         return state
 
-    # Everything else goes through the LLM with one shared instruction, so
-    # behavior is driven by what the user actually said - not by the
-    # widget's category dropdown, which was overriding the model's own
-    # judgment and causing inconsistent behavior.
     instruction = {"role": "system", "content": build_general_instruction(state.get("available_categories"))}
     response, provider_tag = await call_llm_with_fallback([instruction] + state["messages"])
     response.provider = provider_tag
