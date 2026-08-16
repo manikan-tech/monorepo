@@ -1,11 +1,11 @@
 import React from "react";
-import { getAuthFromCookies } from "../../lib/auth";
-import { prisma } from "../../lib/prisma";
+import { getAuthFromCookies } from "../../../lib/auth";
+import { prisma } from "../../../lib/prisma";
 import { redirect } from "next/navigation";
-import WidgetSettingsForm from "./WidgetSettingsForm";
-import WidgetKeyPanel from "./WidgetKeyPanel";
+import RecommendationSettingsForm from "./RecommendationSettingsForm";
+import ServiceKeyPanel from "../_components/ServiceKeyPanel";
 
-export default async function WidgetPage() {
+export default async function RecommendationsPage() {
   const user = await getAuthFromCookies();
 
   if (!user) {
@@ -14,7 +14,7 @@ export default async function WidgetPage() {
 
   const retailer = await prisma.retailer.findUnique({
     where: { id: user.sub },
-    select: { widgetSettings: true, isActivated: true },
+    select: { recommendationSettings: true, isActivated: true },
   });
 
   if (!retailer?.isActivated) {
@@ -25,22 +25,22 @@ export default async function WidgetPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between animate-fade-up transition-all duration-500 hover:translate-x-1" style={{ animationDelay: "100ms" }}>
         <div className="flex flex-col gap-1">
-          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-gold-400/90 animate-pulse">
-            Integration Settings
+          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-emerald-500/90 animate-pulse">
+            Recommendation Engine
           </p>
           <h2 className="text-3xl font-display font-semibold text-forest-950 leading-tight">
-            Widget <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 to-gold-600">Customization</span>
+            Size <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-emerald-700">Settings</span>
           </h2>
-          <p className="text-forest-700/60 text-sm mt-1 max-w-2xl">Customize how the Manikan size recommendation widget appears on your store.</p>
+          <p className="text-forest-700/60 text-sm mt-1 max-w-2xl">Configure how the AI calculates the perfect fit for your shoppers.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <div className="animate-fade-up" style={{ animationDelay: "200ms" }}>
-          <WidgetSettingsForm initialSettings={retailer?.widgetSettings || {}} />
+          <RecommendationSettingsForm initialSettings={retailer?.recommendationSettings || {}} />
         </div>
         <div className="animate-fade-up" style={{ animationDelay: "300ms" }}>
-          <WidgetKeyPanel />
+          <ServiceKeyPanel service="RECOMMENDATION" scriptSrc="https://widget.manikan.tech/v1/recommend.js" />
         </div>
       </div>
     </div>

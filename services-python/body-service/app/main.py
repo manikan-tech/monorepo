@@ -23,6 +23,7 @@ References:
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 import math
 from contextlib import asynccontextmanager
@@ -33,14 +34,17 @@ import numpy as np
 import torch
 import trimesh
 from PIL import Image
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from . import garment  # Pipeline 1 / Tier 1 garment engine (real garment mesh)
 from . import physics_drape  # Pipeline 2 physics-baked drape (delta library)
+from . import layering  # layered outfits (tee + pants on one body)
 from .config import (
+    BODY_SERVICE_KEY,
+    BODY_SERVICE_KEY_PREVIOUS,
     CORS_ORIGINS,
     DEVICE,
     MODEL_DIR,
@@ -277,6 +281,26 @@ def _measure_ring_circumference(
 #  DIFFERENTIABLE OPTIMISATION LOOP
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _shape_only_vertices(model, betas: torch.Tensor) -> torch.Tensor:
+    """SMPL vertices for a given β **at zero pose**: v_template + shapedirs·β.
+
+    Only valid when global_orient and body_pose are both zero, which is
+    exactly the case inside solve_betas (it optimises SHAPE against an
+    A-pose; the pose tensors it builds are all-zeros and never change).
+
+    At zero pose the pose blend shapes vanish and every LBS joint rotation is
+    the identity, so the full skinning pipeline reduces to the shape term
+    alone. Verified against the real `model(...)` forward: max difference
+    1.19e-07 m (~0.0001 mm — float32 rounding), while being ~25x cheaper per
+    call and cheaper again to differentiate through. Over a 40-iteration
+    solve that is ~430ms -> ~120ms.
+
+    Do NOT use this anywhere a non-zero pose is involved -- it would silently
+    return the rest-pose body.
+    """
+    return (model.v_template + torch.einsum("bl,mkl->bmk", betas, model.shapedirs)).squeeze(0)
+
+
 def solve_betas(
     model,
     rings: Dict[str, List[int]],
@@ -310,9 +334,9 @@ def solve_betas(
     )
     optimizer = torch.optim.Adam([betas], lr=lr)
 
-    # ── Fixed pose tensors (A-pose = all zeros) ───────────────────────
-    global_orient = torch.zeros(1, 3, dtype=torch.float32, device=DEVICE)
-    body_pose = torch.zeros(1, 69, dtype=torch.float32, device=DEVICE)
+    # ── Pose is fixed at A-pose (all zeros) for the whole solve ───────
+    # Nothing here ever poses the body, which is what makes the shape-only
+    # forward below valid; see _shape_only_vertices().
 
     # ── Target values ─────────────────────────────────────────────────
     target_height_m = target_height_cm / 100.0
@@ -329,14 +353,8 @@ def solve_betas(
     for i in range(num_iters):
         optimizer.zero_grad()
 
-        # ── Forward pass through SMPL ─────────────────────────────────
-        output = model(
-            betas=betas,
-            global_orient=global_orient,
-            body_pose=body_pose,
-            return_verts=True,
-        )
-        verts = output.vertices.squeeze(0)  # (6890, 3)
+        # ── Forward pass (shape only — pose is zero, see helper) ──────
+        verts = _shape_only_vertices(model, betas)  # (6890, 3)
 
         # ── GLOBAL SCALING: height is guaranteed, not optimised ───────
         mesh_height = _measure_height(verts)
@@ -575,6 +593,22 @@ app.add_middleware(
 )
 
 
+def verify_internal_key(x_manikan_internal_key: str = Header(default="")) -> None:
+    """
+    body-service has no other authentication of its own (see README) -- CORS
+    only constrains browsers, not server-to-server or direct callers. This is
+    what actually stops anything other than the Store's proxy from reaching
+    these routes and bypassing its API-key/subscription/quota checks. Fails
+    closed if no key is configured, so an unconfigured secret never means
+    "open"; accepts BODY_SERVICE_KEY_PREVIOUS too for zero-downtime rotation.
+    """
+    candidates = [key for key in (BODY_SERVICE_KEY, BODY_SERVICE_KEY_PREVIOUS) if key]
+    if not candidates or not any(
+        hmac.compare_digest(x_manikan_internal_key, key) for key in candidates
+    ):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
 @app.get("/health")
 async def health():
     """Liveness probe."""
@@ -591,6 +625,7 @@ async def health():
             "description": "Binary GLB file containing the generated 3D avatar mesh.",
         }
     },
+    dependencies=[Depends(verify_internal_key)],
 )
 async def generate_avatar(payload: MeasurementsPayload):
     """
@@ -627,10 +662,11 @@ async def generate_avatar(payload: MeasurementsPayload):
     except ValueError as exc:
         if str(exc) == "TOO_SMALL":
             raise HTTPException(status_code=400, detail="TOO_SMALL") from exc
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Avatar generation failed with invalid input")
+        raise HTTPException(status_code=500, detail="Avatar generation failed.") from exc
     except Exception as exc:
         logger.exception("Avatar generation failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Avatar generation failed.") from exc
 
     return Response(
         content=glb_bytes,
@@ -648,6 +684,21 @@ async def generate_avatar(payload: MeasurementsPayload):
 # ---------------------------------------------------------------------------
 # Dressed Avatar Payload
 # ---------------------------------------------------------------------------
+class GarmentLayerPayload(BaseModel):
+    """A second garment worn simultaneously with the primary one.
+
+    Carries only what identifies and sizes a garment -- the body measurements
+    stay on the parent payload, because both layers are worn by the SAME body.
+    """
+    category: str = Field(..., description="'tshirt' or 'pants' -- must differ "
+                                            "from the primary category")
+    color_hex: str = Field(..., description="Hex colour for this garment")
+    garment_chest_cm: Optional[float] = Field(None, description="tshirt sizing")
+    garment_waist_cm: Optional[float] = Field(None, description="pants sizing")
+    product_id: Optional[str] = Field(None)
+    product_image_url: Optional[str] = Field(None)
+
+
 class DressedAvatarPayload(BaseModel):
     """Generate a body mesh wearing a t-shirt."""
     sex: Sex
@@ -660,10 +711,24 @@ class DressedAvatarPayload(BaseModel):
         ..., description="Hex colour for the t-shirt, e.g. '#1a1a2e' — also the "
                           "authoritative base colour when texturing from a photo"
     )
-    garment_chest_cm: float = Field(...)
-    garment_length_cm: float = Field(...)
-    garment_sleeve_cm: float = Field(...)
-    garment_shoulder_cm: float = Field(...)
+    category: str = Field(
+        "tshirt", description="Garment category: 'tshirt' (default) or 'pants'. "
+                              "Defaults to tshirt so every existing caller is "
+                              "unaffected."
+    )
+    # Tee-category measurements. Optional so a pants request need not send them;
+    # the tshirt path still requires garment_chest_cm to size correctly.
+    garment_chest_cm: Optional[float] = Field(None)
+    garment_length_cm: Optional[float] = Field(None)
+    garment_sleeve_cm: Optional[float] = Field(None)
+    garment_shoulder_cm: Optional[float] = Field(None)
+    # Pants-category measurements (flat/half measurements, matching the store's
+    # ProductVariant columns). garment_waist_cm drives sizing; the rest are
+    # accepted for API completeness and not yet consumed.
+    garment_waist_cm: Optional[float] = Field(None)
+    garment_hip_cm: Optional[float] = Field(None)
+    garment_inseam_cm: Optional[float] = Field(None)
+    garment_rise_cm: Optional[float] = Field(None)
     product_id: Optional[str] = Field(
         None, description="Catalog product id (diagnostics / cache label only)"
     )
@@ -672,6 +737,14 @@ class DressedAvatarPayload(BaseModel):
                           "present and loadable, the garment is textured with it "
                           "(recoloured to tshirt_color_hex, shading preserved); "
                           "otherwise it falls back to a flat colour fill."
+    )
+    also_wear: Optional["GarmentLayerPayload"] = Field(
+        None,
+        description="OPTIONAL second garment, worn at the same time as the "
+                    "primary one (e.g. request pants while already wearing a "
+                    "tee). Must be a different category. Omit it and the "
+                    "response is exactly as before -- this adds a layered "
+                    "outfit without changing any existing caller's behaviour.",
     )
 
 
@@ -879,13 +952,33 @@ _TEXTURE_MAX_BYTES = 20 * 1024 * 1024  # cap download size (defensive)
 
 
 def _fetch_image_bytes(url: str) -> bytes:
-    """GET an image over http(s) with a timeout and a size cap. Scheme-checked
-    to keep this from being turned into an arbitrary-URL fetcher."""
+    """GET an image over http(s) with a timeout and a size cap. Scheme- and
+    resolved-address-checked to keep this from being turned into an
+    arbitrary-URL / internal-network fetcher: product_image_url ultimately
+    comes from retailer-uploaded catalog data (CSV product upload in the
+    Store), so a malicious or compromised retailer account could otherwise
+    point it at an internal service or a cloud metadata endpoint.
+
+    Note: this checks the address(es) DNS resolves to right before connecting,
+    not the address urlopen ultimately connects to -- it narrows the window
+    for a DNS-rebinding attack but doesn't eliminate it. Acceptable here since
+    a failure just falls back to a flat-colour texture (see caller)."""
+    import ipaddress
+    import socket
     import urllib.request
     from urllib.parse import urlparse
 
-    if urlparse(url).scheme not in ("http", "https"):
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
         raise ValueError(f"unsupported image URL scheme: {url!r}")
+    if not parsed.hostname:
+        raise ValueError(f"missing host in image URL: {url!r}")
+
+    for family, _, _, _, sockaddr in socket.getaddrinfo(parsed.hostname, None):
+        ip = ipaddress.ip_address(sockaddr[0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            raise ValueError(f"image URL resolves to a disallowed address: {url!r}")
+
     req = urllib.request.Request(url, headers={"User-Agent": "manikan-body-service"})
     with urllib.request.urlopen(req, timeout=_TEXTURE_FETCH_TIMEOUT) as resp:
         return resp.read(_TEXTURE_MAX_BYTES + 1)
@@ -986,6 +1079,220 @@ def _dressed_glb_physics(
     return glb
 
 
+def _dressed_glb_physics_pants(
+    model,
+    gender: str,
+    betas: torch.Tensor,
+    height_cm: float,
+    waist_cm: float,
+    garment_waist_cm: Optional[float],
+    color_hex: str,
+    texture_image,
+):
+    """
+    Pipeline 2 runtime path for PANTS, either gender. Poses the body with hip
+    abduction (the feet-apart stance the pants grid was baked in -- NOT the
+    tee's relaxed shoulders), then adds the interpolated delta on top of a
+    kinematic fit that reproduces the bake's own pre-fit exactly.
+
+    The abduction angle is gender/height-conditional for female
+    (physics_drape.pants_pose_hip_abduction_rad) -- the female grid was baked
+    with a wider angle for short-height bodies (see docs/known-issues.md), so
+    reproducing the WRONG angle here would silently desync the kinematic
+    input from the delta it's being added to, even though nothing would
+    error or look obviously broken.
+
+    Returns None when the drape is unavailable (flag off, missing library, or
+    body outside the grid) so the caller falls through to dress_pants().
+    """
+    draper = physics_drape.get_pants_draper(model, gender)
+    if draper is None:
+        return None
+
+    body_pose = torch.zeros(1, 69, dtype=torch.float32, device=DEVICE)
+    a = physics_drape.pants_pose_hip_abduction_rad(gender, height_cm)
+    body_pose[0, 0:3] = torch.tensor([0.0, 0.0, a], device=DEVICE)    # L_Hip
+    body_pose[0, 3:6] = torch.tensor([0.0, 0.0, -a], device=DEVICE)   # R_Hip
+    with torch.no_grad():
+        output = model(
+            betas=betas.to(DEVICE),
+            global_orient=torch.zeros(1, 3, dtype=torch.float32, device=DEVICE),
+            body_pose=body_pose,
+            return_verts=True,
+        )
+    body_verts = output.vertices.detach().cpu().numpy().squeeze().astype(np.float64)
+    faces = np.asarray(model.faces, dtype=np.int64)
+    lbs_weights = model.lbs_weights.detach().cpu().numpy()
+
+    # no size chosen -> assume a fitted size (flat waist ~= body waist / 2)
+    gwaist = garment_waist_cm if garment_waist_cm is not None else waist_cm / 2.0
+
+    result = draper.drape(
+        body_verts, faces, lbs_weights,
+        body_waist_cm=waist_cm, height_cm=height_cm, garment_waist_cm=gwaist,
+    )
+    if result is None:
+        return None            # outside the grid -> Tier 1
+    draped, garment_faces, garment_uv, info = result
+
+    glb = garment.build_dressed_glb(
+        body_verts, faces, draped, garment_faces,
+        color_hex, height_cm / 100.0,
+        garment_uv=garment_uv, texture_image=texture_image,
+    )
+    logger.info("Pants physics drape served: %s", info)
+    return glb
+
+
+def _fit_one_layer(model, sex, category, body_verts, body_faces, lbs_weights,
+                   chest_cm, waist_cm, height_cm,
+                   garment_chest_cm, garment_waist_cm, body_mesh):
+    """Fit ONE garment onto an already-posed body, physics if available for
+    that (category, gender) and Tier-1 otherwise.
+
+    Split out of the single-garment paths so a layered outfit reuses the exact
+    same fitting code rather than a parallel copy that could drift from it.
+    Returns (verts, faces, uv).
+    """
+    if category == "pants":
+        draper = physics_drape.get_pants_draper(model, sex)
+        if draper is not None:
+            res = draper.drape(body_verts, body_faces, lbs_weights,
+                               body_waist_cm=waist_cm, height_cm=height_cm,
+                               garment_waist_cm=garment_waist_cm if garment_waist_cm
+                               else waist_cm / 2.0)
+            if res is not None:
+                v, f, uv, _info = res
+                return v, f, uv
+        tpl = garment.load_pants_template(sex)
+        ref = garment.get_reference_body(model, sex)
+        binding = garment.bind_garment(tpl["vertices"], ref, body_faces, f"pants_{sex}")
+        g = garment.deform_garment(binding, body_verts, body_faces)
+        if garment_waist_cm is not None:
+            try:
+                g = garment.apply_pants_looseness(g, binding, body_verts, body_faces,
+                                                  lbs_weights, garment_waist_cm, waist_cm)
+            except ValueError:
+                pass
+        g = garment.smooth_garment(g, tpl["faces"])
+        # Shared with dress_pants() so pants worn alone and pants worn under a
+        # tee cannot diverge -- they previously did (6mm vs the 4mm default on
+        # the first push-out).
+        g, _ = garment.settle_pants_against_body(g, tpl["faces"], body_verts, body_faces)
+        return g, tpl["faces"], tpl["uv"]
+
+    # ── tshirt ──
+    if USE_PHYSICS_DRAPE and sex == "male":
+        try:
+            d = physics_drape.get_draper()
+            v, f, uv = d.drape(body_verts, body_faces, lbs_weights,
+                               chest_cm=chest_cm, height_cm=height_cm,
+                               garment_chest_cm=garment_chest_cm if garment_chest_cm
+                               else chest_cm / 2.0,
+                               body_chest_cm=chest_cm)
+            return v, f, uv
+        except Exception:
+            logger.exception("Layered tee physics drape failed; using Tier-1")
+    tpl = garment.load_garment_template(sex)
+    ref = garment.get_reference_body(model, sex)
+    binding = garment.bind_garment(tpl["vertices"], ref, body_faces, sex)
+    g = garment.deform_garment(binding, body_verts, body_faces)
+    if garment_chest_cm is not None:
+        try:
+            g = garment.apply_size_looseness(g, binding, body_verts, body_faces,
+                                             lbs_weights, garment_chest_cm, chest_cm, ref)
+        except ValueError:
+            pass
+    g = garment.smooth_garment(g, tpl["faces"])
+    g, _ = garment.resolve_interpenetration(g, body_verts, body_faces, body_mesh=body_mesh)
+    return g, tpl["faces"], tpl["uv"]
+
+
+def generate_layered_avatar_mesh(
+    sex: str,
+    height_cm: float,
+    weight_kg: float,
+    chest_cm: float,
+    waist_cm: float,
+    hips_cm: float,
+    upper: dict,
+    lower: dict,
+) -> bytes:
+    """Render an upper (tee) AND a lower (pants) garment on one body.
+
+    No combined physics bake exists or is needed -- each garment uses its own
+    already-baked delta library independently, and only the tee-hem /
+    pants-waistband overlap is reconciled afterwards (see app/layering.py for
+    why that decomposition is correct and what goes wrong without it).
+
+    The body carries BOTH grids' poses at once: the tee grid's relaxed
+    shoulders and the pants grid's hip abduction write to disjoint SMPL joint
+    ranges, so neither garment's kinematic input is compromised by the other.
+    """
+    model, rings = _load_smpl_model(sex)
+    betas = solve_betas(
+        model=model, rings=rings,
+        target_height_cm=height_cm, target_weight_kg=weight_kg,
+        target_chest_cm=chest_cm, target_waist_cm=waist_cm,
+        target_hips_cm=hips_cm, num_iters=40,
+    )
+
+    body_pose = torch.zeros(1, 69, dtype=torch.float32, device=DEVICE)
+    a = physics_drape.pants_pose_hip_abduction_rad(sex, height_cm)
+    body_pose[0, 0:3] = torch.tensor([0.0, 0.0, a], device=DEVICE)      # L_Hip
+    body_pose[0, 3:6] = torch.tensor([0.0, 0.0, -a], device=DEVICE)     # R_Hip
+    if USE_PHYSICS_DRAPE and sex == "male":
+        s = physics_drape.RELAXED_SHOULDER_ANGLE
+        body_pose[0, 45:48] = torch.tensor([0.0, 0.0, -s], device=DEVICE)   # L_Shoulder
+        body_pose[0, 48:51] = torch.tensor([0.0, 0.0, s], device=DEVICE)    # R_Shoulder
+    with torch.no_grad():
+        out = model(betas=betas.to(DEVICE),
+                    global_orient=torch.zeros(1, 3, dtype=torch.float32, device=DEVICE),
+                    body_pose=body_pose, return_verts=True)
+    body_verts = out.vertices.detach().cpu().numpy().squeeze().astype(np.float64)
+    body_faces = np.asarray(model.faces, dtype=np.int64)
+    lbs_weights = model.lbs_weights.detach().cpu().numpy()
+    # one collision mesh shared by every push-out in both garments' fits
+    body_mesh = garment.body_proximity_mesh(body_verts, body_faces)
+
+    fitted = {}
+    for role, spec in (("upper", upper), ("lower", lower)):
+        v, f, uv = _fit_one_layer(
+            model, sex, spec["category"], body_verts, body_faces, lbs_weights,
+            chest_cm, waist_cm, height_cm,
+            spec.get("garment_chest_cm"), spec.get("garment_waist_cm"), body_mesh,
+        )
+        fitted[role] = {"verts": v, "faces": f, "uv": uv, "spec": spec}
+
+    # ── reconcile the one place the two garments actually meet ──
+    lo = fitted["lower"]
+    waistband_y = layering.waistband_height(lo["verts"], lo["faces"])
+    if waistband_y is not None:
+        up = fitted["upper"]
+        up["verts"], info = layering.reconcile_seam(
+            up["verts"], up["faces"], lo["verts"], lo["faces"], waistband_y)
+        logger.info("Layered outfit seam reconciled: %s", info)
+    else:
+        logger.warning("Lower garment has no open boundary; skipping seam reconciliation")
+
+    layers = []
+    for role in ("lower", "upper"):      # lower first so the tee draws over it
+        item = fitted[role]
+        spec = item["spec"]
+        tex = _load_product_texture(spec.get("product_image_url"), spec["color_hex"])
+        layers.append({
+            "name": spec["category"],
+            "verts": item["verts"], "faces": item["faces"],
+            "color_hex": spec["color_hex"],
+            "uv": item["uv"] if tex is not None else None,
+            "texture_image": tex,
+        })
+    glb = layering.build_layered_glb(body_verts, body_faces, layers, height_cm / 100.0)
+    logger.info("Layered avatar served: %s over %s, %d bytes",
+                upper["category"], lower["category"], len(glb))
+    return glb
+
+
 def generate_dressed_avatar_mesh_v2(
     sex: str,
     height_cm: float,
@@ -1000,6 +1307,11 @@ def generate_dressed_avatar_mesh_v2(
     garment_shoulder_cm: Optional[float] = None,
     product_id: Optional[str] = None,
     product_image_url: Optional[str] = None,
+    category: str = "tshirt",
+    garment_waist_cm: Optional[float] = None,
+    garment_hip_cm: Optional[float] = None,
+    garment_inseam_cm: Optional[float] = None,
+    garment_rise_cm: Optional[float] = None,
 ) -> bytes:
     """
     Fit a real, independently-authored garment mesh (MGN t-shirt template) onto
@@ -1028,6 +1340,48 @@ def generate_dressed_avatar_mesh_v2(
         num_iters=40,
     )
 
+    # ── PANTS category ──────────────────────────────────────────────────────
+    # Physics drape first (both genders, behind MANIKAN_PANTS_DRAPE); any
+    # decline or failure falls through to the Tier-1 kinematic dress_pants().
+    # Female uses its own delta library (models/garments/pants_physics_female/)
+    # and its own height-conditional pose -- get_pants_draper(model, sex) and
+    # pants_pose_hip_abduction_rad(sex, height_cm) both dispatch on gender
+    # internally, so this call site itself needs no per-gender branching.
+    if category == "pants":
+        if sex in ("male", "female"):
+            try:
+                glb = _dressed_glb_physics_pants(
+                    model, sex, betas, height_cm, waist_cm,
+                    garment_waist_cm, tshirt_color_hex, texture_image,
+                )
+                if glb is not None:
+                    return glb
+                logger.info("Pants physics drape declined; using Tier-1 dress_pants()")
+            except Exception:
+                logger.exception("Pants physics drape failed; falling back to dress_pants()")
+
+        with torch.no_grad():
+            output = model(
+                betas=betas.to(DEVICE),
+                global_orient=torch.zeros(1, 3, dtype=torch.float32, device=DEVICE),
+                body_pose=torch.zeros(1, 69, dtype=torch.float32, device=DEVICE),
+                return_verts=True,
+            )
+        body_verts = output.vertices.detach().cpu().numpy().squeeze().astype(np.float64)
+        faces = np.asarray(model.faces, dtype=np.int64)
+        return garment.dress_pants(
+            model=model,
+            gender=sex,
+            user_body_verts=body_verts,
+            body_faces=faces,
+            color_hex=tshirt_color_hex,
+            target_height_m=height_cm / 100.0,
+            garment_waist_cm=garment_waist_cm,
+            body_waist_cm=waist_cm,
+            texture_image=texture_image,
+        )["glb"]
+
+    # ── TSHIRT category (default) ───────────────────────────────────────────
     # Pipeline 2: physics-baked drape (relaxed pose + delta library). Male-only
     # for now; any failure falls through to the kinematic fit below so avatar
     # generation is never blocked.
@@ -1081,6 +1435,7 @@ def generate_dressed_avatar_mesh_v2(
             "description": "Binary GLB file with the body mesh wearing a t-shirt.",
         }
     },
+    dependencies=[Depends(verify_internal_key)],
 )
 async def generate_dressed_avatar(payload: DressedAvatarPayload):
     """
@@ -1089,6 +1444,67 @@ async def generate_dressed_avatar(payload: DressedAvatarPayload):
     Runs in a thread pool to avoid blocking the async event loop.
     """
     loop = asyncio.get_event_loop()
+
+    # ── Layered outfit (optional `also_wear`) ──
+    # Only on the v2 engine, and only for two DIFFERENT categories; anything
+    # else falls through to the normal single-garment path untouched.
+    if USE_GARMENT_V2 and payload.also_wear is not None:
+        second = payload.also_wear
+        if second.category == payload.category:
+            raise HTTPException(
+                status_code=400,
+                detail=f"also_wear.category must differ from category "
+                       f"(both were '{payload.category}')",
+            )
+        specs = {
+            payload.category: {
+                "category": payload.category,
+                "color_hex": payload.tshirt_color_hex,
+                "garment_chest_cm": payload.garment_chest_cm,
+                "garment_waist_cm": payload.garment_waist_cm,
+                "product_image_url": payload.product_image_url,
+            },
+            second.category: {
+                "category": second.category,
+                "color_hex": second.color_hex,
+                "garment_chest_cm": second.garment_chest_cm,
+                "garment_waist_cm": second.garment_waist_cm,
+                "product_image_url": second.product_image_url,
+            },
+        }
+        roles = layering.split_by_role(list(specs.keys()))
+        if roles is None:
+            raise HTTPException(
+                status_code=400,
+                detail="A layered outfit needs one upper-body and one "
+                       f"lower-body garment; got {sorted(specs.keys())}.",
+            )
+        upper_cat, lower_cat = roles
+        try:
+            glb_bytes = await loop.run_in_executor(
+                None,
+                lambda: generate_layered_avatar_mesh(
+                    sex=payload.sex.value,
+                    height_cm=payload.height_cm,
+                    weight_kg=payload.weight_kg,
+                    chest_cm=payload.chest_cm,
+                    waist_cm=payload.waist_cm,
+                    hips_cm=payload.hips_cm,
+                    upper=specs[upper_cat],
+                    lower=specs[lower_cat],
+                ),
+            )
+        except FileNotFoundError as exc:
+            logger.exception("SMPL model file not found (layered outfit)")
+            raise HTTPException(
+                status_code=503, detail="SMPL model files not available."
+            ) from exc
+        return Response(
+            content=glb_bytes,
+            media_type="model/gltf-binary",
+            headers={"Content-Disposition": 'inline; filename="layered-avatar.glb"'},
+        )
+
     engine_fn = (
         generate_dressed_avatar_mesh_v2 if USE_GARMENT_V2
         else generate_dressed_avatar_mesh
@@ -1110,6 +1526,15 @@ async def generate_dressed_avatar(payload: DressedAvatarPayload):
                 garment_shoulder_cm=payload.garment_shoulder_cm,
                 product_id=payload.product_id,
                 product_image_url=payload.product_image_url,
+                # category + pants measurements only exist on the v2 engine;
+                # v1 predates categories and would reject them.
+                **({
+                    "category": payload.category,
+                    "garment_waist_cm": payload.garment_waist_cm,
+                    "garment_hip_cm": payload.garment_hip_cm,
+                    "garment_inseam_cm": payload.garment_inseam_cm,
+                    "garment_rise_cm": payload.garment_rise_cm,
+                } if USE_GARMENT_V2 else {}),
             ),
         )
     except FileNotFoundError as exc:
@@ -1118,10 +1543,11 @@ async def generate_dressed_avatar(payload: DressedAvatarPayload):
     except ValueError as exc:
         if str(exc) == "TOO_SMALL":
             raise HTTPException(status_code=400, detail="TOO_SMALL") from exc
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Dressed avatar generation failed with invalid input")
+        raise HTTPException(status_code=500, detail="Dressed avatar generation failed.") from exc
     except Exception as exc:
         logger.exception("Dressed avatar generation failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Dressed avatar generation failed.") from exc
 
     return Response(
         content=glb_bytes,

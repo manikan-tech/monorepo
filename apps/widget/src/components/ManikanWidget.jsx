@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import MeasurementSlider from './MeasurementSlider'
 import TryOnViewer from './TryOnViewer'
 import { generateDressedAvatar } from '../lib/api'
+import { getLayerableGarment, wearGarment, removeGarment } from '../lib/outfit'
 
 /* ─────────────────────────────────────────────────────────────────────────
    Manikan Widget — Multi-step SDK integration modal
@@ -38,21 +39,32 @@ export default function ManikanWidget({ product, onClose }) {
   const [waist, setWaist] = useState(savedProfile?.waist_cm || 82)
   const [hips, setHips] = useState(savedProfile?.hips_cm || 96)
 
-  // Recommend best size based on user's chest measurement
+  // Recommend the best size from the measurement that actually drives fit for
+  // this category: chest for tops, WAIST for pants (the bake grid is
+  // waist-keyed). Reading chest_width_cm on a pants variant yields undefined,
+  // so `undefined * 2 - chest` is NaN, every comparison is false, and the
+  // default 'M' was being returned for every body regardless of size.
+  const SIZE_DRIVER = {
+    pants: { key: 'waist_width_cm', body: 'waist' },
+    default: { key: 'chest_width_cm', body: 'chest' },
+  }
   const recommendedSize = useMemo(() => {
-    const userChestCirc = chest
-    let best = 'M'
+    const driver = SIZE_DRIVER[product.category] || SIZE_DRIVER.default
+    const userCirc = driver.body === 'waist' ? waist : chest
+    let best = null
     let bestDiff = Infinity
     for (const [sz, specs] of Object.entries(product.sizes)) {
-      const garmentCirc = specs.chest_width_cm * 2
-      const diff = Math.abs(garmentCirc - userChestCirc)
+      const flat = specs?.[driver.key]
+      if (typeof flat !== 'number') continue // measurement missing for this size
+      const diff = Math.abs(flat * 2 - userCirc)
       if (diff < bestDiff) {
         bestDiff = diff
         best = sz
       }
     }
-    return best
-  }, [chest, product.sizes])
+    return best ?? Object.keys(product.sizes)[0] ?? 'M'
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chest, waist, product.sizes, product.category])
 
   const [selectedSize, setSelectedSize] = useState(() => isReturningUser ? recommendedSize : 'M')
   const [tryOnUrl, setTryOnUrl] = useState(null)
@@ -60,15 +72,45 @@ export default function ManikanWidget({ product, onClose }) {
   const [error, setError] = useState(null)
   const previousUrlRef = useRef(null)
 
+  // What the shopper already has on from an earlier product, if it can be
+  // layered with this one (a top with a bottom). Read once on mount so it
+  // can't change underneath an in-flight render.
+  const [wornGarment] = useState(() => getLayerableGarment(product.id, product.category))
+  // Default ON: the shopper put that garment on deliberately, so silently
+  // removing it when they open the next product is the surprising behaviour.
+  const [keepWearing, setKeepWearing] = useState(true)
+
   const sizeKeys = Object.keys(product.sizes)
   const currentSpecs = product.sizes[selectedSize]
+  // Which four measurements to show depends on the category — a pants variant
+  // has no chest/sleeve/shoulder, and rendering those printed four blanks.
+  const specRows = (product.category === 'pants'
+    ? [
+        ['Waist cm', 'waist_width_cm'],
+        ['Hip cm', 'hip_width_cm'],
+        ['Inseam cm', 'inseam_cm'],
+        ['Rise cm', 'rise_cm'],
+      ]
+    : [
+        ['Chest cm', 'chest_width_cm'],
+        ['Length cm', 'body_length_cm'],
+        ['Sleeve cm', 'sleeve_length_cm'],
+        ['Shoulder cm', 'shoulder_width_cm'],
+      ]
+  ).map(([label, key]) => ({ label, value: currentSpecs?.[key] ?? '—' }))
 
   // Generate dressed avatar
-  const generateTryOn = useCallback(async (size) => {
+  // `layerOn` is passed EXPLICITLY rather than read from `keepWearing`.
+  // setState is async, so a handler that flips the checkbox and immediately
+  // regenerates would otherwise render with the PREVIOUS value -- which
+  // inverted the toggle: unchecking still showed both, re-checking showed one.
+  const generateTryOn = useCallback(async (size, layerOn) => {
+    const useLayer = layerOn === undefined ? keepWearing : layerOn
     setIsGenerating(true)
     setError(null)
 
     try {
+      const layerWith = useLayer && wornGarment ? wornGarment : null
       const url = await generateDressedAvatar({
         product_id: product.id,
         size,
@@ -79,6 +121,10 @@ export default function ManikanWidget({ product, onClose }) {
         waist_cm: waist,
         hips_cm: hips,
         recommended_size: recommendedSize,
+        // Only ids/sizes travel; the Store re-resolves the garment from the DB.
+        ...(layerWith
+          ? { also_wear: { product_id: layerWith.product_id, size: layerWith.size } }
+          : {}),
       })
 
       if (previousUrlRef.current) {
@@ -86,15 +132,43 @@ export default function ManikanWidget({ product, onClose }) {
       }
       previousUrlRef.current = url
       setTryOnUrl(url)
+      // Record what is now actually on the body, so the NEXT product can
+      // offer to layer with it. Both slots are updated, because a layered
+      // render means the shopper really is wearing both.
+      wearGarment(product.category, {
+        product_id: product.id, size, name: product.name,
+      })
+      if (layerWith) {
+        wearGarment(layerWith.category, {
+          product_id: layerWith.product_id,
+          size: layerWith.size,
+          name: layerWith.name,
+        })
+      } else if (wornGarment) {
+        // Rendered on its own -> that other garment is off.
+        removeGarment(wornGarment.category)
+      }
     } catch (err) {
       if (err.name !== 'AbortError') {
-        console.error('Try-On Error:', err)
-        setError('Failed to generate virtual try-on. Please try again.')
+        // TOO_SMALL is a real fit verdict, not a transient failure: the body
+        // service refuses a garment more than 25cm smaller than the body.
+        // "Please try again" is useless advice for it -- retrying can never
+        // succeed. Name the actual problem and point at a size that fits.
+        if (err.message === 'TOO_SMALL') {
+          const suggestion = recommendedSize && recommendedSize !== size
+            ? ` Try ${recommendedSize}.`
+            : ''
+          setError(`Size ${size} is too small for your measurements.${suggestion}`)
+        } else {
+          console.error('Try-On Error:', err)
+          setError('Failed to generate virtual try-on. Please try again.')
+        }
       }
     } finally {
       setIsGenerating(false)
     }
-  }, [sex, height, weight, chest, waist, hips, product.id, recommendedSize])
+  }, [sex, height, weight, chest, waist, hips, product.id, product.category,
+      product.name, recommendedSize, keepWearing, wornGarment])
 
   // Handle "Generate My Body Model" click
   const handleGenerateBody = async () => {
@@ -306,6 +380,36 @@ export default function ManikanWidget({ product, onClose }) {
                     </div>
                   </div>
 
+                  {/* Layered outfit: what the shopper already has on, and an
+                      explicit way to take it off. Shown only when the other
+                      garment is a different category (a top with a bottom). */}
+                  {wornGarment && (
+                    <div className="mw-tryon-layer">
+                      <label className="mw-tryon-layer-row">
+                        <input
+                          type="checkbox"
+                          checked={keepWearing}
+                          disabled={isGenerating}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                            setKeepWearing(next)
+                            // pass `next` explicitly -- setKeepWearing has not
+                            // applied yet at this point
+                            generateTryOn(selectedSize, next)
+                          }}
+                          id="tryon-keep-wearing"
+                        />
+                        <span>
+                          Also wearing your <strong>{wornGarment.name}</strong>
+                          {' '}({wornGarment.size})
+                        </span>
+                      </label>
+                      <p className="mw-tryon-layer-hint">
+                        Uncheck to see this item on its own.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="mw-tryon-size-section">
                     <h4 className="mw-tryon-label">Select Size</h4>
                     <div className="mw-tryon-size-pills">
@@ -337,20 +441,20 @@ export default function ManikanWidget({ product, onClose }) {
                     <h4 className="mw-tryon-label">Size {selectedSize} Measurements</h4>
                     <div className="mw-tryon-spec-grid">
                       <div className="mw-tryon-spec">
-                        <span className="mw-tryon-spec-val">{currentSpecs.chest_width_cm}</span>
-                        <span className="mw-tryon-spec-label">Chest cm</span>
+                        <span className="mw-tryon-spec-val">{specRows[0].value}</span>
+                        <span className="mw-tryon-spec-label">{specRows[0].label}</span>
                       </div>
                       <div className="mw-tryon-spec">
-                        <span className="mw-tryon-spec-val">{currentSpecs.body_length_cm}</span>
-                        <span className="mw-tryon-spec-label">Length cm</span>
+                        <span className="mw-tryon-spec-val">{specRows[1].value}</span>
+                        <span className="mw-tryon-spec-label">{specRows[1].label}</span>
                       </div>
                       <div className="mw-tryon-spec">
-                        <span className="mw-tryon-spec-val">{currentSpecs.sleeve_length_cm}</span>
-                        <span className="mw-tryon-spec-label">Sleeve cm</span>
+                        <span className="mw-tryon-spec-val">{specRows[2].value}</span>
+                        <span className="mw-tryon-spec-label">{specRows[2].label}</span>
                       </div>
                       <div className="mw-tryon-spec">
-                        <span className="mw-tryon-spec-val">{currentSpecs.shoulder_width_cm}</span>
-                        <span className="mw-tryon-spec-label">Shoulder cm</span>
+                        <span className="mw-tryon-spec-val">{specRows[3].value}</span>
+                        <span className="mw-tryon-spec-label">{specRows[3].label}</span>
                       </div>
                     </div>
                   </div>

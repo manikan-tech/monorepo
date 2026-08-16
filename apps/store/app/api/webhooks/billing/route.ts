@@ -106,7 +106,7 @@ async function activateCheckoutSubscription(
 
   const checkout = await tx.billingCheckout.findUnique({
     where: { stripeCheckoutSessionId: checkoutSessionId },
-    select: { retailerId: true },
+    select: { retailerId: true, service: true, planId: true },
   });
   if (!checkout) {
     throw new Error(
@@ -127,6 +127,7 @@ async function activateCheckoutSubscription(
     where: { stripeSubscriptionId: subscriptionId },
     select: {
       retailerId: true,
+      service: true,
       stripeCustomerId: true,
       lastStripeEventAt: true,
     },
@@ -135,6 +136,7 @@ async function activateCheckoutSubscription(
   if (existing) {
     if (
       existing.retailerId !== checkout.retailerId ||
+      existing.service !== checkout.service ||
       existing.stripeCustomerId !== customerId
     ) {
       throw new Error(
@@ -147,7 +149,7 @@ async function activateCheckoutSubscription(
 
     await tx.subscription.update({
       where: { stripeSubscriptionId: subscriptionId },
-      data: { status: "ACTIVE", lastStripeEventAt: event.created },
+      data: { status: "ACTIVE", planId: checkout.planId, lastStripeEventAt: event.created },
     });
     return "processed";
   }
@@ -155,6 +157,8 @@ async function activateCheckoutSubscription(
   await tx.subscription.create({
     data: {
       retailerId: checkout.retailerId,
+      service: checkout.service,
+      planId: checkout.planId,
       stripeCustomerId: customerId,
       stripeSubscriptionId: subscriptionId,
       status: "ACTIVE",

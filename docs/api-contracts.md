@@ -75,7 +75,7 @@ Returns a product's current 3D-try-on config (garment colour + per-size garment 
 ```json
 {
   "productId": "…",
-  "tshirtColorHex": "#1a1a2e",
+  "garmentColorHex": "#1a1a2e",
   "isTryOnEnabled": true,
   "variants": [
     { "id": "…", "sizeLabel": "M", "garmentChestCm": 50, "garmentLengthCm": 70, "garmentSleeveCm": 20, "garmentShoulderCm": 44 }
@@ -87,7 +87,7 @@ Returns a product's current 3D-try-on config (garment colour + per-size garment 
 Makes a product 3D-try-on-ready: sets the garment colour + the flat garment measurements per size (the "garment gap" data a CSV import doesn't carry). Atomic. `sizeLabel`s must already exist on the product.
 ```json
 {
-  "tshirtColorHex": "#1a1a2e",
+  "garmentColorHex": "#1a1a2e",
   "variants": [
     { "sizeLabel": "M", "garmentChestCm": 50, "garmentLengthCm": 70, "garmentSleeveCm": 20, "garmentShoulderCm": 44 }
   ]

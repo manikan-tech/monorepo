@@ -7,10 +7,14 @@ class Settings(BaseSettings):
     gemini_api_key_1: Optional[str] = None
     gemini_api_key_2: Optional[str] = None
 
-    # Bedrock Gateway - ITI endpoint
+    # Bedrock Gateway - ITI endpoint. The chat path itself (/student/chat)
+    # is fixed by the gateway's own API and is hardcoded in Bedrock.py,
+    # not configurable here - a separate BEDROCK_CHAT_ENDPOINT env var
+    # used to exist for this and caused real confusion (a duplicated-URL
+    # bug that took a while to track down), so it's intentionally not
+    # brought back. Only the base host is configurable.
     bedrock_api_key: Optional[str] = None
     bedrock_base_url: Optional[str] = None
-    bedrock_chat_endpoint: Optional[str] = None
 
     # Ollama - local fallback, always last resort
     ollama_base_url: str = "http://localhost:11434"
@@ -46,12 +50,6 @@ class Settings(BaseSettings):
     def gemini_keys(self) -> List[str]:
         # Ordered list of configured Gemini keys, skipping any that are empty
         return [k for k in (self.gemini_api_key_1, self.gemini_api_key_2) if k]
-
-    @property
-    def bedrock_full_url(self) -> Optional[str]:
-        if self.bedrock_base_url and self.bedrock_chat_endpoint:
-            return f"{self.bedrock_base_url.rstrip('/')}{self.bedrock_chat_endpoint}"
-        return None
 
 
 def get_settings() -> Settings:

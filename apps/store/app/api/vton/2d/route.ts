@@ -4,6 +4,11 @@ import { prisma } from "../../../lib/prisma";
 import { authorizeServiceRequest } from "../../../lib/service-auth";
 
 const VTON_SERVICE_URL = process.env.VTON_SERVICE_URL || "http://localhost:8003";
+// Shared secret tryon-service verifies on every call — distinct from
+// VTON_2D_SERVICE_KEY above, which only guards the inbound hop to THIS route.
+// Proves this outbound request came from this proxy, not just from something
+// that can reach the Python service's URL.
+const TRYON_SERVICE_KEY = process.env.TRYON_SERVICE_KEY || "";
 const MAX_HUMAN_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 90_000;
 const ALLOWED_IMAGE_HOSTS = new Set(
@@ -117,7 +122,10 @@ export async function POST(request: NextRequest) {
             upstream = await fetch(`${VTON_SERVICE_URL}/api/vton/2d`, {
                 method: "POST",
                 body: upstreamFormData,
-                headers: { "X-Request-Id": requestId },
+                headers: {
+                    "X-Request-Id": requestId,
+                    "X-Manikan-Internal-Key": TRYON_SERVICE_KEY,
+                },
                 signal: controller.signal,
                 cache: "no-store",
             });

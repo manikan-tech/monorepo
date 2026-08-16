@@ -1,30 +1,57 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
-export default function WidgetKeyPanel() {
-  const [apiKey, setApiKey] = useState("");
-  const [isActivated, setIsActivated] = useState(false);
-  const [allowedOrigins, setAllowedOrigins] = useState<string[]>([]);
+type Service = "BODY_MODELING" | "VTON_2D" | "RECOMMENDATION";
+
+type SubscriptionSummary = {
+  planName: string;
+  quota: number;
+  usage: number;
+} | null;
+
+type KeyData = {
+  apiKey: string;
+  isActivated: boolean;
+  allowedOrigins: string[];
+  subscription: SubscriptionSummary;
+};
+
+export default function ServiceKeyPanel({
+  service,
+  scriptSrc,
+}: {
+  service: Service;
+  /** The widget script URL retailers should point their <script src> at. */
+  scriptSrc: string;
+}) {
+  const [data, setData] = useState<KeyData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRevealed, setIsRevealed] = useState(false);
-  
+
   const [newOrigin, setNewOrigin] = useState("");
-  const [actionLoading, setActionLoading] = useState<string | null>(null); // 'rotate', 'origins', 'toggle'
+  const [actionLoading, setActionLoading] = useState<string | null>(null); // 'rotate', 'origins'
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     fetchData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [service]);
+
+  const endpoint = `/api/retailer/widget-key/${service}`;
 
   const fetchData = async () => {
+    setIsLoading(true);
     try {
-      const res = await fetch("/api/retailer/widget-key");
+      const res = await fetch(endpoint);
       if (!res.ok) throw new Error("Failed to load widget key data");
-      const data = await res.json();
-      setApiKey(data.apiKey);
-      setIsActivated(data.isActivated);
-      setAllowedOrigins(data.allowedOrigins || []);
+      const json = await res.json();
+      setData({
+        apiKey: json.apiKey,
+        isActivated: json.isActivated,
+        allowedOrigins: json.allowedOrigins || [],
+        subscription: json.subscription ?? null,
+      });
     } catch (err: any) {
       setMessage({ type: "error", text: err.message });
     } finally {
@@ -33,20 +60,24 @@ export default function WidgetKeyPanel() {
   };
 
   const handleRotateKey = async () => {
-    if (!window.confirm("Rotating your key will immediately break any live widget embed using the old key. You'll need to update your embed snippet. Continue?")) {
+    if (
+      !window.confirm(
+        "Rotating your key will immediately break any live widget embed using the old key. You'll need to update your embed snippet. Continue?"
+      )
+    ) {
       return;
     }
-    
+
     setActionLoading("rotate");
     setMessage(null);
     try {
-      const res = await fetch("/api/retailer/widget-key", { method: "POST" });
+      const res = await fetch(endpoint, { method: "POST" });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "Failed to rotate key");
       }
-      const data = await res.json();
-      setApiKey(data.apiKey);
+      const json = await res.json();
+      setData((prev) => (prev ? { ...prev, apiKey: json.apiKey } : prev));
       setMessage({ type: "success", text: "Key rotated successfully." });
       setIsRevealed(false);
     } catch (err: any) {
@@ -60,7 +91,7 @@ export default function WidgetKeyPanel() {
     setActionLoading("origins");
     setMessage(null);
     try {
-      const res = await fetch("/api/retailer/widget-key", {
+      const res = await fetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ allowedOrigins: newOriginsList }),
@@ -69,8 +100,8 @@ export default function WidgetKeyPanel() {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "Failed to update origins");
       }
-      const data = await res.json();
-      setAllowedOrigins(data.allowedOrigins);
+      const json = await res.json();
+      setData((prev) => (prev ? { ...prev, allowedOrigins: json.allowedOrigins } : prev));
       setMessage({ type: "success", text: "Allowed origins updated." });
       setNewOrigin("");
     } catch (err: any) {
@@ -95,26 +126,24 @@ export default function WidgetKeyPanel() {
       origin = origin.replace(/\/$/, "").toLowerCase();
     }
 
-    if (allowedOrigins.includes(origin)) {
+    if (data?.allowedOrigins.includes(origin)) {
       setMessage({ type: "error", text: "Origin already exists" });
       return;
     }
-    handleUpdateOrigins([...allowedOrigins, origin]);
+    handleUpdateOrigins([...(data?.allowedOrigins ?? []), origin]);
   };
 
   const handleRemoveOrigin = (originToRemove: string) => {
-    handleUpdateOrigins(allowedOrigins.filter(o => o !== originToRemove));
+    handleUpdateOrigins((data?.allowedOrigins ?? []).filter((o) => o !== originToRemove));
   };
 
-
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(apiKey);
-    setMessage({ type: "success", text: "API Key copied to clipboard." });
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setMessage({ type: "success", text: `${label} copied to clipboard.` });
     setTimeout(() => setMessage(null), 3000);
   };
 
-  if (isLoading) {
+  if (isLoading || !data) {
     return (
       <div className="bg-white rounded-2xl shadow-card border border-manikan-border p-8 max-w-2xl animate-pulse">
         <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div>
@@ -124,18 +153,17 @@ export default function WidgetKeyPanel() {
     );
   }
 
+  const { apiKey, isActivated, allowedOrigins, subscription } = data;
   const maskedKey = apiKey ? `${apiKey.substring(0, 8)}••••••••${apiKey.substring(apiKey.length - 4)}` : "";
-
-  const snippet = `<script src="https://widget.manikan.tech/v1/embed.js" data-key="${isRevealed ? apiKey : maskedKey}"></script>`;
+  const snippet = `<script src="${scriptSrc}" data-retailer-key="${isRevealed ? apiKey : maskedKey}" data-product-id="PRODUCT_ID"></script>`;
 
   return (
     <div className="bg-white rounded-2xl shadow-card border border-manikan-border p-8 h-full transition-all duration-300 hover:shadow-lg space-y-8 flex flex-col">
-      
       <div className="flex items-center justify-between border-b border-manikan-border pb-6">
         <div>
           <h3 className="text-xl font-display font-semibold text-forest-900">Widget Activation & API Key</h3>
           <p className="text-sm text-manikan-text-secondary mt-1">
-            Manage your API key and widget access.
+            Manage your API key and widget access for this service.
           </p>
         </div>
         <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 border border-manikan-border rounded-full">
@@ -151,6 +179,25 @@ export default function WidgetKeyPanel() {
           <strong>Note:</strong> The widget is currently deactivated. It will reject all requests until activated.
         </div>
       )}
+
+      <div className="rounded-lg border border-manikan-border bg-gray-50 px-4 py-3 flex items-center justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-manikan-text-secondary mb-1">
+            Subscription
+          </p>
+          {subscription ? (
+            <p className="text-sm text-forest-900">
+              <span className="font-semibold">{subscription.planName}</span>
+              <span className="text-manikan-text-secondary">
+                {" "}
+                — {subscription.usage.toLocaleString()} / {subscription.quota.toLocaleString()} calls used this period
+              </span>
+            </p>
+          ) : (
+            <p className="text-sm text-amber-700">No active subscription for this service.</p>
+          )}
+        </div>
+      </div>
 
       <div>
         <label className="block text-sm font-medium text-forest-900 mb-2">Public API Key</label>
@@ -171,7 +218,7 @@ export default function WidgetKeyPanel() {
             </button>
             <button
               type="button"
-              onClick={copyToClipboard}
+              onClick={() => copyToClipboard(apiKey, "API Key")}
               className="text-gray-500 hover:text-forest-900 p-1 rounded transition-colors"
               title="Copy to Clipboard"
             >
@@ -191,14 +238,14 @@ export default function WidgetKeyPanel() {
       <div>
         <label className="block text-sm font-medium text-forest-900 mb-2">Allowed Origins</label>
         <p className="text-sm text-manikan-text-secondary mb-3">
-          Specify the domains where your widget is allowed to run.
+          Specify the domains where your widget is allowed to run. Shared across all your subscribed services.
         </p>
-        
+
         <div className="space-y-3 mb-4">
           {allowedOrigins.length === 0 ? (
             <p className="text-sm text-gray-500 italic px-2">No origins configured yet. Widget will not load anywhere.</p>
           ) : (
-            allowedOrigins.map(origin => (
+            allowedOrigins.map((origin) => (
               <div key={origin} className="flex items-center justify-between bg-gray-50 px-4 py-2 rounded-lg border border-manikan-border">
                 <span className="text-sm font-mono text-forest-900">{origin}</span>
                 <button
@@ -222,7 +269,7 @@ export default function WidgetKeyPanel() {
             placeholder="https://store.example.com"
             className="flex-1 px-4 py-2 border border-manikan-border rounded-lg focus:ring-2 focus:ring-forest-400 focus:outline-none text-sm"
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === "Enter") {
                 e.preventDefault();
                 handleAddOrigin();
               }
@@ -238,16 +285,25 @@ export default function WidgetKeyPanel() {
           </button>
         </div>
       </div>
-      
+
       <div>
         <label className="block text-sm font-medium text-forest-900 mb-2">Embed Snippet</label>
         <p className="text-sm text-manikan-text-secondary mb-3">
-          Place this snippet right before the closing <code>&lt;/body&gt;</code> tag of your website.
+          Place this snippet on any product page where you want the widget to appear, replacing{" "}
+          <code>PRODUCT_ID</code> with that product&apos;s id from your catalog.
         </p>
         <div className="relative group">
           <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-xs font-mono overflow-x-auto">
             {snippet}
           </pre>
+          <button
+            type="button"
+            onClick={() => copyToClipboard(`<script src="${scriptSrc}" data-retailer-key="${apiKey}" data-product-id="PRODUCT_ID"></script>`, "Snippet")}
+            className="absolute top-3 right-3 text-gray-400 hover:text-white p-1 rounded transition-colors opacity-0 group-hover:opacity-100"
+            title="Copy snippet with full key"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+          </button>
         </div>
       </div>
 

@@ -3,6 +3,13 @@ import { prisma } from "../../../../lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import RetailerDetailToggle from "./RetailerDetailToggle";
+import { SERVICES } from "../../../../lib/service-keys";
+
+const SERVICE_LABELS: Record<(typeof SERVICES)[number], string> = {
+  BODY_MODELING: "Body Modeling",
+  VTON_2D: "2D Try-On",
+  RECOMMENDATION: "Recommendations",
+};
 
 export default async function RetailerDetailPage({
   params,
@@ -32,6 +39,20 @@ export default async function RetailerDetailPage({
   if (!retailer) {
     redirect("/admin/retailers");
   }
+
+  // Each service is independently subscribed to -- show each one's own
+  // active plan rather than a single bundled "plan" (that legacy field
+  // predates the real per-service Plan/Subscription model and is unused).
+  const subscriptionsByService = await Promise.all(
+    SERVICES.map(async (service) => {
+      const subscription = await prisma.subscription.findFirst({
+        where: { retailerId: retailer.id, service, status: "ACTIVE" },
+        include: { plan: true },
+        orderBy: { createdAt: "desc" },
+      });
+      return { service, planName: subscription?.plan?.name ?? null };
+    })
+  );
 
   return (
     <div className="space-y-6">
@@ -73,8 +94,14 @@ export default async function RetailerDetailPage({
                 </p>
               </div>
               <div>
-                <p className="text-xs font-semibold text-forest-700/60 uppercase tracking-wider mb-1">Plan</p>
-                <p className="font-medium text-forest-900 capitalize">{retailer.plan}</p>
+                <p className="text-xs font-semibold text-forest-700/60 uppercase tracking-wider mb-1">Subscriptions</p>
+                <div className="space-y-0.5">
+                  {subscriptionsByService.map(({ service, planName }) => (
+                    <p key={service} className="text-xs font-medium text-forest-900">
+                      {SERVICE_LABELS[service]}: {planName ?? <span className="text-forest-700/50">none</span>}
+                    </p>
+                  ))}
+                </div>
               </div>
               <div>
                 <p className="text-xs font-semibold text-forest-700/60 uppercase tracking-wider mb-1">Products</p>

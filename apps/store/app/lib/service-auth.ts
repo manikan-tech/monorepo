@@ -19,8 +19,8 @@ function matchesSecret(candidate: string, secret: string): boolean {
 
 /**
  * Authorizes server-to-server service calls. These credentials are deliberately
- * separate from Retailer.apiKey: the latter is a public widget identifier and
- * must never authorize billable backend workloads.
+ * separate from ServiceApiKey: the latter is a public per-service widget
+ * identifier and must never authorize billable backend workloads.
  *
  * VTON_2D_SERVICE_KEY is server-only (do not prefix it with NEXT_PUBLIC_).
  * VTON_2D_SERVICE_KEY_PREVIOUS permits a zero-downtime credential rotation.

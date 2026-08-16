@@ -8,6 +8,7 @@ described below.
 
 ---
 
+<<<<<<< HEAD
 ## 1. Architecture
 
 ```
@@ -223,3 +224,30 @@ they depend on live model output).
   representative product's* variants per category, not an average
   across all products in that category — a reasonable approximation
   for a demo, not a substitute for per-product accuracy.
+=======
+1. Set up a virtual environment:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Run the development server:
+   ```bash
+   uvicorn app.main:app --reload --port 8002
+   ```
+
+## Configuration
+
+In addition to the DB/Supabase/LLM settings in [`app/config.py`](app/config.py):
+
+| Env var | Default | Purpose |
+|---------|---------|---------|
+| `RECOMMENDATION_SERVICE_KEY` | *(unset)* | Shared secret the Store's proxy must send as `X-Manikan-Internal-Key` on `POST /recommend`. **Required in every non-local deployment** — this service has no other auth of its own, so an unset key means the route is rejected (fails closed), not open. |
+| `RECOMMENDATION_SERVICE_KEY_PREVIOUS` | *(unset)* | Optional second accepted value, for zero-downtime key rotation. |
+| `CORS_ORIGINS` | `*` | Comma-separated allowed origins (set explicitly in prod) |
+
+⚠️ **This service must never be exposed on a public/internet-reachable address.** CORS only constrains browsers; `RECOMMENDATION_SERVICE_KEY` is what actually stops a direct server-to-server or curl caller from bypassing the Store's API-key/subscription/quota checks entirely. `/` (health check) remains open (no key required).
+>>>>>>> 9bb6580a1aed68b43246e8421eec1b09d47406e0

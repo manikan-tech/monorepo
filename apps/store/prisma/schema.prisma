@@ -45,6 +45,24 @@ enum AuditAction {
   PLAN_CHANGED
 }
 
+// Which measurement chart a retailer is uploading. BODY_FIT is the retailer's
+// published size guide ("what body does our M fit") and is a fixed 5 fields
+// regardless of category; GARMENT_TECHPACK is the garment's own flat
+// tech-pack measurements, whose field list varies by category
+// (CATEGORY_GARMENT_FIELDS in app/lib/tryon-status.ts).
+enum ChartType {
+  BODY_FIT
+  GARMENT_TECHPACK
+}
+
+enum IngestionStatus {
+  PENDING // row created, not yet parsed
+  PROCESSING // parsing/validating/committing
+  ACTION_REQUIRED // parsed, but some rows failed validation -- retailer must fix
+  COMPLETE // all rows committed
+  FAILED // unrecoverable (unparseable file, no readable rows)
+}
+
 // ─── B2B: Retailer (existing) ───────────────────────────────────
 
 model PlatformAdmin {
@@ -64,41 +82,154 @@ model Retailer {
   storeName      String
   hashedPassword String?
   isActivated    Boolean  @default(false)
-  apiKey         String   @unique @default(cuid())
-  plan           String   @default("free")
-  widgetSettings Json?
-  createdAt      DateTime @default(now())
+  widgetSettings         Json?
+  recommendationSettings Json?
+  createdAt              DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  products         Product[]
-  sessions         MeasurementSession[]
-  subscriptions    Subscription[]
-  billingCheckouts BillingCheckout[]
-  originAllowlist  OriginAllowlist[]
-  vtonCacheEntries VtonCacheEntry[]
-  auditLogs        RetailerAuditLog[]
+  products            Product[]
+  sessions            MeasurementSession[]
+  serviceApiKeys      ServiceApiKey[]
+  subscriptions       Subscription[]
+  billingCheckouts    BillingCheckout[]
+  originAllowlist     OriginAllowlist[]
+  vtonCacheEntries    VtonCacheEntry[]
+  auditLogs           RetailerAuditLog[]
+  sizeChartIngestions SizeChartIngestion[]
+}
+
+// ─── Size chart ingestion ──────────────────────────────────────
+
+// One retailer-uploaded measurement chart, from upload through to commit.
+// Deliberately independent of whatever dispatches the work: the handler takes
+// only an id (app/lib/ingestion/process-job.ts) and runs inline today, so
+// putting a real queue in front of it later changes nothing here.
+model SizeChartIngestion {
+  id         String          @id @default(cuid())
+  retailerId String
+  chartType  ChartType
+  status     IngestionStatus @default(PENDING)
+
+  fileName    String
+  storagePath String? // Supabase Storage object key; null when the upload failed
+  rowCount    Int     @default(0)
+
+  // Parsed rows + per-row errors, so the fix screen renders without re-reading
+  // the CSV and a resubmit only touches the rows that changed.
+  // Non-blocking warnings are NOT a third column -- they hang off each
+  // ParsedRow as `warnings`, so they stay attached to the row they describe.
+  rows   Json? // ParsedRow[]  (each row may carry its own warnings)
+  errors Json? // RowError[]
+
+  committedRows Int     @default(0)
+  // Persisted rather than computed: the list endpoint deliberately does not
+  // select `rows`, so deriving this there would undo that.
+  hasWarnings   Boolean @default(false)
+  failureReason String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+
+  @@index([retailerId, status])
+  @@index([retailerId, createdAt])
 }
 
 // ─── SaaS billing ──────────────────────────────────────────────
 
+// Each service (BODY_MODELING / VTON_2D / RECOMMENDATION) is subscribed to,
+// keyed, and billed completely independently -- a retailer may use just one,
+// some, or all three. One retailer-wide key (the old Retailer.apiKey) made it
+// impossible to tell which service a request was for, or to gate a service
+// on that service's own subscription. This is the widget-facing PUBLIC key
+// (not a secret) sent as X-Manikan-Key; see app/lib/service-auth.ts for the
+// separate, private, server-to-server keys the Python services verify.
+model ServiceApiKey {
+  id         String   @id @default(cuid())
+  retailerId String
+  service    String // "BODY_MODELING" | "VTON_2D" | "RECOMMENDATION"
+  apiKey     String   @unique @default(cuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+
+  @@unique([retailerId, service])
+}
+
+// Pricing tiers. A plan belongs to exactly one service -- e.g. "Growth" for
+// BODY_MODELING and "Growth" for RECOMMENDATION are two separate rows, which
+// can carry different prices/quotas per service. A same-name bundle discount
+// for subscribing to all three is a future checkout-flow/pricing decision on
+// top of this, not a schema concern.
+model Plan {
+  id              String   @id @default(cuid())
+  name            String
+  service         String // "BODY_MODELING" | "VTON_2D" | "RECOMMENDATION"
+  priceEgpMonthly Float
+  quota           Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subscriptions    Subscription[]
+  billingCheckouts BillingCheckout[]
+
+  @@unique([name, service])
+}
+
 // Stripe identifiers are only written by verified Stripe webhooks. Historical
 // rows are retained so delayed events cannot overwrite a newer subscription.
+// `planId` and `currentPeriodEnd` are nullable so legacy/webhook-created rows
+// (which predate Plan selection) remain valid until fully migrated.
+//
+// One row per (retailer, service): independent subscriptions, so a retailer
+// subscribed to BODY_MODELING only has no RECOMMENDATION row at all (not a
+// row with a zero quota) until they subscribe to that service too.
 model Subscription {
   id                   String             @id @default(cuid())
   retailerId           String
+  service              String // "BODY_MODELING" | "VTON_2D" | "RECOMMENDATION"
+  planId               String?
   stripeCustomerId     String
   // Legacy rows may not have a Stripe subscription ID. New webhook-created
   // rows always provide one and are the only rows eligible for state changes.
   stripeSubscriptionId String?            @unique
   status               SubscriptionStatus @default(PAST_DUE)
+  currentPeriodEnd     DateTime?
+  // Usage count for THIS service in the current billing period (a
+  // subscription is already single-service, so no per-scope keying needed).
+  currentPeriodUsage   Int                @default(0)
   lastStripeEventAt    Int                @default(0)
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
   retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  plan     Plan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
 
   @@index([retailerId, status])
+  @@index([retailerId, service, status])
   @@index([stripeCustomerId])
+}
+
+// ─── Service Usage Rollup (Metering) ───────────────────────────
+
+// Provides an asynchronous, low-cost ledger for daily service metering.
+// Used for historical graphing/analytics in the dashboard.
+model ServiceUsageDailyRollup {
+  id         String   @id @default(cuid())
+  retailerId String
+  service    String // e.g. "BODY_MODELING", "VTON_2D", "RECOMMENDATION"
+  date       DateTime @db.Date // Truncated to midnight UTC
+  count      Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([retailerId, service, date])
+  @@index([retailerId, date])
 }
 
 // A Checkout Session is created only by an authenticated server-side flow and
@@ -107,13 +238,25 @@ model Subscription {
 model BillingCheckout {
   stripeCheckoutSessionId String   @id
   retailerId              String
+  service                 String // "BODY_MODELING" | "VTON_2D" | "RECOMMENDATION" -- which independent subscription this checkout is for.
+  planId                  String // The exact plan tier the retailer selected -- the webhook reads this (not Stripe metadata) to activate the subscription on the right plan.
   createdAt               DateTime @default(now())
 
   retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  plan     Plan     @relation(fields: [planId], references: [id])
 }
 
 // Tenant-owned Origins used by VTON developer tooling. Origin values are
 // normalized before persistence so equivalent values cannot bypass the limit.
+//
+// NOT CURRENTLY ENFORCED ANYWHERE: the real security gate (widget-auth.ts's
+// origin check, and the VTON storefront proxy's same-origin check) both read
+// Retailer.widgetSettings.allowedOrigins instead -- a separate, actually-
+// enforced mechanism. This table is only read/written by the dashboard CRUD
+// at app/api/vton/allowlist, with no consumer checking it on the request
+// path. Before building anything on top of this table, either wire it into
+// a real enforcement point or retire it -- don't assume populating it
+// restricts anything today.
 model OriginAllowlist {
   id         String   @id @default(cuid())
   retailerId String
@@ -186,27 +329,28 @@ model Category {
 // ─── Product (extended) ─────────────────────────────────────────
 
 model Product {
-  id             String                       @id @default(cuid())
-  retailerId     String
-  categoryId     String?
-  productCode    String
-  name           String
-  slug           String                       @unique
-  description    String?
-  category       String
-  gender         String
-  brand          String
-  fabric         String
-  priceEgp       Float
-  discountPct    Float                        @default(0)
-  imageUrl       String
-  images         String[]
-  stock          Int                          @default(0)
-  isActive       Boolean                      @default(true)
-  embedding      Unsupported("vector(1536)")?
+  id              String                       @id @default(cuid())
+  retailerId      String
+  categoryId      String?
+  productCode     String
+  name            String
+  slug            String                       @unique
+  description     String?
+  category        String
+  gender          String
+  brand           String
+  fabric          String
+  priceEgp        Float
+  discountPct     Float                        @default(0)
+  imageUrl        String
+  images          String[]
+  stock           Int                          @default(0)
+  isActive        Boolean                      @default(true)
+  embedding       Unsupported("vector(1536)")?
   garmentColorHex String? // garment colour (hex) for the 3D virtual try-on
-  createdAt      DateTime                     @default(now())
-  updatedAt      DateTime                     @updatedAt
+  tshirtColorHex  String? // garment colour (hex) for the 3D virtual try-on
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
 
   retailer      Retailer             @relation(fields: [retailerId], references: [id], onDelete: Cascade)
   categoryRef   Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
@@ -235,10 +379,16 @@ model ProductVariant {
   lengthCm          Float?
   inseamCm          Float?
   // ─── Flat garment measurements — used by the 3D virtual try-on engine ───
+  // Tee-category fields:
   garmentChestCm    Float?
   garmentLengthCm   Float?
   garmentSleeveCm   Float?
   garmentShoulderCm Float?
+  // Pants-category fields:
+  garmentWaistCm    Float?
+  garmentHipCm      Float?
+  garmentInseamCm   Float?
+  garmentRiseCm     Float?
 
   product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   cartItems  CartItem[]

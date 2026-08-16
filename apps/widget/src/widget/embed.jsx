@@ -26,7 +26,15 @@ function autoInit() {
 
   const { productId, retailerKey } = script.dataset
   if (!productId) {
-    console.warn('Manikan widget: missing data-product-id on the embed <script> tag.')
+    // A tag with NO data attributes at all is a first-party host loading the
+    // library to drive window.Manikan.mount() itself (see the store's
+    // Manikan3DTryOn launcher) -- that is intentional, not a misconfiguration,
+    // so stay quiet. Warn only when the tag looks like a retailer embed that
+    // simply forgot the product id.
+    const looksLikeRetailerEmbed = Object.keys(script.dataset).length > 0
+    if (looksLikeRetailerEmbed) {
+      console.warn('Manikan widget: missing data-product-id on the embed <script> tag.')
+    }
     return
   }
 

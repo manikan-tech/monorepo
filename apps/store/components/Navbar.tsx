@@ -49,8 +49,8 @@ const shopperNavLinks = [
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { cartCount, refreshCart } = useCart();
-  const { items: wishlistItems, refresh: refreshWishlist } = useWishlist();
+  const { cartCount } = useCart();
+  const { items: wishlistItems } = useWishlist();
   const wishlistCount = wishlistItems?.length || 0;
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -69,7 +69,8 @@ export default function Navbar() {
     }
     try {
       const res = await fetch(`/api/retailer/me`);
-      setIsRetailer(res.ok);
+      const data = await res.json();
+      setIsRetailer(data.isRetailer === true);
     } catch {
       setIsRetailer(false);
     }
@@ -91,8 +92,6 @@ export default function Navbar() {
       const u = session?.user || null;
       setUser(u);
       checkRole(u?.email);
-      void refreshCart();
-      void refreshWishlist();
     });
 
     return () => subscription.unsubscribe();

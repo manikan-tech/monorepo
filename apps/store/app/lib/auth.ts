@@ -125,8 +125,10 @@ export async function getCustomerFromCookies(): Promise<CustomerTokenPayload | n
         return null;
       }
 
-      customer = await prisma.customer.create({
-        data: {
+      customer = await prisma.customer.upsert({
+        where: { authId: user.id },
+        update: { email: user.email },
+        create: {
           authId: user.id,
           email: user.email,
           firstName: user.user_metadata?.full_name?.split(' ')[0] || "Test",

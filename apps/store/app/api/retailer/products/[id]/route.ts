@@ -3,18 +3,12 @@ import { Prisma } from "@prisma/client";
 import { getAuthFromCookies } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
 import { isProductTryOnEnabled } from "../../../../lib/tryon-status";
+import { isPositiveNumber, isNonNegativeInt } from "../../../../lib/validation";
 
 // ─── /api/retailer/products/[id] ────────────────────────────────────────
 // Detail / edit / delete for one of the retailer's OWN products. Every method
 // enforces tenant isolation (retailerId === user.sub → else 404, never
 // revealing another tenant's product exists).
-
-function isPositiveNumber(v: unknown): v is number {
-  return typeof v === "number" && Number.isFinite(v) && v > 0;
-}
-function isNonNegativeInt(v: unknown): v is number {
-  return typeof v === "number" && Number.isInteger(v) && v >= 0;
-}
 
 // ─── GET: product detail ───
 export async function GET(

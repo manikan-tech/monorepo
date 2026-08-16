@@ -29,6 +29,18 @@ CORS_ORIGINS: list[str] = [
     o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()
 ]
 
+# Shared secret the Store's server-side proxy must present on every billable
+# request. CORS/origin checks only constrain browsers -- this is what stops a
+# server-to-server caller (or anyone who finds this URL) from reaching this
+# service directly and bypassing the Store's API-key/subscription/quota gate.
+# Unset in local dev is allowed (verify_internal_key fails closed instead);
+# every non-local deployment must set it.
+BODY_SERVICE_KEY: str | None = os.environ.get("BODY_SERVICE_KEY") or None
+# Lets the Store rotate BODY_SERVICE_KEY with zero downtime: deploy the new
+# value as BODY_SERVICE_KEY there while the old value still validates here
+# via BODY_SERVICE_KEY_PREVIOUS, then retire the old value once rolled out.
+BODY_SERVICE_KEY_PREVIOUS: str | None = os.environ.get("BODY_SERVICE_KEY_PREVIOUS") or None
+
 # ─── SMPL / Torch ───────────────────────────────────────────────────────
 DEVICE = torch.device("cpu")
 NUM_BETAS: int = 10
