@@ -1,9 +1,11 @@
 import asyncio
 import json
 import logging
+import re
 import typing_extensions
 from typing import Optional, List
 
+from openai import AsyncOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph, END
@@ -41,22 +43,10 @@ class SizeMatchResult:
 OUT_OF_RANGE_THRESHOLD_CM = 15.0
 
 
-def _confidence_phrase(score: Optional[float]) -> str:
-    if score is None:
-        return ""
-    pct = round(score * 100)
-    if score >= 0.8:
-        return f"I'm very confident about this ({pct}% match)."
-    if score >= 0.5:
-        return f"I'm fairly confident about this ({pct}% match)."
-    return f"This is my best estimate, though it's not a perfect match ({pct}%) - consider checking the size chart yourself too."
-
-
 def compute_recommended_size(betas: MeasurementInput, size_chart_raw: str) -> SizeMatchResult:
     try:
         size_chart = json.loads(size_chart_raw)
     except (json.JSONDecodeError, TypeError):
-        logger.warning("Could not parse size_chart, falling back to no recommendation")
         return SizeMatchResult(None, None, None, [], True)
 
     if not size_chart:
@@ -90,39 +80,63 @@ def compute_recommended_size(betas: MeasurementInput, size_chart_raw: str) -> Si
 
     confidence = max(0.0, 1.0 - (best_distance / OUT_OF_RANGE_THRESHOLD_CM))
     explanation = (
-        f"Closest match based on chest ({betas.chest_cm}cm), waist ({betas.waist_cm}cm), "
-        f"and hip ({betas.hips_cm}cm)."
+        f"Based on your measurements: chest ({betas.chest_cm}cm), waist ({betas.waist_cm}cm), "
+        f"and hip ({betas.hips_cm}cm), size {best_size} is the best match."
     )
     return SizeMatchResult(best_size, round(confidence, 2), explanation, available_sizes, False)
 
 
 def _build_gemini_client(api_key: str) -> ChatGoogleGenerativeAI:
     return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
+        model="gemini-flash-latest",
         google_api_key=api_key,
         timeout=10,
         max_retries=0,
     )
 
 
+def _strip_json_fences(text: str) -> str:
+    return re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
+
+
 async def call_llm_with_fallback(messages: list[dict]) -> tuple[RecommendationOutput, str]:
     settings = get_settings()
-    attempts = []
-
-    for key in settings.gemini_keys:
-        attempts.append(("GEMINI", _build_gemini_client(key)))
-
     last_error = None
-    for provider_tag, llm in attempts:
+
+    if settings.deepseek_api_key:
         try:
-            structured_llm = llm.with_structured_output(RecommendationOutput)
-            response = await structured_llm.ainvoke(messages)
-            response.provider = provider_tag
-            return response, provider_tag
+            client = AsyncOpenAI(api_key=settings.deepseek_api_key, base_url="https://api.deepseek.com")
+            resp = await client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Return ONLY a JSON object. It MUST include a key named exactly "
+                            "'message' (string) with your reply text - not 'reply', not 'text', "
+                            "not anything else. Other keys: action, recommended_size, "
+                            "confidence_score, explanation, matched_category."
+                        ),
+                    }
+                ] + messages,
+                response_format={"type": "json_object"}
+            )
+            parsed = json.loads(_strip_json_fences(resp.choices[0].message.content))
+            # DeepSeek sometimes names the reply field something other than
+            # "message" (e.g. "reply") despite the instruction above -
+            # normalize known variants before validating, instead of
+            # failing the whole provider over a field-name mismatch.
+            if "message" not in parsed:
+                for alt_key in ("reply", "text", "response", "content"):
+                    if alt_key in parsed:
+                        parsed["message"] = parsed.pop(alt_key)
+                        break
+            response = RecommendationOutput.model_validate(parsed)
+            response.provider = "DEEPSEEK"
+            return response, "DEEPSEEK"
         except Exception as e:
-            logger.warning(f"Provider {provider_tag} failed: {type(e).__name__}: {e}")
+            logger.warning(f"Provider DEEPSEEK failed: {type(e).__name__}: {e}")
             last_error = e
-            continue
 
     try:
         response = await _call_bedrock_gateway(messages)
@@ -131,6 +145,18 @@ async def call_llm_with_fallback(messages: list[dict]) -> tuple[RecommendationOu
     except Exception as e:
         logger.warning(f"Provider BEDROCK failed: {type(e).__name__}: {e}")
         last_error = e
+
+    for key in settings.gemini_keys:
+        try:
+            llm = _build_gemini_client(key)
+            structured_llm = llm.with_structured_output(RecommendationOutput)
+            response = await structured_llm.ainvoke(messages)
+            response.provider = "GEMINI"
+            return response, "GEMINI"
+        except Exception as e:
+            logger.warning(f"Provider GEMINI failed: {type(e).__name__}: {e}")
+            last_error = e
+            continue
 
     try:
         ollama_llm = ChatOllama(model=settings.ollama_model, base_url=settings.ollama_base_url)
@@ -149,16 +175,17 @@ async def check_all_providers() -> list[dict]:
     settings = get_settings()
     results = []
 
-    for idx, key in enumerate(settings.gemini_keys, start=1):
-        provider_name = f"GEMINI_KEY_{idx}"
+    if settings.deepseek_api_key:
         try:
-            llm = _build_gemini_client(key)
-            await llm.ainvoke("ping")
-            results.append({"provider": provider_name, "status": "ok"})
+            client = AsyncOpenAI(api_key=settings.deepseek_api_key, base_url="https://api.deepseek.com")
+            await client.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": "ping"}], max_tokens=10)
+            results.append({"provider": "DEEPSEEK", "status": "ok"})
         except Exception as e:
-            results.append({"provider": provider_name, "status": "failed", "error": str(e)})
+            results.append({"provider": "DEEPSEEK", "status": "failed", "error": str(e)})
+    else:
+        results.append({"provider": "DEEPSEEK", "status": "not_configured", "error": "missing api_key"})
 
-    if settings.bedrock_base_url and settings.bedrock_api_key:
+    if getattr(settings, "bedrock_base_url", None) and getattr(settings, "bedrock_api_key", None):
         try:
             await _call_bedrock_gateway([{"role": "user", "content": "ping"}])
             results.append({"provider": "BEDROCK", "status": "ok"})
@@ -167,9 +194,17 @@ async def check_all_providers() -> list[dict]:
     else:
         results.append({"provider": "BEDROCK", "status": "not_configured", "error": "missing base_url or api_key"})
 
+    for idx, key in enumerate(settings.gemini_keys, start=1):
+        try:
+            llm = _build_gemini_client(key)
+            await llm.ainvoke("ping")
+            results.append({"provider": f"GEMINI_KEY_{idx}", "status": "ok"})
+        except Exception as e:
+            results.append({"provider": f"GEMINI_KEY_{idx}", "status": "failed", "error": str(e)})
+
     try:
-        llm = ChatOllama(model=settings.ollama_model, base_url=settings.ollama_base_url)
-        await asyncio.wait_for(llm.ainvoke("ping"), timeout=10)
+        ollama_llm = ChatOllama(model=settings.ollama_model, base_url=settings.ollama_base_url)
+        await asyncio.wait_for(ollama_llm.ainvoke("ping"), timeout=10)
         results.append({"provider": "OLLAMA", "status": "ok"})
     except Exception as e:
         results.append({"provider": "OLLAMA", "status": "failed", "error": str(e)})
@@ -178,153 +213,62 @@ async def check_all_providers() -> list[dict]:
 
 
 def build_general_instruction(available_categories: Optional[List[str]]) -> str:
+    categories_str = ", ".join(available_categories) if available_categories else "no categories configured yet"
     base = (
-        "You are Manikan's shopping and sizing assistant for an online clothing store. "
-        "IMPORTANT: size labels like S, M, L, XL are NOT standardized across "
-        "brands or products - the same label can mean very different actual "
-        "body measurements from one item to another. Because of this:\n"
-        "- If the user states a size label (e.g. 'my size is L') because they "
-        "want a size RECOMMENDATION or fit check, do NOT treat that label as "
-        "reliable by itself. Respond with action='ask_measurements' and ask "
-        "for their real height, weight, chest, and waist, plus which category "
-        "they're shopping for if that isn't already clear - only real "
-        "measurements checked against a specific item's chart can determine "
-        "actual fit.\n"
-        "- If the user is just asking to browse or see products (by category "
-        "or style, with no fit recommendation implied), respond with "
-        "action='fetch_products'.\n"
-        "- Otherwise, respond with action='provide_recommendation' and just "
-        "reply conversationally in the message field.\n"
-        "Never invent product names, brand names, prices, or stock availability "
-        "that were not provided to you - the widget fetches real product data "
-        "separately based on your action."
+        "You are Manikan AI, the interactive shopping and sizing assistant for an online "
+        f"clothing store. Available store categories (EXACT strings, case-sensitive): {categories_str}.\n\n"
+        "CRITICAL RULE - NEVER INVENT DATA: Never state a specific size (S, M, L, XL, "
+        "a number, etc.) unless the user explicitly typed that size themselves in this "
+        "conversation, OR it was computed from real measurements you were given. If you "
+        "don't actually know the user's size yet, do not mention any size at all - ask "
+        "for it instead. Never invent product names, prices, or stock availability either.\n\n"
+        "FLOW:\n"
+        "1. If the user names an item/category (e.g. 'I want a blouse') without giving a "
+        "size or measurements: respond with action='provide_recommendation' and ask about "
+        "their style preference AND whether they know their size for it - don't show "
+        "products yet.\n"
+        "2. If the user states a size label (e.g. 'Large') for a specific category: ask "
+        "'How confident are you in this size, from 0-100%?' - respond with "
+        "action='provide_recommendation'.\n"
+        "3. Once the user gives a confidence percentage for a stated label:\n"
+        "   - If confidence >= 70%: trust the label. Set action='fetch_products', "
+        "recommended_size to the exact label the user gave, and matched_category to the "
+        "EXACT matching string from the categories list above.\n"
+        "   - If confidence < 70%: do NOT trust the label. Set action='ask_measurements' "
+        "and ask for their real height, weight, chest, waist measurements instead - a "
+        "label they're unsure about isn't reliable enough to shop by.\n"
+        "4. If the user is just browsing/asking to see items with NO fit question implied "
+        "at all (e.g. 'show me your shirts'): action='fetch_products', matched_category "
+        "set to the exact matching category string, recommended_size left null.\n"
+        "5. Otherwise: action='provide_recommendation', reply conversationally.\n"
+        "matched_category must ALWAYS be copied EXACTLY (same spelling/case) from the "
+        "categories list - never invent a category not in that list. If the user asks for "
+        "something not in the list, say so honestly and mention what IS available instead."
     )
-    if available_categories:
-        categories_str = ", ".join(available_categories)
-        base += (
-            f"\nThe store currently carries these categories only: {categories_str}. "
-            "If the user asks for a category not in this list, say so honestly and "
-            "friendly, and mention the categories that ARE available instead of "
-            "pretending to search for something we don't carry."
-        )
     return base
-
-
-_QUESTION_MARKERS = (
-    "?", "what", "how", "max", "min", "maximum", "minimum",
-    "which size", "does this", "is this", "range", "largest", "smallest",
-)
-
-
-def _last_user_message(messages: list[dict]) -> str:
-    for m in reversed(messages):
-        if m.get("role") == "user":
-            return (m.get("content") or "").lower()
-    return ""
-
-
-def _is_descriptive_question(messages: list[dict]) -> bool:
-    text = _last_user_message(messages)
-    if text.startswith("my measurements:"):
-        return False
-    return any(marker in text for marker in _QUESTION_MARKERS)
-
-
-def _try_answer_from_size_chart_locally(question: str, size_chart_raw: str) -> Optional[str]:
-    try:
-        size_chart = json.loads(size_chart_raw)
-    except (json.JSONDecodeError, TypeError):
-        return None
-    if not size_chart:
-        return None
-
-    field = None
-    if "chest" in question:
-        field = "chest_cm"
-    elif "waist" in question:
-        field = "waist_cm"
-    elif "hip" in question:
-        field = "hip_cm"
-
-    if not field:
-        available_sizes = [e.get("size") for e in size_chart if e.get("size")]
-        if not available_sizes:
-            return None
-        if any(w in question for w in ("what size", "which size", "sizes do you", "available size")):
-            return f"This item comes in these sizes: {', '.join(available_sizes)}."
-        if any(w in question for w in ("max", "largest", "biggest", "up to")):
-            return f"The largest size we carry for this item is {available_sizes[-1]}."
-        if any(w in question for w in ("min", "smallest")):
-            return f"The smallest size we carry for this item is {available_sizes[0]}."
-        return None
-
-    values = [e[field] for e in size_chart if isinstance(e.get(field), (int, float))]
-    if not values:
-        return None
-
-    label = field.replace("_cm", "")
-    if any(w in question for w in ("max", "largest", "biggest", "up to")):
-        return f"The maximum {label} in our size chart for this item is {max(values)}cm."
-    if any(w in question for w in ("min", "smallest")):
-        return f"The minimum {label} in our size chart for this item is {min(values)}cm."
-    return f"Our {label} sizing for this item ranges from {min(values)}cm to {max(values)}cm."
 
 
 async def call_conversational_agent(state: FitState) -> FitState:
     product_id = state.get("product_id")
     betas = state.get("betas")
     size_chart = state.get("size_chart")
-    is_question = _is_descriptive_question(state["messages"])
 
-    if is_question and not size_chart and not product_id:
-        available_categories = state.get("available_categories") or []
-        if available_categories:
-            categories_str = ", ".join(available_categories)
-            message = f"That depends on what you're shopping for - {categories_str}? Pick a category above and I'll give you the exact sizes."
-        else:
-            message = "That depends on the item - which category are you shopping for?"
+    # On a specific product page, waiting on measurements: prompt for them
+    if product_id and size_chart and not betas:
         state["structured_response"] = RecommendationOutput(
             action=ActionType.PROVIDE_RECOMMENDATION,
-            message=message,
-            provider="STATIC",
+            message="Please enter your height, weight, chest, and waist measurements below, and I'll calculate your exact size and confidence score.",
+            provider="STATIC-PRODUCT-MODE",
         )
         return state
 
-    if size_chart and is_question:
-        last_message = _last_user_message(state["messages"])
-        local_answer = _try_answer_from_size_chart_locally(last_message, size_chart)
-        if local_answer:
-            state["structured_response"] = RecommendationOutput(
-                action=ActionType.PROVIDE_RECOMMENDATION,
-                message=local_answer,
-                provider="STATIC-LOCAL",
-            )
-            return state
-
-        instruction = {
-            "role": "system",
-            "content": (
-                "You are a product sizing assistant. The user is asking a "
-                "descriptive question about this specific product's size chart, "
-                "not submitting their own body measurements. Use ONLY the "
-                f"following real size chart data to answer accurately: {size_chart}. "
-                "Never invent numbers that aren't in this data - if something "
-                "isn't covered by the chart, say so honestly. Respond with "
-                "action='provide_recommendation' and put your answer in the "
-                "message field."
-            ),
-        }
-        response, provider_tag = await call_llm_with_fallback([instruction] + state["messages"])
-        response.provider = provider_tag
-        state["structured_response"] = response
-        return state
-
+    # On a specific product page, measurements given: deterministic calculation
     if betas and size_chart:
         result = compute_recommended_size(betas, size_chart)
 
         if result.recommended_size and not result.is_out_of_range:
-            confidence_phrase = _confidence_phrase(result.confidence_score)
-            message = f"Based on your measurements, size {result.recommended_size} should fit you best. {confidence_phrase}".strip()
+            confidence_pct = round((result.confidence_score or 0.0) * 100)
+            message = f"Based on your measurements, size {result.recommended_size} is your best match ({confidence_pct}% confidence). {result.explanation}"
             state["structured_response"] = RecommendationOutput(
                 action=ActionType.PROVIDE_RECOMMENDATION,
                 recommended_size=result.recommended_size,
@@ -333,50 +277,42 @@ async def call_conversational_agent(state: FitState) -> FitState:
                 confidence_score=result.confidence_score,
                 explanation=result.explanation,
             )
-        elif result.available_sizes:
-            sizes_str = ", ".join(result.available_sizes)
-            state["structured_response"] = RecommendationOutput(
-                action=ActionType.FETCH_PRODUCTS,
-                recommended_size=None,
-                message=(
-                    f"Unfortunately your measurements don't closely match any size we "
-                    f"carry for this item. The available sizes are: {sizes_str}. "
-                    f"Here's what we have:"
-                ),
-                provider="STATIC-CALC",
-            )
         else:
+            # Honest "not available in your size" - a plain message, no
+            # automatic alternate-product browsing on a product-specific page.
             state["structured_response"] = RecommendationOutput(
                 action=ActionType.PROVIDE_RECOMMENDATION,
                 recommended_size=None,
-                message="I couldn't read this item's size chart. Could you try again in a moment?",
+                message="I'm sorry, but based on your measurements, this item doesn't come in a size that would fit you well.",
                 provider="STATIC-CALC",
             )
         return state
 
-    if betas and not size_chart:
-        available_categories = state.get("available_categories") or []
-        if available_categories:
-            categories_str = ", ".join(available_categories)
-            message = (
-                f"Got your measurements, thanks! What are you shopping for - "
-                f"{categories_str}? Pick a category above and I'll size you up."
-            )
-        else:
-            message = (
-                "Got your measurements, thanks! Which item are you shopping for? "
-                "Open a product page and I'll tell you the best size for it."
-            )
-        state["structured_response"] = RecommendationOutput(
-            action=ActionType.PROVIDE_RECOMMENDATION,
-            message=message,
-            provider="STATIC",
-        )
-        return state
-
-    instruction = {"role": "system", "content": build_general_instruction(state.get("available_categories"))}
+    available_categories = state.get("available_categories") or []
+    instruction = {"role": "system", "content": build_general_instruction(available_categories)}
     response, provider_tag = await call_llm_with_fallback([instruction] + state["messages"])
     response.provider = provider_tag
+
+    # Defensive guard: if the LLM's matched_category doesn't exactly match
+    # (case-insensitive) anything in available_categories, drop it rather
+    # than let a mismatched/hallucinated category reach the widget's
+    # product filter.
+    if response.matched_category:
+        matched_lower = response.matched_category.strip().lower()
+        valid_lower = {c.lower() for c in available_categories}
+        if matched_lower not in valid_lower:
+            logger.warning(
+                f"Dropping matched_category '{response.matched_category}' - not in "
+                f"available_categories {available_categories}"
+            )
+            response.matched_category = None
+            if response.action == ActionType.FETCH_PRODUCTS:
+                response.action = ActionType.PROVIDE_RECOMMENDATION
+                response.message = (
+                    f"Could you tell me which of these categories you're looking for? "
+                    f"{', '.join(available_categories)}"
+                )
+
     state["structured_response"] = response
     return state
 

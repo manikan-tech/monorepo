@@ -27,10 +27,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Simple in-memory rate limiter (per session_id). Not distributed / not
-# persisted across restarts - fine for a single-instance demo deployment.
-# Protects the LLM provider quota (especially Gemini's already-limited
-# free tier) from being burned by rapid repeated requests.
 _RATE_LIMIT_MAX_REQUESTS = 10
 _RATE_LIMIT_WINDOW_SECONDS = 60
 _request_log: dict[str, deque] = defaultdict(deque)
@@ -49,15 +45,9 @@ def _check_rate_limit(session_id: str) -> None:
     log.append(now)
 
 
-# Per-retailer usage tracking (in-memory) - foundation for KPI reporting
-# and anomaly detection (e.g. a sudden spike in overall traffic). Keyed
-# by a fixed "widget" label for now since we only see one caller
-# (widget.js calling us directly). Once the Next.js proxy route lands
-# (List 3), Next.js can pass a retailer identifier through and this can
-# be broken down per-retailer again on their side.
 _usage_log: deque = deque()
 _ANOMALY_WINDOW_SECONDS = 3600
-_ANOMALY_THRESHOLD = 200  # requests/hour before we log a warning
+_ANOMALY_THRESHOLD = 200
 
 
 def _track_usage() -> None:
@@ -74,17 +64,15 @@ def _track_usage() -> None:
 
 async def verify_widget_key(x_widget_key: Optional[str] = Header(None)) -> None:
     """
-    Shared-secret check between the caller (currently widget.js directly;
-    later the team's Next.js proxy route per Trello List 3) and this
-    service. Real per-retailer identity/auth (Retailer.apiKey +
-    OriginAllowlist) is handled on the Next.js side against the database
-    - this key is just a simple shared secret confirming the request came
-    from our own infrastructure. If RECOMMEND_API_KEY isn't set in .env
-    yet, this is skipped entirely - permissive for local dev only.
+    Simple shared-secret check between widget.js (calling this service
+    directly) and this service. Not connected to the Next.js proxy path
+    in any way - that's a separate, unused-for-now integration. If
+    RECOMMEND_API_KEY isn't set in .env yet, this check is skipped -
+    permissive for local dev only.
     """
     settings = get_settings()
     if settings.recommend_api_key and x_widget_key != settings.recommend_api_key:
-        raise HTTPException(status_code=401, detail="Invalid or missing widget API key")
+        raise HTTPException(status_code=401, detail="Invalid or missing internal service key")
     _track_usage()
 
 
@@ -110,6 +98,7 @@ class ChatRecommendResponse(BaseModel):
     provider: Optional[str] = None
     confidence_score: Optional[float] = None
     explanation: Optional[str] = None
+    matched_category: Optional[str] = None
     error_code: Optional[str] = None
 
 
@@ -148,8 +137,6 @@ async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
     }
 
     try:
-        # ainvoke keeps the FastAPI event loop free while the graph runs,
-        # even though the node function itself is a plain async function
         final_state = await recommendation_graph.ainvoke(initial_state)
         res = final_state.get("structured_response")
 
@@ -166,11 +153,10 @@ async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
             provider=res.provider,
             confidence_score=res.confidence_score,
             explanation=res.explanation,
+            matched_category=res.matched_category,
         )
     except Exception as e:
         logger.error(f"Workflow execution failed: {e}", exc_info=True)
-        # Keep the action consistent with what the widget expected for this intent,
-        # instead of always returning the same action regardless of what failed
         fallback_action = (
             ActionType.FETCH_PRODUCTS if body.intent == "search" else ActionType.PROVIDE_RECOMMENDATION
         )

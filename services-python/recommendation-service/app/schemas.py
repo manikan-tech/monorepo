@@ -12,8 +12,6 @@ class ActionType(str, Enum):
 
 
 class MeasurementInput(BaseModel):
-    # Named fields instead of a positional list, so any retailer integration
-    # can send these in any order without silently breaking the calculation
     height_cm: float
     weight_kg: float
     chest_cm: float
@@ -29,3 +27,18 @@ class RecommendationOutput(BaseModel):
     provider: Optional[str] = Field(None, description="Which LLM provider produced this response")
     confidence_score: Optional[float] = Field(None, description="0-1 confidence in the size match")
     explanation: Optional[str] = Field(None, description="Short reasoning behind the recommendation")
+    # Only meaningful when action=fetch_products. The exact category string
+    # from the available_categories list the user is shopping for - lets
+    # the widget filter /api/products by real category instead of guessing
+    # from free-text keyword matching (which breaks for non-English input
+    # and any category name that isn't a hardcoded keyword).
+    matched_category: Optional[str] = Field(
+        None, description="If action=fetch_products, the exact category string from available_categories the user wants"
+    )
+
+    # NOTE: deliberately no auto-downgrade validator here (a previous
+    # iteration force-changed action='fetch_products' to
+    # 'provide_recommendation' whenever recommended_size was empty - this
+    # broke plain category browsing, which legitimately has no size yet).
+    # Keeping the model itself passive and letting the prompt instructions
+    # in agent.py control behavior is safer and easier to reason about.
