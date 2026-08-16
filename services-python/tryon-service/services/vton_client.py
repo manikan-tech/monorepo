@@ -1,116 +1,154 @@
-# OOTDiffusion Gradio client setup and inference retry behavior.
+# FASHN.ai REST API client — virtual try-on inference and retry logic.
+import base64
 import logging
 import os
 import time
-from typing import Optional
+import uuid
+from pathlib import Path
 
+import requests
 from dotenv import load_dotenv
-from gradio_client import Client, handle_file
-from gradio_client.exceptions import AppError
-from httpx import HTTPError
 
-SPACE_ID = "levihsu/OOTDiffusion"
 logger = logging.getLogger(__name__)
 
 load_dotenv()
-HF_TOKEN = os.getenv("HF_TOKEN")
-client: Optional[Client]
+FASHN_API_KEY = os.getenv("FASHN_API_KEY", "")
+FASHN_BASE_URL = "https://api.fashn.ai/v1"
 
-try:
-    client = Client(SPACE_ID, token=HF_TOKEN)
-except (AppError, HTTPError, OSError, RuntimeError, ValueError) as error:
-    logger.warning("OOTDiffusion client could not initialize: %s", error)
-    client = None
+_POLL_INTERVAL_SECONDS = 3
+_MAX_POLL_ATTEMPTS = 30
 
 
 def is_client_initialized() -> bool:
-    """Return whether the OOTDiffusion client initialized successfully."""
-    return client is not None
+    """Return True if a FASHN_API_KEY is present in the environment."""
+    return bool(FASHN_API_KEY)
+
+
+def _map_cloth_type_to_fashn_category(cloth_type: str) -> str:
+    """Map internal cloth_type string to a FASHN.ai category name."""
+    mapping = {
+        "upperbody": "tops",
+        "lowerbody": "bottoms",
+        "dress": "one-pieces",
+    }
+    if cloth_type not in mapping:
+        raise ValueError(f"Unsupported cloth type: {cloth_type}")
+    return mapping[cloth_type]
+
+
+def _auth_headers() -> dict[str, str]:
+    return {"Authorization": f"Bearer {FASHN_API_KEY}"}
 
 
 def run_tryon(human_img_path: str, garment_img_path: str, cloth_type: str) -> str:
-    """Submit one image pair to OOTDiffusion and return its local result path."""
-    if client is None:
-        raise RuntimeError("OOTDiffusion client is unavailable.")
+    """Submit one image pair to FASHN.ai and return the local result file path.
 
-    category = _map_cloth_type_to_ootd_category(cloth_type)
-    if category == 0:
-        result = client.predict(
-            handle_file(human_img_path),
-            handle_file(garment_img_path),
-            1,
-            20,
-            2.0,
-            -1,
-            api_name="/process_hd",
-        )
+    FASHN.ai API schema (current):
+      POST /v1/run  →  { model_name, inputs: { model_image, product_image } }
+      GET  /v1/status/{id}  →  { status, output: [url] }
+
+    Steps:
+    1. Build model_image value (base64 data URI for local file, URL as-is).
+    2. Build product_image value (URL passed directly from main.py).
+    3. POST /run — receive prediction id.
+    4. Poll GET /status/{id} every 3 s, up to 30 attempts (90 s).
+    5. On completion, download output[0] → save locally → return path.
+    6. On failure or timeout, raise RuntimeError.
+    """
+    if not is_client_initialized():
+        raise RuntimeError("FASHN.ai client is unavailable: FASHN_API_KEY is not set.")
+
+    category = _map_cloth_type_to_fashn_category(cloth_type)
+
+    # --- Step 1: encode human image ---
+    with open(human_img_path, "rb") as fh:
+        raw_bytes = fh.read()
+    b64_data = base64.b64encode(raw_bytes).decode("utf-8")
+    model_image_data_uri = f"data:image/jpeg;base64,{b64_data}"
+
+    # FASHN.ai /run expects a public URL for garment_image.
+    # If main.py passes the original URL, use it directly.
+    # Fall back to base64 only when a local file path is given.
+    if garment_img_path.startswith(("http://", "https://")):
+        garment_payload_value = garment_img_path
     else:
-        result = client.predict(
-            handle_file(human_img_path),
-            handle_file(garment_img_path),
-            _map_category_label(category),
-            1,
-            20,
-            2.0,
-            -1,
-            api_name="/process_dc",
+        with open(garment_img_path, "rb") as fh:
+            garment_bytes = fh.read()
+        garment_b64 = base64.b64encode(garment_bytes).decode("utf-8")
+        garment_payload_value = f"data:image/jpeg;base64,{garment_b64}"
+
+    # --- Step 2: start prediction (new FASHN.ai schema) ---
+    payload = {
+        "model_name": "tryon-max",
+        "inputs": {
+            "model_image": model_image_data_uri,
+            "product_image": garment_payload_value,
+        },
+    }
+    logger.info("Starting FASHN.ai prediction (category=%s).", category)
+    response = requests.post(
+        f"{FASHN_BASE_URL}/run",
+        json=payload,
+        headers=_auth_headers(),
+        timeout=30,
+    )
+    response.raise_for_status()
+    run_data = response.json()
+
+    if run_data.get("error"):
+        raise RuntimeError(f"FASHN.ai /run error: {run_data['error']}")
+
+    prediction_id = run_data.get("id")
+    if not prediction_id:
+        raise RuntimeError(f"FASHN.ai /run returned no prediction id: {run_data}")
+
+    logger.info("FASHN.ai prediction started (id=%s).", prediction_id)
+
+    # --- Step 3: poll for result ---
+    for attempt in range(1, _MAX_POLL_ATTEMPTS + 1):
+        time.sleep(_POLL_INTERVAL_SECONDS)
+        status_response = requests.get(
+            f"{FASHN_BASE_URL}/status/{prediction_id}",
+            headers=_auth_headers(),
+            timeout=15,
+        )
+        status_response.raise_for_status()
+        status_data = status_response.json()
+        status = status_data.get("status", "")
+
+        logger.debug(
+            "FASHN.ai poll attempt %d/%d — status=%s",
+            attempt,
+            _MAX_POLL_ATTEMPTS,
+            status,
         )
 
-    result_path = _extract_result_path(result)
-    if result_path is None:
-        raise ValueError(f"Unexpected result format from OOTDiffusion: {result}")
+        if status == "completed":
+            output_urls = status_data.get("output", [])
+            if not output_urls:
+                raise RuntimeError("FASHN.ai completed but returned no output URLs.")
+            result_url = output_urls[0]
+            break
+
+        if status == "failed":
+            raise RuntimeError(f"FASHN.ai prediction failed: {status_data.get('error')}")
+
+        # statuses "starting" | "in_queue" | "processing" → keep polling
+    else:
+        raise RuntimeError("FASHN prediction timed out.")
+
+    # --- Step 4: download result image ---
+    logger.info("FASHN.ai prediction completed; downloading result from %s.", result_url)
+    img_response = requests.get(result_url, timeout=60)
+    img_response.raise_for_status()
+
+    result_filename = f"{uuid.uuid4()}.png"
+    result_path = str(Path(human_img_path).parent / result_filename)
+    with open(result_path, "wb") as fh:
+        fh.write(img_response.content)
+
+    logger.info("FASHN.ai result saved to %s.", result_path)
     return result_path
-
-
-def _map_cloth_type_to_ootd_category(cloth_type: str) -> int:
-    """Map the service cloth type to the OOTDiffusion category index."""
-    if cloth_type == "upperbody":
-        return 0
-    if cloth_type == "lowerbody":
-        return 1
-    if cloth_type == "dress":
-        return 2
-    raise ValueError(f"Unsupported cloth type for OOTDiffusion: {cloth_type}")
-
-
-def _map_category_label(category: int) -> str:
-    """Map the OOTDiffusion category index to the Gradio dropdown label."""
-    if category == 0:
-        return "Upper-body"
-    if category == 1:
-        return "Lower-body"
-    if category == 2:
-        return "Dress"
-    raise ValueError(f"Unsupported OOTDiffusion category: {category}")
-
-
-def _extract_result_path(result: object) -> str | None:
-    """Extract the first generated image path from an OOTDiffusion response."""
-    if isinstance(result, str):
-        return result
-    if isinstance(result, dict):
-        for key in ("path", "image", "url"):
-            value = result.get(key)
-            if isinstance(value, str):
-                return value
-        for value in result.values():
-            nested = _extract_result_path(value)
-            if nested is not None:
-                return nested
-    if isinstance(result, (list, tuple)):
-        for item in result:
-            nested = _extract_result_path(item)
-            if nested is not None:
-                return nested
-    return None
-
-
-def _is_retryable(error: RuntimeError | AppError) -> bool:
-    """Return whether an OOTDiffusion failure is safe to retry."""
-    message = str(error).lower()
-    if "validation" in message or "valueerror" in message:
-        return False
-    return isinstance(error, (RuntimeError, AppError)) or "quota" in message or "503" in message
 
 
 def run_tryon_with_retry(
@@ -120,15 +158,18 @@ def run_tryon_with_retry(
     max_retries: int = 3,
     wait_seconds: int = 10,
 ) -> str:
-    """Run OOTDiffusion, retrying only transient application failures."""
+    """Run FASHN.ai try-on, retrying only on transient RuntimeError failures.
+
+    ValueError (e.g. unsupported cloth type) is never retried.
+    """
     for attempt in range(1, max_retries + 1):
         try:
             return run_tryon(human_img_path, garment_img_path, cloth_type)
-        except (RuntimeError, AppError) as error:
-            if not _is_retryable(error) or attempt == max_retries:
+        except RuntimeError as error:
+            if attempt == max_retries:
                 raise
             logger.warning(
-                "OOTDiffusion attempt %d/%d failed; retrying in %d seconds: %s",
+                "FASHN.ai attempt %d/%d failed; retrying in %d seconds: %s",
                 attempt,
                 max_retries,
                 wait_seconds,
@@ -136,4 +177,4 @@ def run_tryon_with_retry(
             )
             time.sleep(wait_seconds)
 
-    raise RuntimeError("OOTDiffusion retry loop ended unexpectedly.")
+    raise RuntimeError("FASHN.ai retry loop ended unexpectedly.")
