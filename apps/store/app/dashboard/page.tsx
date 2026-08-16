@@ -157,7 +157,7 @@ export default async function DashboardPage() {
             </span>
           </h1>
           <p className="text-forest-200/70 text-sm mt-1 max-w-md">
-            Manage your fashion catalog, track orders, and monitor your widget performance — all in one place.
+            Manage your fashion catalog, track orders, and monitor your widget performance, all in one place.
           </p>
         </div>
       </div>

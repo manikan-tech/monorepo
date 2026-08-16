@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Modal from "../../../../components/Modal";
 
 type Service = "BODY_MODELING" | "VTON_2D" | "RECOMMENDATION";
 
@@ -28,6 +29,7 @@ export default function ServiceKeyPanel({
   const [data, setData] = useState<KeyData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRevealed, setIsRevealed] = useState(false);
+  const [confirmRotateModal, setConfirmRotateModal] = useState(false);
 
   const [newOrigin, setNewOrigin] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null); // 'rotate', 'origins'
@@ -60,13 +62,7 @@ export default function ServiceKeyPanel({
   };
 
   const handleRotateKey = async () => {
-    if (
-      !window.confirm(
-        "Rotating your key will immediately break any live widget embed using the old key. You'll need to update your embed snippet. Continue?"
-      )
-    ) {
-      return;
-    }
+    setConfirmRotateModal(false);
 
     setActionLoading("rotate");
     setMessage(null);
@@ -226,7 +222,7 @@ export default function ServiceKeyPanel({
             </button>
           </div>
           <button
-            onClick={handleRotateKey}
+            onClick={() => setConfirmRotateModal(true)}
             disabled={actionLoading === "rotate"}
             className="px-4 py-2 border border-manikan-border rounded-lg text-sm font-medium text-forest-900 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
@@ -312,6 +308,32 @@ export default function ServiceKeyPanel({
           {message.text}
         </div>
       )}
+
+      <Modal
+        isOpen={confirmRotateModal}
+        onClose={() => setConfirmRotateModal(false)}
+        title="Regenerate API Key"
+        footer={
+          <>
+            <button
+              onClick={() => setConfirmRotateModal(false)}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-forest-700 bg-forest-50 hover:bg-forest-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleRotateKey}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 transition-colors shadow-soft"
+            >
+              Regenerate
+            </button>
+          </>
+        }
+      >
+        <p className="text-forest-700">
+          Rotating your key will immediately break any live widget embed using the old key. You'll need to update your embed snippet. Continue?
+        </p>
+      </Modal>
     </div>
   );
 }

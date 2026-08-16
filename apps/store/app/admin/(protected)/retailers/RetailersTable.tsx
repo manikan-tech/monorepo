@@ -77,7 +77,7 @@ export default function RetailersTable({ initialRetailers }: { initialRetailers:
             <tr className="bg-forest-50/60 text-forest-700/70 text-xs font-bold uppercase tracking-widest border-b border-manikan-border">
               <th className="px-6 py-4">Store</th>
               <th className="px-6 py-4">Email</th>
-              <th className="px-6 py-4">Plan</th>
+              <th className="px-6 py-4">Plans</th>
               <th className="px-6 py-4 text-center">Products</th>
               <th className="px-6 py-4 text-center">Sessions</th>
               <th className="px-6 py-4">Joined</th>
@@ -104,11 +104,19 @@ export default function RetailersTable({ initialRetailers }: { initialRetailers:
                 {/* Email */}
                 <td className="px-6 py-4 text-sm text-forest-700/70">{retailer.email}</td>
 
-                {/* Plan */}
+                {/* Plans */}
                 <td className="px-6 py-4">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-gold-50 text-gold-700 border-gold-200 capitalize">
-                    {retailer.subscriptions[0]?.plan?.name ?? "No Plan"}
-                  </span>
+                  {retailer.subscriptions.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {retailer.subscriptions.map((sub) => (
+                        <span key={sub.id} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-gold-50 text-gold-700 border border-gold-200 capitalize whitespace-nowrap">
+                          {sub.plan?.name ?? "No Plan"}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-forest-700/50">None</span>
+                  )}
                 </td>
 
                 {/* Products count */}

@@ -15,5 +15,5 @@ if (!stripeSecretKey) {
 export const stripe = new Stripe(stripeSecretKey, {
   // Pinned to the latest API surface exposed by stripe@22.x.
   // Upgrade deliberately after reviewing Stripe's migration guide.
-  apiVersion: "2026-06-24.dahlia",
+  apiVersion: "2026-07-29.dahlia" as any,
 });
