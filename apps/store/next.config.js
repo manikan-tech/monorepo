@@ -12,7 +12,25 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'images.unsplash.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'example.com',
+      },
     ],
+  },
+  async redirects() {
+    return [
+      {
+        source: '/dashboard/widget',
+        destination: '/dashboard/services/body-modeling',
+        permanent: true,
+      },
+      {
+        source: '/dashboard/vton-cache',
+        destination: '/dashboard/services',
+        permanent: true,
+      },
+    ];
   },
 };
 

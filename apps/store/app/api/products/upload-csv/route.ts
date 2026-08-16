@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthFromCookies } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import Papa from "papaparse";
+import { commitBodyFitVariants, type CommitErrorCode } from "../../../lib/commit-measurements";
+import { BODY_FIT_FIELDS } from "../../../lib/measurement-fields";
+
+// Does this variant row supply ANY body-fit measurement? Matches
+// commitBodyFitVariants' own definition of "not supplied" exactly, so this
+// pre-check and its internal validation never disagree on what counts as
+// empty.
+function hasAnyMeasurement(v: Record<string, unknown>): boolean {
+  return BODY_FIT_FIELDS.some((f) => v[f] !== undefined && v[f] !== null && v[f] !== "");
+}
 
 function generateMockEmbedding(dim = 1536) {
   // Generate random mock embeddings since we don't have an OpenAI key available.
@@ -65,17 +75,31 @@ export async function POST(request: NextRequest) {
         sku: `${pid}-${row.size_label}`,
         sizeLabel: row.size_label,
         stock: stockForVariant,
-        chestCm: row.chest_cm || null,
-        waistCm: row.waist_cm || null,
-        hipCm: row.hip_cm || null,
-        lengthCm: row.length_cm || null,
-        inseamCm: row.inseam_cm || null,
+        // Raw parsed values, deliberately NOT coerced with `|| null` here --
+        // that silently turned 0 and malformed values into null with no
+        // error. commitBodyFitVariants below is now the one place that
+        // judges these.
+        chestCm: row.chest_cm,
+        waistCm: row.waist_cm,
+        hipCm: row.hip_cm,
+        lengthCm: row.length_cm,
+        inseamCm: row.inseam_cm,
       });
     }
 
     // Insert into DB
     let insertedCount = 0;
-    
+    const measurementErrors: Array<{
+      productCode: string;
+      sizeLabel?: string;
+      code: CommitErrorCode;
+      message: string;
+    }> = [];
+    // Products whose rows supplied no measurement data at all -- normal for
+    // a catalog-only CSV, not a validation failure, so tracked separately
+    // from measurementErrors.
+    const noMeasurementData: string[] = [];
+
     for (const [, productData] of productsMap.entries()) {
       // Find category or create
       let category = await prisma.category.findFirst({
@@ -126,31 +150,57 @@ export async function POST(request: NextRequest) {
         }
       });
 
-      // Insert variants
+      // Upsert variant EXISTENCE only -- sku/sizeLabel/stock. Measurements
+      // are committed separately below through commitBodyFitVariants, the
+      // single shared writer for these columns (see commit-measurements.ts)
+      // -- this route no longer sets them directly. commitBodyFitVariants
+      // only ever UPDATES an existing variant, so this upsert has to run
+      // first: it's what makes a size introduced by this very CSV "existing"
+      // by the time the measurement commit looks for it.
       for (const v of productData.variants) {
          await prisma.productVariant.upsert({
             where: { sku: v.sku },
             update: {
                sizeLabel: v.sizeLabel,
                stock: v.stock,
-               chestCm: v.chestCm,
-               waistCm: v.waistCm,
-               hipCm: v.hipCm,
-               lengthCm: v.lengthCm,
-               inseamCm: v.inseamCm,
             },
             create: {
                productId: product.id,
                sku: v.sku,
                sizeLabel: v.sizeLabel,
                stock: v.stock,
-               chestCm: v.chestCm,
-               waistCm: v.waistCm,
-               hipCm: v.hipCm,
-               lengthCm: v.lengthCm,
-               inseamCm: v.inseamCm,
             }
          });
+      }
+
+      // Commit measurements -- but only if this product's rows actually
+      // supplied any. A catalog CSV with no measurement columns at all is
+      // normal (most legacy uploads have none), not a mistake; calling the
+      // shared validator unconditionally would reject every row of every
+      // such product with "at least one measurement is required".
+      if (productData.variants.some(hasAnyMeasurement)) {
+        const result = await commitBodyFitVariants({
+          productId: product.id,
+          retailerId: user.sub,
+          variants: productData.variants.map((v: any) => ({
+            sizeLabel: v.sizeLabel,
+            chestCm: v.chestCm,
+            waistCm: v.waistCm,
+            hipCm: v.hipCm,
+            lengthCm: v.lengthCm,
+            inseamCm: v.inseamCm,
+          })),
+        });
+        if (!result.ok) {
+          measurementErrors.push({
+            productCode: productData.productCode,
+            sizeLabel: result.sizeLabel,
+            code: result.code,
+            message: result.message,
+          });
+        }
+      } else {
+        noMeasurementData.push(productData.productCode);
       }
 
       // Generate embedding and save to pgvector
@@ -167,7 +217,17 @@ export async function POST(request: NextRequest) {
       insertedCount++;
     }
 
-    return NextResponse.json({ success: true, count: insertedCount });
+    // 200 even when measurementErrors/noMeasurementData are non-empty -- a
+    // per-product measurement issue never blocks or rolls back that
+    // product's catalog write (see the upsert split above), so it isn't an
+    // HTTP-level failure. Same precedent as the size-chart ingestion job's
+    // ACTION_REQUIRED state: partial issues are a body-level signal.
+    return NextResponse.json({
+      success: true,
+      count: insertedCount,
+      measurementErrors,
+      noMeasurementData,
+    });
   } catch (error: any) {
     console.error("CSV upload error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -2,6 +2,7 @@ import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
+import { generatePublicKey, SERVICES } from "../app/lib/service-keys";
 
 // ─── Configure the demo retailer for widget auth (Phase 3b) ─────────────
 // NON-DESTRUCTIVE: merges `allowedOrigins` into the demo retailer's EXISTING
@@ -48,8 +49,20 @@ async function main() {
         data: { isActivated: true, widgetSettings: merged },
     });
 
+    // Each service has its own independent key -- ensure all three exist
+    // (lazily provisioned the same way the dashboard does on first visit).
+    const keysByService: Record<string, string> = {};
+    for (const service of SERVICES) {
+        const key = await prisma.serviceApiKey.upsert({
+            where: { retailerId_service: { retailerId: retailer.id, service } },
+            update: {},
+            create: { retailerId: retailer.id, service, apiKey: generatePublicKey() },
+        });
+        keysByService[service] = key.apiKey;
+    }
+
     console.log("Done. Demo retailer configured:");
-    console.log("  apiKey:        ", retailer.apiKey);
+    console.log("  apiKeys:       ", keysByService);
     console.log("  isActivated:    true");
     console.log("  allowedOrigins:", ALLOWED_ORIGINS);
 }

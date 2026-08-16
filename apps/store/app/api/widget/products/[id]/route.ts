@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { authorizeWidgetRequest } from "../../../../lib/widget-auth";
+import { isProductTryOnEnabled } from "../../../../lib/tryon-status";
 
 // ─── GET /api/widget/products/[id] ───
 // Public, CORS-enabled product endpoint for the embeddable widget. Gated by the
@@ -28,7 +29,7 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     // ── Security gate (key + fail-closed Origin + allowlist + rate limit) ──
-    const auth = await authorizeWidgetRequest(request, CORS_HEADERS);
+    const auth = await authorizeWidgetRequest(request, CORS_HEADERS, "RECOMMENDATION");
     if (!auth.ok) {
         return auth.response;
     }
@@ -51,39 +52,40 @@ export async function GET(
     }
 
     // Try-on-enabled only if the product has a garment colour AND every variant
-    // carries the flat garment measurements the 3D engine needs (matches the
-    // requirements /api/tryon enforces).
-    const isTryOnEnabled =
-        product.tshirtColorHex !== null &&
-        product.variants.length > 0 &&
-        product.variants.every(
-            (v) =>
-                v.garmentChestCm !== null &&
-                v.garmentLengthCm !== null &&
-                v.garmentSleeveCm !== null &&
-                v.garmentShoulderCm !== null
-        );
+    // carries the flat garment measurements the 3D engine needs for THIS
+    // product's category (matches the requirements /api/tryon enforces).
+    // Shared with the retailer routes via CATEGORY_GARMENT_FIELDS so the two
+    // can never drift apart.
+    const isTryOnEnabled = isProductTryOnEnabled(product);
 
     // Map DB shape → the shape the widget components already consume.
     const sortedVariants = [...product.variants].sort(
         (a, b) => SIZE_ORDER.indexOf(a.sizeLabel) - SIZE_ORDER.indexOf(b.sizeLabel)
     );
-    const sizes: Record<
-        string,
-        {
-            chest_width_cm: number | null;
-            body_length_cm: number | null;
-            sleeve_length_cm: number | null;
-            shoulder_width_cm: number | null;
-        }
-    > = {};
+    // Size payload is category-shaped: the widget needs the measurements that
+    // actually drive that category's fit, not a tee-shaped object with nulls.
+    const sizes: Record<string, Record<string, number | null>> = {};
     for (const v of sortedVariants) {
-        sizes[v.sizeLabel] = {
-            chest_width_cm: v.garmentChestCm,
-            body_length_cm: v.garmentLengthCm,
-            sleeve_length_cm: v.garmentSleeveCm,
-            shoulder_width_cm: v.garmentShoulderCm,
-        };
+        sizes[v.sizeLabel] =
+            product.category === "pants"
+                ? {
+                      waist_width_cm: v.garmentWaistCm,
+                      hip_width_cm: v.garmentHipCm,
+                      inseam_cm: v.garmentInseamCm,
+                      rise_cm: v.garmentRiseCm,
+                  }
+                : {
+                      chest_width_cm: v.garmentChestCm,
+                      body_length_cm: v.garmentLengthCm,
+                      sleeve_length_cm: v.garmentSleeveCm,
+                      shoulder_width_cm: v.garmentShoulderCm,
+                  };
+    }
+
+    // ── Deduct Quota ──
+    if (auth.subscription) {
+        const { consumeQuota } = await import("../../../../lib/widget-auth");
+        await consumeQuota(auth.subscription.id, "RECOMMENDATION");
     }
 
     return NextResponse.json(
@@ -93,7 +95,7 @@ export async function GET(
             image: product.imageUrl,
             price: product.priceEgp,
             category: product.category,
-            color_hex: product.tshirtColorHex,
+            color_hex: product.garmentColorHex,
             color_name: null, // no colour name column in the DB (display-only)
             isTryOnEnabled,
             sizes,

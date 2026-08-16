@@ -29,9 +29,32 @@ CORS_ORIGINS: list[str] = [
     o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()
 ]
 
+# Shared secret the Store's server-side proxy must present on every billable
+# request. CORS/origin checks only constrain browsers -- this is what stops a
+# server-to-server caller (or anyone who finds this URL) from reaching this
+# service directly and bypassing the Store's API-key/subscription/quota gate.
+# Unset in local dev is allowed (verify_internal_key fails closed instead);
+# every non-local deployment must set it.
+BODY_SERVICE_KEY: str | None = os.environ.get("BODY_SERVICE_KEY") or None
+# Lets the Store rotate BODY_SERVICE_KEY with zero downtime: deploy the new
+# value as BODY_SERVICE_KEY there while the old value still validates here
+# via BODY_SERVICE_KEY_PREVIOUS, then retire the old value once rolled out.
+BODY_SERVICE_KEY_PREVIOUS: str | None = os.environ.get("BODY_SERVICE_KEY_PREVIOUS") or None
+
 # ─── SMPL / Torch ───────────────────────────────────────────────────────
 DEVICE = torch.device("cpu")
 NUM_BETAS: int = 10
+
+# ─── Garment engine ─────────────────────────────────────────────────────
+# Dressed-avatar engine: "v2" = Pipeline 1 real garment mesh; "v1" = legacy
+# vertex-paint fallback. Overridable via the MANIKAN_DRESSED_ENGINE env var.
+USE_GARMENT_V2: bool = os.environ.get("MANIKAN_DRESSED_ENGINE", "v2").lower() != "v1"
+
+# Pipeline 2: physics-baked drape via the precomputed delta library (relaxed
+# pose, tee category). Male-only for now (female needs its own tuning pass +
+# grid). Falls back to the kinematic v2 fit if disabled or if it errors, so
+# avatar generation never breaks. Toggle with MANIKAN_PHYSICS_DRAPE=0.
+USE_PHYSICS_DRAPE: bool = os.environ.get("MANIKAN_PHYSICS_DRAPE", "1") != "0"
 
 # ─── Optimisation hyper-parameters (tuned for SMPL on CPU) ──────────────
 OPT_ITERATIONS: int = int(os.environ.get("OPT_ITERATIONS", "80"))

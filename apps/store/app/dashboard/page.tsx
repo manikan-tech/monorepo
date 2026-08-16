@@ -8,7 +8,7 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const [totalProducts, widgetViews, tryonConversions, recentOrders, totalOrders] = await Promise.all([
+  const [totalProducts, widgetViews, tryonConversions, recentOrders, totalOrders, retailer] = await Promise.all([
     prisma.product.count({ where: { retailerId: user.sub } }),
     prisma.measurementSession.count({ where: { retailerId: user.sub } }),
     prisma.measurementSession.count({ where: { retailerId: user.sub, isPurchased: true } }),
@@ -23,6 +23,10 @@ export default async function DashboardPage() {
     }),
     prisma.order.count({
       where: { items: { some: { product: { retailerId: user.sub } } } },
+    }),
+    prisma.retailer.findUnique({
+      where: { id: user.sub },
+      select: { isActivated: true },
     }),
   ]);
 
@@ -96,6 +100,25 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* ── Pending Activation Banner ── */}
+      {!retailer?.isActivated && (
+        <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 flex items-start gap-4 shadow-soft animate-fade-in">
+          <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          <div className="flex flex-col justify-center min-h-[3rem]">
+            <h3 className="text-amber-900 font-display font-semibold text-lg">Your account is under review</h3>
+            <p className="text-amber-800/80 text-sm mt-0.5">
+              You cannot generate a Widget API key or fully integrate your store until an admin activates your account.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Welcome Banner ── */}
       <div
         className="relative overflow-hidden rounded-3xl p-8 animate-fade-up"
@@ -134,7 +157,7 @@ export default async function DashboardPage() {
             </span>
           </h1>
           <p className="text-forest-200/70 text-sm mt-1 max-w-md">
-            Manage your fashion catalog, track orders, and monitor your widget performance — all in one place.
+            Manage your fashion catalog, track orders, and monitor your widget performance, all in one place.
           </p>
         </div>
       </div>
@@ -241,22 +264,20 @@ export default async function DashboardPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
-                            order.status === "DELIVERED"
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${order.status === "DELIVERED"
                               ? "bg-green-50 text-green-700 border-green-200"
                               : order.status === "CANCELLED"
-                              ? "bg-red-50 text-red-700 border-red-200"
-                              : order.status === "SHIPPED"
-                              ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                              : "bg-yellow-50 text-yellow-700 border-yellow-200"
-                          }`}
+                                ? "bg-red-50 text-red-700 border-red-200"
+                                : order.status === "SHIPPED"
+                                  ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                  : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                            }`}
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full ${
-                            order.status === "DELIVERED" ? "bg-green-500" :
-                            order.status === "CANCELLED" ? "bg-red-500" :
-                            order.status === "SHIPPED" ? "bg-indigo-500" :
-                            "bg-yellow-500"
-                          }`} />
+                          <span className={`w-1.5 h-1.5 rounded-full ${order.status === "DELIVERED" ? "bg-green-500" :
+                              order.status === "CANCELLED" ? "bg-red-500" :
+                                order.status === "SHIPPED" ? "bg-indigo-500" :
+                                  "bg-yellow-500"
+                            }`} />
                           {order.status}
                         </span>
                       </td>

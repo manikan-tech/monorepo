@@ -23,4 +23,4 @@ COPY . .
 
 # Expose port and run
 EXPOSE ${PORT}
-CMD uvicorn app.main:app --host 0.0.0.0 --port 8002
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]

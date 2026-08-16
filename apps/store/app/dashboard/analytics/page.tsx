@@ -6,6 +6,8 @@ import FunnelChart from "./FunnelChart";
 import RevenueByDimensionChart from "./RevenueByDimensionChart";
 import StockHealthChart from "./StockHealthChart";
 import RatingVsConversionChart from "./RatingVsConversionChart";
+import AreaChart from "../../../components/analytics/AreaChart";
+import DonutChart from "../../../components/analytics/DonutChart";
 
 export const metadata = {
   title: "Analytics | Manikan Dashboard",
@@ -108,19 +110,28 @@ export default async function AnalyticsPage() {
       productId: { in: productIds },
       order: { status: { notIn: ["CANCELLED", "RETURNED"] } }
     },
-    select: { productId: true, quantity: true, unitPriceEgp: true },
+    select: { 
+      productId: true, 
+      quantity: true, 
+      unitPriceEgp: true,
+      order: { select: { id: true, createdAt: true } }
+    },
   });
 
   const revUnitsInit = () => ({ revenue: 0, units: 0 });
   const categoryAgg: Record<string, ReturnType<typeof revUnitsInit>> = {};
   const brandAgg: Record<string, ReturnType<typeof revUnitsInit>> = {};
   const fabricAgg: Record<string, ReturnType<typeof revUnitsInit>> = {};
+  
+  const dailyAgg: Record<string, { revenue: number; orderIds: Set<string> }> = {};
+  const productRevAgg: Record<string, number> = {};
 
   orderItems.forEach(item => {
     const p = productDict[item.productId];
     if (!p) return;
     const rev = item.quantity * item.unitPriceEgp;
     
+    // Aggregation for category/brand/fabric
     if (!categoryAgg[p.category]) categoryAgg[p.category] = revUnitsInit();
     categoryAgg[p.category]!.revenue += rev;
     categoryAgg[p.category]!.units += item.quantity;
@@ -132,6 +143,15 @@ export default async function AnalyticsPage() {
     if (!fabricAgg[p.fabric]) fabricAgg[p.fabric] = revUnitsInit();
     fabricAgg[p.fabric]!.revenue += rev;
     fabricAgg[p.fabric]!.units += item.quantity;
+
+    // Aggregation for Daily Revenue
+    const dateStr = item.order.createdAt.toISOString().split("T")[0]!;
+    if (!dailyAgg[dateStr]) dailyAgg[dateStr] = { revenue: 0, orderIds: new Set() };
+    dailyAgg[dateStr]!.revenue += rev;
+    dailyAgg[dateStr]!.orderIds.add(item.order.id);
+
+    // Aggregation for Top Products
+    productRevAgg[item.productId] = (productRevAgg[item.productId] || 0) + rev;
   });
 
   const toChartData = (agg: typeof categoryAgg) => Object.entries(agg).map(([name, data]) => ({
@@ -145,6 +165,22 @@ export default async function AnalyticsPage() {
     brand: toChartData(brandAgg),
     fabric: toChartData(fabricAgg),
   };
+
+  const dailyRevenueData = Object.entries(dailyAgg)
+    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+    .map(([date, data]) => ({
+      date,
+      revenue: parseFloat(data.revenue.toFixed(2)),
+      orders: data.orderIds.size,
+    }));
+
+  const topProductsData = Object.entries(productRevAgg)
+    .map(([id, rev]) => ({
+      name: productDict[id]?.name || "Unknown",
+      value: parseFloat(rev.toFixed(2)),
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5);
 
   // Stock Health by Category
   const stockHealthAgg: Record<string, { outOfStock: number; lowStock: number; healthy: number }> = {};
@@ -193,21 +229,27 @@ export default async function AnalyticsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="animate-fade-up" style={{ animationDelay: "100ms" }}>
-          <ConversionChart data={conversionData} />
+          <AreaChart data={dailyRevenueData} />
         </div>
         <div className="animate-fade-up" style={{ animationDelay: "200ms" }}>
-          <FunnelChart data={funnelData} />
+          <DonutChart data={topProductsData} title="Top 5 Products by Revenue" />
         </div>
         <div className="animate-fade-up" style={{ animationDelay: "300ms" }}>
-          <RevenueByDimensionChart data={revenueData} />
+          <ConversionChart data={conversionData} />
         </div>
         <div className="animate-fade-up" style={{ animationDelay: "400ms" }}>
+          <FunnelChart data={funnelData} />
+        </div>
+        <div className="animate-fade-up" style={{ animationDelay: "500ms" }}>
+          <RevenueByDimensionChart data={revenueData} />
+        </div>
+        <div className="animate-fade-up" style={{ animationDelay: "600ms" }}>
           <StockHealthChart data={stockHealthData} />
         </div>
       </div>
 
       {ratingData.length > 0 && (
-        <div className="animate-fade-up" style={{ animationDelay: "500ms" }}>
+        <div className="animate-fade-up" style={{ animationDelay: "700ms" }}>
           <RatingVsConversionChart data={ratingData} />
         </div>
       )}

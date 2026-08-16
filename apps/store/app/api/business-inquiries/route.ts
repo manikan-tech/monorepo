@@ -11,7 +11,6 @@ const IP_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 export async function POST(request: NextRequest) {
   try {
     const ip =
-      request.ip ??
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       "unknown";
     const rateLimit = checkRateLimit(

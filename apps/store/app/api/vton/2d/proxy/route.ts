@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { getCustomerFromCookies } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
 import { checkRateLimit } from "../../../../lib/rate-limit";
+import { checkServiceQuota, consumeQuota } from "../../../../lib/widget-auth";
 
 const MAX_HUMAN_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 const CUSTOMER_RATE_LIMIT_MAX = 5;
@@ -76,11 +77,23 @@ export async function POST(request: NextRequest) {
         // choose an active catalog product, never an arbitrary remote URL.
         const product = await prisma.product.findFirst({
             where: { id: productId, isActive: true },
-            select: { id: true },
+            select: { id: true, retailerId: true },
         });
         if (!product) {
             return jsonError(requestId, 404, "Product not found.");
         }
+
+        // ── Enforce Retailer Quota (VTON_2D specifically -- independent of
+        //     any BODY_MODELING/RECOMMENDATION subscription this retailer
+        //     may or may not also have). Shared with the widget gate's
+        //     identical check (app/lib/widget-auth.ts) rather than a second
+        //     hand-rolled copy -- this route just arrives via a different
+        //     auth model (customer session, not a retailer X-Manikan-Key).
+        const quotaCheck = await checkServiceQuota(product.retailerId, "VTON_2D");
+        if (!quotaCheck.ok) {
+            return quotaCheck.response;
+        }
+        const subscription = quotaCheck.subscription;
 
         const serviceKey = process.env.VTON_2D_SERVICE_KEY;
         if (!serviceKey) {
@@ -101,6 +114,11 @@ export async function POST(request: NextRequest) {
             body: upstreamFormData,
             cache: "no-store",
         });
+
+        if (upstream.ok) {
+            // Deduct quota on success
+            await consumeQuota(subscription.id, "VTON_2D");
+        }
 
         const headers = new Headers({
             "Content-Type": upstream.headers.get("content-type") || "application/octet-stream",

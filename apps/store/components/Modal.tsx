@@ -7,9 +7,10 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  footer?: React.ReactNode | null;
 }
 
-export default function Modal({ isOpen, onClose, title, children }: ModalProps) {
+export default function Modal({ isOpen, onClose, title, children, footer }: ModalProps) {
   // Prevent scrolling when modal is open
   useEffect(() => {
     if (isOpen) {
@@ -55,14 +56,18 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
         </div>
 
         {/* Action Buttons */}
-        <div className="p-5 bg-forest-50/50 flex justify-end gap-3 border-t border-forest-100">
-          <button 
-            onClick={onClose}
-            className="px-6 py-2.5 rounded-xl text-sm font-medium text-white bg-forest-900 hover:bg-forest-800 transition-colors shadow-soft"
-          >
-            Got it
-          </button>
-        </div>
+        {footer !== null && (
+          <div className="p-5 bg-forest-50/50 flex justify-end gap-3 border-t border-forest-100">
+            {footer !== undefined ? footer : (
+              <button 
+                onClick={onClose}
+                className="px-6 py-2.5 rounded-xl text-sm font-medium text-white bg-forest-900 hover:bg-forest-800 transition-colors shadow-soft"
+              >
+                Got it
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getAuthFromCookies } from "../../../../../lib/auth";
 import { prisma } from "../../../../../lib/prisma";
+import { garmentFieldsFor, isProductTryOnEnabled } from "../../../../../lib/tryon-status";
+import {
+  commitGarmentConfig,
+  type CommitErrorCode,
+} from "../../../../../lib/commit-measurements";
 
 // ─── /api/retailer/products/[id]/tryon-config ───────────────────────────
 // Retailer-facing endpoint to make one of their products 3D-try-on-enabled by
 // supplying the data a normal catalog/CSV import doesn't carry: the garment
-// colour (Product.tshirtColorHex) + the flat garment measurements per size
+// colour (Product.garmentColorHex) + the flat garment measurements per size
 // (ProductVariant.garment*Cm).
 //
 // Auth: retailer SESSION COOKIE (dashboard) via getAuthFromCookies. STRICT
@@ -22,19 +27,27 @@ import { prisma } from "../../../../../lib/prisma";
 //   variant). See docs/enterprise-roadmap.md § Catalog.
 // ───────────────────────────────────────────────────────────────────────
 
-const HEX_COLOR = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+// The write itself lives in app/lib/commit-measurements.ts so that this route,
+// the CSV ingestion pipeline, and any later automated extraction all share one
+// implementation -- validation cannot drift between a human filling in a form
+// and a machine producing the same rows. This route is now just auth, JSON
+// parsing, and mapping the commit result onto HTTP.
+//
+// Garment measurements are keyed dynamically by the product's own category
+// (garmentFieldsFor) rather than a hardcoded tee-shaped interface -- a frozen
+// tee-shaped field list here is what previously made pants un-configurable
+// through this route.
 
-interface VariantConfigInput {
-  sizeLabel: string;
-  garmentChestCm: number;
-  garmentLengthCm: number;
-  garmentSleeveCm: number;
-  garmentShoulderCm: number;
-}
-
-function isPositiveNumber(v: unknown): v is number {
-  return typeof v === "number" && Number.isFinite(v) && v > 0;
-}
+/** Commit failures -> the exact status + message this route has always
+ *  returned. Kept as a table so the mapping is auditable at a glance. */
+const ERROR_STATUS: Record<CommitErrorCode, number> = {
+  INVALID_COLOR: 400,
+  EMPTY_VARIANTS: 400,
+  PRODUCT_NOT_FOUND: 404,
+  UNSUPPORTED_CATEGORY: 400,
+  INVALID_VARIANT: 400,
+  UNKNOWN_SIZE: 400,
+};
 
 // ─── GET: current try-on config for a product ───
 export async function GET(
@@ -73,131 +86,50 @@ export async function PUT(
 
   const { id } = await params;
 
-  let body: { tshirtColorHex?: unknown; variants?: unknown };
+  let body: { garmentColorHex?: unknown; variants?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  // ── Validate colour ──
-  if (typeof body.tshirtColorHex !== "string" || !HEX_COLOR.test(body.tshirtColorHex)) {
-    return NextResponse.json(
-      { error: "tshirtColorHex is required and must be a hex colour (e.g. #1a1a2e)" },
-      { status: 400 }
-    );
-  }
-  const tshirtColorHex = body.tshirtColorHex;
-
-  // ── Validate variants ──
-  if (!Array.isArray(body.variants) || body.variants.length === 0) {
-    return NextResponse.json(
-      { error: "variants must be a non-empty array" },
-      { status: 400 }
-    );
-  }
-
-  const variantInputs: VariantConfigInput[] = [];
-  for (const v of body.variants) {
-    if (
-      !v ||
-      typeof v.sizeLabel !== "string" ||
-      !isPositiveNumber(v.garmentChestCm) ||
-      !isPositiveNumber(v.garmentLengthCm) ||
-      !isPositiveNumber(v.garmentSleeveCm) ||
-      !isPositiveNumber(v.garmentShoulderCm)
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Each variant needs a sizeLabel and positive garmentChestCm, garmentLengthCm, garmentSleeveCm, garmentShoulderCm",
-        },
-        { status: 400 }
-      );
-    }
-    variantInputs.push({
-      sizeLabel: v.sizeLabel,
-      garmentChestCm: v.garmentChestCm,
-      garmentLengthCm: v.garmentLengthCm,
-      garmentSleeveCm: v.garmentSleeveCm,
-      garmentShoulderCm: v.garmentShoulderCm,
-    });
-  }
-
-  // ── Fetch product (tenant isolation) + resolve sizeLabels → variant ids ──
-  const product = await prisma.product.findUnique({
-    where: { id },
-    include: { variants: true },
+  const result = await commitGarmentConfig({
+    productId: id,
+    retailerId: user.sub,
+    garmentColorHex: body.garmentColorHex,
+    variants: body.variants,
   });
-  if (!product || product.retailerId !== user.sub) {
-    return NextResponse.json({ error: "Product not found" }, { status: 404 });
-  }
 
-  const variantBySize = new Map(product.variants.map((v) => [v.sizeLabel, v]));
-  const updates: Prisma.PrismaPromise<unknown>[] = [
-    prisma.product.update({ where: { id: product.id }, data: { tshirtColorHex } }),
-  ];
-
-  for (const input of variantInputs) {
-    const variant = variantBySize.get(input.sizeLabel);
-    if (!variant) {
-      return NextResponse.json(
-        { error: `Unknown size "${input.sizeLabel}" for this product` },
-        { status: 400 }
-      );
-    }
-    updates.push(
-      prisma.productVariant.update({
-        where: { id: variant.id },
-        data: {
-          garmentChestCm: input.garmentChestCm,
-          garmentLengthCm: input.garmentLengthCm,
-          garmentSleeveCm: input.garmentSleeveCm,
-          garmentShoulderCm: input.garmentShoulderCm,
-        },
-      })
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.message },
+      { status: ERROR_STATUS[result.code] }
     );
   }
 
-  // Atomic — colour + all variant rows update together, or none do.
-  await prisma.$transaction(updates);
-
-  const updated = await prisma.product.findUnique({
-    where: { id: product.id },
-    include: { variants: true },
-  });
-  return NextResponse.json(configResponse(updated!));
+  return NextResponse.json(configResponse(result.product));
 }
 
 // ─── Shared response shape ───
 function configResponse(
   product: Prisma.ProductGetPayload<{ include: { variants: true } }>
 ) {
-  const variants = product.variants.map((v) => ({
-    id: v.id,
-    sizeLabel: v.sizeLabel,
-    garmentChestCm: v.garmentChestCm,
-    garmentLengthCm: v.garmentLengthCm,
-    garmentSleeveCm: v.garmentSleeveCm,
-    garmentShoulderCm: v.garmentShoulderCm,
-  }));
+  const fields = garmentFieldsFor(product.category ?? "");
+  const variants = product.variants.map((v) => {
+    const out: Record<string, unknown> = { id: v.id, sizeLabel: v.sizeLabel };
+    for (const f of fields) out[f] = (v as unknown as Record<string, unknown>)[f];
+    return out;
+  });
 
-  // Mirrors the try-on gate: a product is try-on-ready only with a colour AND
-  // every variant carrying all four garment measurements.
-  const isTryOnEnabled =
-    product.tshirtColorHex !== null &&
-    variants.length > 0 &&
-    variants.every(
-      (v) =>
-        v.garmentChestCm !== null &&
-        v.garmentLengthCm !== null &&
-        v.garmentSleeveCm !== null &&
-        v.garmentShoulderCm !== null
-    );
+  // Single source of truth (app/lib/tryon-status.ts) -- was three independent
+  // hardcoded copies of the tee's four fields, which is exactly why this
+  // route never learned about pants when that category was added.
+  const isTryOnEnabled = isProductTryOnEnabled(product);
 
   return {
     productId: product.id,
-    tshirtColorHex: product.tshirtColorHex,
+    category: product.category,
+    garmentColorHex: product.garmentColorHex,
     isTryOnEnabled,
     variants,
   };

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authorizeWidgetRequest } from "../../lib/widget-auth";
+import { authorizeWidgetRequest, consumeQuota } from "../../lib/widget-auth";
 
 // ─── POST /api/avatar ───
 // Thin proxy for the bare 3D body avatar (no garment). Enforces the
@@ -11,6 +11,9 @@ import { authorizeWidgetRequest } from "../../lib/widget-auth";
 // The widget may include `shopper_ref` in the payload for uniformity; ignored.
 
 const BODY_SERVICE_URL = process.env.BODY_SERVICE_URL || "http://localhost:8001";
+// Shared secret body-service verifies on every call — proves this request
+// came from this proxy, not just from something that can reach the URL.
+const BODY_SERVICE_KEY = process.env.BODY_SERVICE_KEY || "";
 
 const CORS_HEADERS: Record<string, string> = {
     "Access-Control-Allow-Origin": "*",
@@ -24,7 +27,7 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest) {
     // ── Security gate (key + fail-closed Origin + allowlist + rate limit) ──
-    const auth = await authorizeWidgetRequest(request, CORS_HEADERS);
+    const auth = await authorizeWidgetRequest(request, CORS_HEADERS, "BODY_MODELING");
     if (!auth.ok) {
         return auth.response;
     }
@@ -61,7 +64,10 @@ export async function POST(request: NextRequest) {
     try {
         const upstream = await fetch(`${BODY_SERVICE_URL}/generate-avatar`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "X-Manikan-Internal-Key": BODY_SERVICE_KEY,
+            },
             body: JSON.stringify({ sex, height_cm, weight_kg, chest_cm, waist_cm, hips_cm }),
         });
 
@@ -74,6 +80,12 @@ export async function POST(request: NextRequest) {
         }
 
         const glb = await upstream.arrayBuffer();
+
+        // ── Deduct Quota ──
+        if (auth.subscription) {
+            await consumeQuota(auth.subscription.id, "BODY_MODELING");
+        }
+
         return new NextResponse(glb, {
             status: 200,
             headers: { ...CORS_HEADERS, "Content-Type": "model/gltf-binary" },

@@ -81,7 +81,7 @@ function LoginForm() {
 
       const data = await res.json();
 
-      if (!res.ok) {
+      if (!data.success) {
         // If account exists but not activated, redirect to activation page
         if (data.requiresActivation) {
           router.push(`/activation?email=${encodeURIComponent(data.email)}`);

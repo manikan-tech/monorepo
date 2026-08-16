@@ -1,10 +1,11 @@
 # FastAPI application configuration and Virtual Try-On HTTP routes.
+import hmac
 import logging
 import os
 from pathlib import Path
 from typing import Optional
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import requests
@@ -16,6 +17,15 @@ from utils.image_handler import cleanup_files, download_url_to_temp, save_upload
 logger = logging.getLogger(__name__)
 TEMP_DIR = str(Path(__file__).resolve().parent / "tmp")
 os.makedirs(TEMP_DIR, exist_ok=True)
+
+# Shared secret the Store's server-side proxy must present on every billable
+# request. Same pattern as body-service's BODY_SERVICE_KEY: CORS/origin checks
+# only constrain browsers, this is what actually stops a server-to-server
+# caller (or anyone who finds this URL) from reaching this service directly
+# and bypassing the Store's API-key/subscription/quota gate. Read via
+# services.vton_client's load_dotenv() import above, same as HF_TOKEN.
+TRYON_SERVICE_KEY = os.getenv("TRYON_SERVICE_KEY")
+TRYON_SERVICE_KEY_PREVIOUS = os.getenv("TRYON_SERVICE_KEY_PREVIOUS")
 
 SUPPORTED_CATEGORIES = ["blouse", "shirt", "jacket", "pants", "skirt", "dress"]
 MIN_HUMAN_IMAGE_WIDTH = 400
@@ -41,14 +51,33 @@ def _validation_error_from_message(message: str) -> tuple[int, str]:
         return 400, "INVALID_GARMENT_IMAGE_URL"
     return 400, "INVALID_INPUT"
 
+# Comma-separated allowed origins. Default "*" for local dev; set an explicit
+# list (e.g. the Store service origin) in production. Same convention as
+# body-service's CORS_ORIGINS.
+CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+
 app = FastAPI(title="Manikan VTON Service", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def verify_internal_key(x_manikan_internal_key: str = Header(default="")) -> None:
+    """
+    tryon-service has no other authentication of its own -- CORS only
+    constrains browsers, not server-to-server or direct callers. Fails closed
+    if no key is configured, so an unconfigured secret never means "open";
+    accepts TRYON_SERVICE_KEY_PREVIOUS too for zero-downtime rotation.
+    """
+    candidates = [key for key in (TRYON_SERVICE_KEY, TRYON_SERVICE_KEY_PREVIOUS) if key]
+    if not candidates or not any(
+        hmac.compare_digest(x_manikan_internal_key, key) for key in candidates
+    ):
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 @app.get("/health")
@@ -79,7 +108,11 @@ def capabilities() -> dict[str, object]:
     }
 
 
-@app.post("/api/vton/2d", response_class=FileResponse)
+@app.post(
+    "/api/vton/2d",
+    response_class=FileResponse,
+    dependencies=[Depends(verify_internal_key)],
+)
 async def tryon_2d(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -95,9 +128,9 @@ async def tryon_2d(
 
     try:
         cloth_type = map_category(category)
-        human_image_path = save_upload_to_temp(human_image, TEMP_DIR)
+        human_image_path = save_upload_to_temp(human_image, TEMP_DIR, MAX_UPLOAD_SIZE_BYTES)
         files_to_cleanup.append(human_image_path)
-        garment_image_path = download_url_to_temp(garment_image_url, TEMP_DIR)
+        garment_image_path = download_url_to_temp(garment_image_url, TEMP_DIR, MAX_UPLOAD_SIZE_BYTES)
         files_to_cleanup.append(garment_image_path)
         result_image_path = run_tryon_with_retry(
             human_img_path=human_image_path,

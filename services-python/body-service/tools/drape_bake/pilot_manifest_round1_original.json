@@ -1,0 +1,505 @@
+[
+  {
+    "name": "named_nonconvergent_baseline",
+    "point": {
+      "gender": "male",
+      "h_cm": 175,
+      "wt_kg": 75,
+      "chest": 98,
+      "waist": 86,
+      "hips": 100,
+      "garment_waist_cm": 44.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 159,
+    "wall_time_s": 129.6,
+    "converged": false,
+    "convergence_status": "failed",
+    "frames_run": 90,
+    "retries_used": 1,
+    "final_window_max_mm": 3.390426886728159
+  },
+  {
+    "name": "too_small_heavy_build",
+    "point": {
+      "gender": "male",
+      "h_cm": 175,
+      "wt_kg": 125,
+      "chest": 134,
+      "waist": 122,
+      "hips": 136,
+      "garment_waist_cm": 38.0
+    },
+    "too_small_path": true,
+    "n_pushed_kinematic": 175,
+    "wall_time_s": 73.9,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.12918344630811265
+  },
+  {
+    "name": "height_low_midsize_midbuild",
+    "point": {
+      "gender": "male",
+      "h_cm": 162,
+      "wt_kg": 92,
+      "chest": 110,
+      "waist": 98,
+      "hips": 112,
+      "garment_waist_cm": 50.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 160,
+    "wall_time_s": 151.9,
+    "converged": false,
+    "convergence_status": "failed",
+    "frames_run": 90,
+    "retries_used": 1,
+    "final_window_max_mm": 5.154385920595989
+  },
+  {
+    "name": "height_high_midsize_midbuild",
+    "point": {
+      "gender": "male",
+      "h_cm": 188,
+      "wt_kg": 92,
+      "chest": 110,
+      "waist": 98,
+      "hips": 112,
+      "garment_waist_cm": 50.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 159,
+    "wall_time_s": 130.4,
+    "converged": false,
+    "convergence_status": "failed",
+    "frames_run": 90,
+    "retries_used": 1,
+    "final_window_max_mm": 3.3581727298768644
+  },
+  {
+    "name": "h175_s38_bslim",
+    "point": {
+      "gender": "male",
+      "h_cm": 175,
+      "wt_kg": 58,
+      "chest": 86,
+      "waist": 74,
+      "hips": 88,
+      "garment_waist_cm": 38.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 134,
+    "wall_time_s": 73.9,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.36882073231126555
+  },
+  {
+    "name": "h175_s38_bavg",
+    "point": {
+      "gender": "male",
+      "h_cm": 175,
+      "wt_kg": 92,
+      "chest": 110,
+      "waist": 98,
+      "hips": 112,
+      "garment_waist_cm": 38.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 624,
+    "wall_time_s": 156.6,
+    "converged": false,
+    "convergence_status": "failed",
+    "frames_run": 90,
+    "retries_used": 1,
+    "final_window_max_mm": 3.5046688245880597
+  },
+  {
+    "name": "h175_s38_bheavy",
+    "point": {
+      "gender": "male",
+      "h_cm": 175,
+      "wt_kg": 125,
+      "chest": 134,
+      "waist": 122,
+      "hips": 136,
+      "garment_waist_cm": 38.0
+    },
+    "too_small_path": true,
+    "n_pushed_kinematic": 175,
+    "wall_time_s": 75.9,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.12918344630811265
+  },
+  {
+    "name": "h175_s50_bslim",
+    "point": {
+      "gender": "male",
+      "h_cm": 175,
+      "wt_kg": 58,
+      "chest": 86,
+      "waist": 74,
+      "hips": 88,
+      "garment_waist_cm": 50.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 80,
+    "wall_time_s": 53.3,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.09122096733021444
+  },
+  {
+    "name": "h175_s50_bavg",
+    "point": {
+      "gender": "male",
+      "h_cm": 175,
+      "wt_kg": 92,
+      "chest": 110,
+      "waist": 98,
+      "hips": 112,
+      "garment_waist_cm": 50.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 150,
+    "wall_time_s": 103.7,
+    "converged": false,
+    "convergence_status": "failed",
+    "frames_run": 90,
+    "retries_used": 1,
+    "final_window_max_mm": 3.2324609552412262
+  },
+  {
+    "name": "h175_s50_bheavy",
+    "point": {
+      "gender": "male",
+      "h_cm": 175,
+      "wt_kg": 125,
+      "chest": 134,
+      "waist": 122,
+      "hips": 136,
+      "garment_waist_cm": 50.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 598,
+    "wall_time_s": 159.6,
+    "converged": false,
+    "convergence_status": "failed",
+    "frames_run": 90,
+    "retries_used": 1,
+    "final_window_max_mm": 14.119633738063287
+  },
+  {
+    "name": "h175_s62_bslim",
+    "point": {
+      "gender": "male",
+      "h_cm": 175,
+      "wt_kg": 58,
+      "chest": 86,
+      "waist": 74,
+      "hips": 88,
+      "garment_waist_cm": 62.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 46,
+    "wall_time_s": 41.2,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.22834057914785102
+  },
+  {
+    "name": "h175_s62_bavg",
+    "point": {
+      "gender": "male",
+      "h_cm": 175,
+      "wt_kg": 92,
+      "chest": 110,
+      "waist": 98,
+      "hips": 112,
+      "garment_waist_cm": 62.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 92,
+    "wall_time_s": 50.1,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.09234260853945238
+  },
+  {
+    "name": "h175_s62_bheavy",
+    "point": {
+      "gender": "male",
+      "h_cm": 175,
+      "wt_kg": 125,
+      "chest": 134,
+      "waist": 122,
+      "hips": 136,
+      "garment_waist_cm": 62.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 155,
+    "wall_time_s": 64.0,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.116444866533067
+  },
+  {
+    "name": "h180_s38_bslim",
+    "point": {
+      "gender": "male",
+      "h_cm": 180,
+      "wt_kg": 58,
+      "chest": 86,
+      "waist": 74,
+      "hips": 88,
+      "garment_waist_cm": 38.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 133,
+    "wall_time_s": 75.1,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.11560824613204308
+  },
+  {
+    "name": "h180_s38_bavg",
+    "point": {
+      "gender": "male",
+      "h_cm": 180,
+      "wt_kg": 92,
+      "chest": 110,
+      "waist": 98,
+      "hips": 112,
+      "garment_waist_cm": 38.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 594,
+    "wall_time_s": 162.0,
+    "converged": false,
+    "convergence_status": "failed",
+    "frames_run": 90,
+    "retries_used": 1,
+    "final_window_max_mm": 3.835825142515669
+  },
+  {
+    "name": "h180_s38_bheavy",
+    "point": {
+      "gender": "male",
+      "h_cm": 180,
+      "wt_kg": 125,
+      "chest": 134,
+      "waist": 122,
+      "hips": 136,
+      "garment_waist_cm": 38.0
+    },
+    "too_small_path": true,
+    "n_pushed_kinematic": 177,
+    "wall_time_s": 176.8,
+    "converged": false,
+    "convergence_status": "failed",
+    "frames_run": 90,
+    "retries_used": 1,
+    "final_window_max_mm": 11.231444807371235
+  },
+  {
+    "name": "h180_s50_bslim",
+    "point": {
+      "gender": "male",
+      "h_cm": 180,
+      "wt_kg": 58,
+      "chest": 86,
+      "waist": 74,
+      "hips": 88,
+      "garment_waist_cm": 50.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 87,
+    "wall_time_s": 55.7,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.10616479071153585
+  },
+  {
+    "name": "h180_s50_bavg",
+    "point": {
+      "gender": "male",
+      "h_cm": 180,
+      "wt_kg": 92,
+      "chest": 110,
+      "waist": 98,
+      "hips": 112,
+      "garment_waist_cm": 50.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 150,
+    "wall_time_s": 146.9,
+    "converged": false,
+    "convergence_status": "failed",
+    "frames_run": 90,
+    "retries_used": 1,
+    "final_window_max_mm": 3.724349456388116
+  },
+  {
+    "name": "h180_s50_bheavy",
+    "point": {
+      "gender": "male",
+      "h_cm": 180,
+      "wt_kg": 125,
+      "chest": 134,
+      "waist": 122,
+      "hips": 136,
+      "garment_waist_cm": 50.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 583,
+    "wall_time_s": 188.0,
+    "converged": false,
+    "convergence_status": "failed",
+    "frames_run": 90,
+    "retries_used": 1,
+    "final_window_max_mm": 10.596335917490254
+  },
+  {
+    "name": "h180_s62_bslim",
+    "point": {
+      "gender": "male",
+      "h_cm": 180,
+      "wt_kg": 58,
+      "chest": 86,
+      "waist": 74,
+      "hips": 88,
+      "garment_waist_cm": 62.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 65,
+    "wall_time_s": 46.4,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.17614855568864604
+  },
+  {
+    "name": "h180_s62_bavg",
+    "point": {
+      "gender": "male",
+      "h_cm": 180,
+      "wt_kg": 92,
+      "chest": 110,
+      "waist": 98,
+      "hips": 112,
+      "garment_waist_cm": 62.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 87,
+    "wall_time_s": 52.7,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.07847113837197875
+  },
+  {
+    "name": "h180_s62_bheavy",
+    "point": {
+      "gender": "male",
+      "h_cm": 180,
+      "wt_kg": 125,
+      "chest": 134,
+      "waist": 122,
+      "hips": 136,
+      "garment_waist_cm": 62.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 168,
+    "wall_time_s": 76.5,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.06139102179466653
+  },
+  {
+    "name": "female_s32_avg",
+    "point": {
+      "gender": "female",
+      "h_cm": 165,
+      "wt_kg": 65,
+      "chest": 90,
+      "waist": 72,
+      "hips": 98,
+      "garment_waist_cm": 32.0,
+      "template_path": "<scratch>/pants_female_sanity_check.npz"
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 493,
+    "wall_time_s": 108.1,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.0808216507443482
+  },
+  {
+    "name": "female_s36_avg",
+    "point": {
+      "gender": "female",
+      "h_cm": 165,
+      "wt_kg": 65,
+      "chest": 90,
+      "waist": 72,
+      "hips": 98,
+      "garment_waist_cm": 36.0,
+      "template_path": "<scratch>/pants_female_sanity_check.npz"
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 151,
+    "wall_time_s": 101.3,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.0642360169164259
+  },
+  {
+    "name": "female_s40_avg",
+    "point": {
+      "gender": "female",
+      "h_cm": 165,
+      "wt_kg": 65,
+      "chest": 90,
+      "waist": 72,
+      "hips": 98,
+      "garment_waist_cm": 40.0,
+      "template_path": "<scratch>/pants_female_sanity_check.npz"
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 117,
+    "wall_time_s": 93.0,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.026266790792175174
+  }
+]

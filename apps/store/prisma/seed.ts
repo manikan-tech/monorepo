@@ -5,6 +5,8 @@ import pg from "pg";
 import fs from "fs";
 import path from "path";
 import { seedDemoTshirts } from "./demo-tshirts";
+import { seedDemoPants } from "./demo-pants";
+import { seedDemoPantsFemale } from "./demo-pants-female";
 
 const { Pool } = pg;
 
@@ -66,6 +68,51 @@ interface CsvRow {
 async function main() {
     console.log("🌱 Starting database seeding from CSV...");
 
+    // ── Seed Plan Tiers ──────────────────────────────────────────────────
+    // ⚠️  PRODUCT OWNER: these quotas/prices are placeholders. Confirm
+    //     actual go-to-market pricing before deploying to production.
+    //
+    // Each service is subscribed to, billed, and keyed independently -- a
+    // retailer may subscribe to just one, some, or all three -- so each tier
+    // is a separate Plan row per service, not one row bundling all three.
+    const tiers = [
+        {
+            name: "Free",
+            priceEgpMonthly: 0,
+            quotas: { BODY_MODELING: 100, VTON_2D: 50, RECOMMENDATION: 500 },
+        },
+        {
+            name: "Starter",
+            priceEgpMonthly: 999,
+            quotas: { BODY_MODELING: 1000, VTON_2D: 200, RECOMMENDATION: 5000 },
+        },
+        {
+            name: "Growth",
+            priceEgpMonthly: 2499,
+            quotas: { BODY_MODELING: 5000, VTON_2D: 1000, RECOMMENDATION: 20000 },
+        },
+    ] as const;
+    const services = ["BODY_MODELING", "VTON_2D", "RECOMMENDATION"] as const;
+
+    let planCount = 0;
+    for (const tier of tiers) {
+        for (const service of services) {
+            await prisma.plan.upsert({
+                where: { name_service: { name: tier.name, service } },
+                update: { priceEgpMonthly: tier.priceEgpMonthly, quota: tier.quotas[service] },
+                create: {
+                    name: tier.name,
+                    service,
+                    priceEgpMonthly: tier.priceEgpMonthly,
+                    quota: tier.quotas[service],
+                },
+            });
+            planCount++;
+        }
+    }
+    console.log(`Seeded ${planCount} pricing plans (Free / Starter / Growth × 3 services).`);
+
+
     // Locating the catalog CSV file
     const csvPath = path.resolve("./../../demo-retailer-catalog-final.csv");
     if (!fs.existsSync(csvPath)) {
@@ -113,7 +160,6 @@ async function main() {
             authId: "default-retailer-auth-id",
             email: "retailer@manikan.com",
             storeName: "Manikan Official Store",
-            plan: "premium",
         },
     });
     console.log(`Linked Retailer: ${retailer.storeName}`);
@@ -247,6 +293,15 @@ async function main() {
     // Seed the Manikan demo T-shirts (virtual try-on enabled) for the widget
     const tshirtCount = await seedDemoTshirts(prisma, retailer.id);
     console.log(`Seeded ${tshirtCount} demo t-shirts (virtual try-on enabled).`);
+
+    // Seed the Manikan demo pants (virtual try-on enabled), both genders --
+    // previously only ever run as one-off scripts, never part of the
+    // reproducible seed. Wired in so a dropped/reset database regenerates
+    // both catalogs automatically, same as the tees.
+    const pantsCount = await seedDemoPants(prisma, retailer.id);
+    console.log(`Seeded ${pantsCount} demo pants (virtual try-on enabled).`);
+    const pantsFemaleCount = await seedDemoPantsFemale(prisma, retailer.id);
+    console.log(`Seeded ${pantsFemaleCount} demo female pants (virtual try-on enabled).`);
 
     console.log("🌱 Database seeding complete!");
 }

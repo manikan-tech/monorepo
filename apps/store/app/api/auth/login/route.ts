@@ -8,13 +8,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { email, password, role } = body;
 
-    // ── Validation ─────────────────────────────────────────
+    // ── Validation ──────────────────────────────────────
     if (!email || typeof email !== "string") {
-      return NextResponse.json({ error: "Email is required" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Email is required" }, { status: 200 });
     }
 
     if (!password || typeof password !== "string") {
-      return NextResponse.json({ error: "Password is required" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Password is required" }, { status: 200 });
     }
 
     // ── Sign in via Supabase Auth ──────────────────────────
@@ -31,19 +31,20 @@ export async function POST(request: NextRequest) {
       if (signInError.message?.toLowerCase().includes("email not confirmed")) {
         return NextResponse.json(
           {
+            success: false,
             error: "Please verify your email before signing in",
             requiresActivation: true,
             email: email.toLowerCase().trim(),
           },
-          { status: 403 }
+          { status: 200 }
         );
       }
 
-      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+      return NextResponse.json({ success: false, error: "Invalid email or password" }, { status: 200 });
     }
 
     if (!data.user) {
-      return NextResponse.json({ error: "Login failed. Please try again." }, { status: 500 });
+      return NextResponse.json({ success: false, error: "Login failed. Please try again." }, { status: 200 });
     }
 
     const cookieStore = await cookies();
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     if (customer) {
       if (role === "retailer") {
-        return NextResponse.json({ error: "This email belongs to a customer, please select Login as Customer." }, { status: 403 });
+        return NextResponse.json({ success: false, error: "This email belongs to a customer, please select Login as Customer." }, { status: 200 });
       }
       cookieStore.set("manikan_role", "customer", { httpOnly: true, secure: true, sameSite: "lax", path: "/" });
       return NextResponse.json({
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     if (retailer) {
       if (role === "customer") {
-        return NextResponse.json({ error: "This email belongs to a retailer, please select Login as Retailer." }, { status: 403 });
+        return NextResponse.json({ success: false, error: "This email belongs to a retailer, please select Login as Retailer." }, { status: 200 });
       }
 
       // Update the Retailer's authId to match Supabase if it wasn't already synced
@@ -100,6 +101,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Login error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 200 });
   }
 }

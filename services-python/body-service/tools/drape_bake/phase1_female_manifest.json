@@ -1,0 +1,42 @@
+[
+  {
+    "name": "female_stress",
+    "point": {
+      "gender": "female",
+      "h_cm": 165.0,
+      "wt_kg": 78,
+      "chest": 98,
+      "waist": 88,
+      "hips": 108,
+      "garment_waist_cm": 50.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 118,
+    "wall_time_s": 198.0,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.03484286907371223
+  },
+  {
+    "name": "female_normal",
+    "point": {
+      "gender": "female",
+      "h_cm": 165.0,
+      "wt_kg": 65,
+      "chest": 92,
+      "waist": 74,
+      "hips": 100,
+      "garment_waist_cm": 38.0
+    },
+    "too_small_path": false,
+    "n_pushed_kinematic": 138,
+    "wall_time_s": 223.1,
+    "converged": true,
+    "convergence_status": "converged",
+    "frames_run": 60,
+    "retries_used": 0,
+    "final_window_max_mm": 0.05079661214735141
+  }
+]

@@ -28,15 +28,24 @@ const LockIcon = (
   </svg>
 );
 
+const StoreIcon = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+    <path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" />
+  </svg>
+);
+
 /* ── Page Component ─────────────────────────────────────── */
 
 export default function SignupPage() {
   const router = useRouter();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [storeName, setStoreName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"customer" | "retailer">("customer");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -45,12 +54,17 @@ export default function SignupPage() {
   function validate(): boolean {
     const errors: Record<string, string> = {};
 
-    if (!firstName.trim() || firstName.trim().length < 2) {
-      errors.firstName = "Min 2 chars";
-    }
-
-    if (!lastName.trim() || lastName.trim().length < 2) {
-      errors.lastName = "Min 2 chars";
+    if (role === "customer") {
+      if (!firstName.trim() || firstName.trim().length < 2) {
+        errors.firstName = "Min 2 chars";
+      }
+      if (!lastName.trim() || lastName.trim().length < 2) {
+        errors.lastName = "Min 2 chars";
+      }
+    } else {
+      if (!storeName.trim() || storeName.trim().length < 2) {
+        errors.storeName = "Min 2 chars";
+      }
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -76,8 +90,10 @@ export default function SignupPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
+          role,
+          ...(role === "customer"
+            ? { firstName: firstName.trim(), lastName: lastName.trim() }
+            : { storeName: storeName.trim() }),
           phone: phone.trim() || undefined,
           email: email.toLowerCase().trim(),
           password,
@@ -144,6 +160,24 @@ export default function SignupPage() {
         </p>
       </div>
 
+      {/* ── Role Tabs ──────────────────────────────────── */}
+      <div className="flex bg-forest-50 p-1 rounded-xl">
+        <button
+          type="button"
+          onClick={() => { setRole("customer"); setError(""); }}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${role === "customer" ? "bg-white text-forest-900 shadow-sm" : "text-forest-700/70 hover:text-forest-900"}`}
+        >
+          Shopper
+        </button>
+        <button
+          type="button"
+          onClick={() => { setRole("retailer"); setError(""); }}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${role === "retailer" ? "bg-white text-forest-900 shadow-sm" : "text-forest-700/70 hover:text-forest-900"}`}
+        >
+          Retailer
+        </button>
+      </div>
+
       {/* ── Error Banner ──────────────────────────────── */}
       {error && (
         <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-md text-red-600 text-xs font-normal animate-fade-in" role="alert">
@@ -158,34 +192,54 @@ export default function SignupPage() {
 
       {/* ── Fields ─────────────────────────────────────── */}
       <div className="flex flex-col gap-4">
-        <AuthInput
-          id="signup-first-name"
-          label="First Name"
-          type="text"
-          placeholder="Jane"
-          value={firstName}
-          onChange={(v) => {
-            setFirstName(v);
-            if (fieldErrors.firstName) setFieldErrors((p) => ({ ...p, firstName: "" }));
-          }}
-          icon={UserIcon}
-          error={fieldErrors.firstName}
-          autoComplete="given-name"
-        />
-        <AuthInput
-          id="signup-last-name"
-          label="Last Name"
-          type="text"
-          placeholder="Doe"
-          value={lastName}
-          onChange={(v) => {
-            setLastName(v);
-            if (fieldErrors.lastName) setFieldErrors((p) => ({ ...p, lastName: "" }));
-          }}
-          icon={UserIcon}
-          error={fieldErrors.lastName}
-          autoComplete="family-name"
-        />
+        {role === "customer" ? (
+          <>
+            <AuthInput
+              id="signup-first-name"
+              label="First Name"
+              type="text"
+              placeholder="Jane"
+              value={firstName}
+              onChange={(v) => {
+                setFirstName(v);
+                if (fieldErrors.firstName) setFieldErrors((p) => ({ ...p, firstName: "" }));
+              }}
+              icon={UserIcon}
+              error={fieldErrors.firstName}
+              autoComplete="given-name"
+            />
+            <AuthInput
+              id="signup-last-name"
+              label="Last Name"
+              type="text"
+              placeholder="Doe"
+              value={lastName}
+              onChange={(v) => {
+                setLastName(v);
+                if (fieldErrors.lastName) setFieldErrors((p) => ({ ...p, lastName: "" }));
+              }}
+              icon={UserIcon}
+              error={fieldErrors.lastName}
+              autoComplete="family-name"
+            />
+          </>
+        ) : (
+          <AuthInput
+            id="signup-store-name"
+            label="Store Name"
+            type="text"
+            placeholder="My Fashion Store"
+            value={storeName}
+            onChange={(v) => {
+              setStoreName(v);
+              if (fieldErrors.storeName) setFieldErrors((p) => ({ ...p, storeName: "" }));
+            }}
+            icon={StoreIcon}
+            error={fieldErrors.storeName}
+            autoComplete="organization"
+          />
+        )}
+
         <AuthInput
           id="signup-email"
           label="Email Address"
