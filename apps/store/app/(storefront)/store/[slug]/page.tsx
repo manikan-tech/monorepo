@@ -72,6 +72,33 @@ export default function ProductDetailPage() {
     if (slug) fetchProduct();
   }, [slug]);
 
+  // ── Manikan widget integration (added) ──────────────────────────
+  // Exposes the current product's size chart on window so the chatbot
+  // (loaded once, globally, from the Navbar) knows which product the
+  // shopper is currently viewing and can fetch a size recommendation
+  // for it. This does not touch any existing state or logic above.
+  useEffect(() => {
+    if (!product) return;
+
+    (window as any).currentProductContext = {
+      id: product.id,
+      name: product.name,
+      size_chart_json: JSON.stringify(
+        (product.variants ?? []).map((v: any) => ({
+          size: v.sizeLabel,
+          chest_cm: v.chestCm,
+          waist_cm: v.waistCm,
+          hip_cm: v.hipCm,
+        }))
+      ),
+    };
+
+    return () => {
+      (window as any).currentProductContext = null;
+    };
+  }, [product]);
+  // ── end Manikan widget integration ──────────────────────────────
+
   // Load reviews when product is set
   useEffect(() => {
     if (!slug) return;
@@ -241,9 +268,14 @@ export default function ProductDetailPage() {
             )}
             <div className="flex gap-3">
               <button
+<<<<<<< HEAD
+                onClick={() => toggle(product.id)}
+                className="flex items-center justify-center gap-2 py-3 px-5 border-2 border-forest-200 text-forest-700 rounded-2xl font-medium text-sm hover:border-gold-400 hover:text-gold-600 transition-all duration-300 hover:-translate-y-0.5"
+=======
                 onClick={handleAddToCart}
                 disabled={isAdding || (selectedVariant && selectedVariant.stock === 0)}
                 className="flex-1 flex items-center justify-center gap-2 bg-forest-900 text-white rounded-2xl py-4 font-medium shadow-soft hover:bg-forest-800 transition-all duration-300 hover:shadow-card hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-80 disabled:cursor-not-allowed"
+>>>>>>> 9bb6580a1aed68b43246e8421eec1b09d47406e0
               >
                 {isAdding ? (
                   <span className="inline-block w-5 h-5 border-[2px] border-white/30 border-t-white rounded-full animate-spin" />
@@ -268,6 +300,39 @@ export default function ProductDetailPage() {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill={wishlisted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
                 </svg>
+<<<<<<< HEAD
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  if (typeof window !== 'undefined' && (window as any).ManikanWidget) {
+                    (window as any).ManikanWidget.openForSizing();
+                  }
+                }}
+                className="flex-1 flex items-center justify-center gap-2 py-3 px-4 border-2 border-gold-400 text-gold-600 rounded-2xl font-medium text-sm hover:bg-gold-50 hover:text-gold-700 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                  <path d="M21 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2" />
+                  <path d="M3 8h18v8H3z" />
+                  <path d="M7 8v3M11 8v3M15 8v3" />
+                </svg>
+                Find My Size
+              </button>
+              <Link
+                href={`/visualize?productId=${product.id}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void handleVirtualTryOn();
+                }}
+                aria-busy={isTryOnRouting}
+                className="flex-1 flex items-center justify-center gap-2 py-3 px-4 border-2 border-gold-500 bg-gold-50 text-gold-600 rounded-2xl font-medium text-sm hover:bg-gold-100 hover:text-gold-700 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                  <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                </svg>
+                Virtual Try-On
+              </Link>
+=======
               </button>
             </div>
 
@@ -320,6 +385,7 @@ export default function ProductDetailPage() {
 
                 <Manikan3DTryOn product={product} />
               </div>
+>>>>>>> 9bb6580a1aed68b43246e8421eec1b09d47406e0
             </div>
           </div>
 
