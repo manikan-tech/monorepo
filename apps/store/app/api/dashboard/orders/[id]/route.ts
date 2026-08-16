@@ -41,7 +41,7 @@ function isSerializationError(error: unknown): boolean {
 function errorResponse(error: ReturnRequestError) {
   return NextResponse.json(
     { error: error.message, code: error.code },
-    { status: error.status },
+    { status: 200 },
   );
 }
 
@@ -80,7 +80,7 @@ export async function PATCH(
   }
 
   // ── Request body ──────────────────────────────────────────────────────────
-  let body: { status?: unknown };
+  let body: { status?: string };
   try {
     body = await request.json();
   } catch {
@@ -90,17 +90,52 @@ export async function PATCH(
     );
   }
 
-  if (body.status !== "RETURNED") {
-    return NextResponse.json(
-      {
-        error: "Only the RETURNED status can be requested from this endpoint",
-        code: "INVALID_STATUS_TRANSITION",
-      },
-      { status: 400 },
-    );
-  }
-
   const { id: orderId } = await params;
+
+  if (body.status !== "RETURNED") {
+    // ─────────────────────────────────────────────────────────────────────────
+    // SIMPLE STATUS UPDATE (non-return)
+    // ─────────────────────────────────────────────────────────────────────────
+    const ALLOWED_STATUSES = ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "RETURN_PENDING", "RETURNED"];
+
+    try {
+      if (body.status && !ALLOWED_STATUSES.includes(body.status)) {
+        return NextResponse.json({ error: "Invalid status", code: "INVALID_STATUS" }, { status: 400 });
+      }
+
+      // Retailers can only update orders they own
+      const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: { items: { include: { product: true } } }
+      });
+
+      if (!order) {
+        return NextResponse.json({ error: "Order not found", code: "NOT_FOUND" }, { status: 404 });
+      }
+
+      if (retailer && !adminSession) {
+        const ownsOrder = order.items.every(item => item.product.retailerId === retailer.sub);
+        if (!ownsOrder) {
+          return NextResponse.json({ error: "Not authorized", code: "FORBIDDEN" }, { status: 403 });
+        }
+      }
+
+      const updateData: any = {};
+      if (body.status) {
+        updateData.status = body.status;
+      }
+
+      const updatedOrder = await prisma.order.update({
+        where: { id: orderId },
+        data: updateData
+      });
+
+      return NextResponse.json({ order: updatedOrder });
+    } catch (error) {
+      console.error("[dashboard/orders] simple update failed", error);
+      return NextResponse.json({ error: "Failed to update order", code: "UPDATE_FAILED" }, { status: 500 });
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // PHASE 1 — Validate eligibility and claim the order atomically.

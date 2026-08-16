@@ -146,7 +146,7 @@ export async function authorizeWidgetRequest(
         where: { apiKey: key },
         include: { retailer: true },
     });
-    if (!serviceKey || serviceKey.service !== scope || !serviceKey.retailer.isActivated) {
+    if (!serviceKey || !serviceKey.isActive || serviceKey.service !== scope || !serviceKey.retailer.isActivated) {
         return { ok: false, response: forbidden(cors) };
     }
     const retailer = serviceKey.retailer;

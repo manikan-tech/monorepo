@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import Modal from "../../../components/Modal";
 
 type Tab = "cache" | "allowlist";
 
@@ -56,6 +57,7 @@ export default function VtonDeveloperTools() {
   const [isLoading, setIsLoading] = useState(true);
   const [isMutating, setIsMutating] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
+  const [confirmClearModal, setConfirmClearModal] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -153,9 +155,7 @@ export default function VtonDeveloperTools() {
   }
 
   async function clearCache() {
-    if (!window.confirm("Clear all VTON cache metadata for this retailer?")) {
-      return;
-    }
+    setConfirmClearModal(false);
 
     setIsMutating(true);
     setMessage(null);
@@ -282,7 +282,7 @@ export default function VtonDeveloperTools() {
               </div>
               <button
                 type="button"
-                onClick={clearCache}
+                onClick={() => setConfirmClearModal(true)}
                 disabled={isLoading || isMutating || cacheEntries.length === 0}
                 className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -472,6 +472,32 @@ export default function VtonDeveloperTools() {
           </div>
         </section>
       )}
+
+      <Modal
+        isOpen={confirmClearModal}
+        onClose={() => setConfirmClearModal(false)}
+        title="Clear Cache"
+        footer={
+          <>
+            <button
+              onClick={() => setConfirmClearModal(false)}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-forest-700 bg-forest-50 hover:bg-forest-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={clearCache}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors shadow-soft"
+            >
+              Clear Cache
+            </button>
+          </>
+        }
+      >
+        <p className="text-forest-700">
+          Clear all VTON cache metadata for this retailer? This will force new rendering for existing garments.
+        </p>
+      </Modal>
     </div>
   );
 }

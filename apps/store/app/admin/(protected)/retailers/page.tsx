@@ -17,7 +17,6 @@ export default async function AdminRetailersPage() {
         where: { status: "ACTIVE" },
         include: { plan: true },
         orderBy: { createdAt: "desc" },
-        take: 1,
       },
       _count: {
         select: {

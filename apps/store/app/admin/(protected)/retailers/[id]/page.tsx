@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import RetailerDetailToggle from "./RetailerDetailToggle";
+import RetailerServicesManagement from "./RetailerServicesManagement";
 import { SERVICES } from "../../../../lib/service-keys";
 
 const SERVICE_LABELS: Record<(typeof SERVICES)[number], string> = {
@@ -40,19 +41,52 @@ export default async function RetailerDetailPage({
     redirect("/admin/retailers");
   }
 
-  // Each service is independently subscribed to -- show each one's own
-  // active plan rather than a single bundled "plan" (that legacy field
-  // predates the real per-service Plan/Subscription model and is unused).
-  const subscriptionsByService = await Promise.all(
+  // Each service is independently subscribed to
+  const servicesData = await Promise.all(
     SERVICES.map(async (service) => {
       const subscription = await prisma.subscription.findFirst({
-        where: { retailerId: retailer.id, service, status: "ACTIVE" },
+        where: { retailerId: retailer.id, service },
         include: { plan: true },
         orderBy: { createdAt: "desc" },
       });
-      return { service, planName: subscription?.plan?.name ?? null };
+      
+      const apiKey = await prisma.serviceApiKey.findUnique({
+        where: { retailerId_service: { retailerId: retailer.id, service } }
+      });
+
+      return {
+        service,
+        subscription: subscription ? {
+          id: subscription.id,
+          status: subscription.status,
+          planName: subscription.plan?.name ?? "No Plan",
+          usage: subscription.currentPeriodUsage,
+          quota: subscription.plan?.quota ?? 0,
+        } : null,
+        apiKey: apiKey ? {
+          id: apiKey.id,
+          key: apiKey.apiKey,
+          isActive: apiKey.isActive,
+        } : null,
+      };
     })
   );
+
+  const widgetSettings = (retailer.widgetSettings as Record<string, any>) || {};
+  const origins = Array.isArray(widgetSettings.allowedOrigins) 
+    ? widgetSettings.allowedOrigins.filter(o => typeof o === "string") 
+    : [];
+
+  const plans = await prisma.plan.findMany({
+    select: { id: true, name: true, service: true },
+    orderBy: { priceEgpMonthly: 'asc' }
+  });
+  
+  const allPlans: Record<string, { id: string; name: string }[]> = {};
+  for (const p of plans) {
+    if (!allPlans[p.service]) allPlans[p.service] = [];
+    allPlans[p.service]!.push({ id: p.id, name: p.name });
+  }
 
   return (
     <div className="space-y-6">
@@ -96,9 +130,9 @@ export default async function RetailerDetailPage({
               <div>
                 <p className="text-xs font-semibold text-forest-700/60 uppercase tracking-wider mb-1">Subscriptions</p>
                 <div className="space-y-0.5">
-                  {subscriptionsByService.map(({ service, planName }) => (
+                  {servicesData.map(({ service, subscription }) => (
                     <p key={service} className="text-xs font-medium text-forest-900">
-                      {SERVICE_LABELS[service]}: {planName ?? <span className="text-forest-700/50">none</span>}
+                      {SERVICE_LABELS[service]}: {subscription?.planName ?? <span className="text-forest-700/50">none</span>}
                     </p>
                   ))}
                 </div>
@@ -113,6 +147,13 @@ export default async function RetailerDetailPage({
               </div>
             </div>
           </div>
+          
+          <RetailerServicesManagement
+            retailerId={retailer.id}
+            services={servicesData}
+            initialOrigins={origins}
+            allPlans={allPlans}
+          />
         </div>
         <div className="space-y-6 animate-fade-up" style={{ animationDelay: "200ms" }}>
           <div className="bg-white rounded-2xl shadow-card border border-manikan-border p-6 h-full flex flex-col">
@@ -157,7 +198,7 @@ export default async function RetailerDetailPage({
                         </p>
                         {log.reason && (
                           <div className="mt-2 text-xs text-forest-700 bg-forest-50 p-2 rounded-md border border-forest-100">
-                            "{log.reason}"
+                            {log.reason}
                           </div>
                         )}
                       </div>

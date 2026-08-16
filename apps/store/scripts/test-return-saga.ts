@@ -24,7 +24,7 @@ if (!stripeSecretKey || !webhookSecret || !adminSecret) {
 
 
 const stripe = new Stripe(stripeSecretKey, {
-    apiVersion: "2026-06-24.dahlia",
+    apiVersion: "2026-07-29.dahlia" as any,
 });
 
 function wait(ms: number) {

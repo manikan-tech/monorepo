@@ -152,6 +152,7 @@ model ServiceApiKey {
   retailerId String
   service    String // "BODY_MODELING" | "VTON_2D" | "RECOMMENDATION"
   apiKey     String   @unique @default(cuid())
+  isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
