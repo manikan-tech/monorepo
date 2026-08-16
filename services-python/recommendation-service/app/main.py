@@ -1,146 +1,170 @@
-import hmac
-import httpx
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+import time
+from collections import defaultdict, deque
 from typing import Optional, List, Dict, Any
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from .agent import FitState, recommendation_graph, ProductRecommendation
+from pydantic import BaseModel
+
+from .agent import FitState, recommendation_graph, check_all_providers
 from .config import get_settings
+from .schemas import ActionType, MeasurementInput
+
+logger = logging.getLogger("manikan.recommendation")
 
 app = FastAPI(
     title="Manikan Recommendation Service",
-    description="Conversational Pure-AI size recommendation — multi-LLM adaptive architecture (Multi-tier Cloud Gateway with automatic Ollama fallback) via JS Widget.",
-    version="3.0.0",
+    description="AI recommendation engine with multi-tier LLM fallback",
+    version="3.2.0",
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=get_settings().cors_origins_list,
-    allow_credentials=True,
+    allow_origins=get_settings().allowed_origins_list,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
+_RATE_LIMIT_MAX_REQUESTS = 10
+_RATE_LIMIT_WINDOW_SECONDS = 60
+_request_log: dict[str, deque] = defaultdict(deque)
 
-def verify_internal_key(x_manikan_internal_key: str = Header(default="")) -> None:
+
+def _check_rate_limit(session_id: str) -> None:
+    now = time.time()
+    log = _request_log[session_id]
+    while log and now - log[0] > _RATE_LIMIT_WINDOW_SECONDS:
+        log.popleft()
+    if len(log) >= _RATE_LIMIT_MAX_REQUESTS:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests - please slow down a moment and try again.",
+        )
+    log.append(now)
+
+
+_usage_log: deque = deque()
+_ANOMALY_WINDOW_SECONDS = 3600
+_ANOMALY_THRESHOLD = 200
+
+
+def _track_usage() -> None:
+    now = time.time()
+    _usage_log.append(now)
+    while _usage_log and now - _usage_log[0] > _ANOMALY_WINDOW_SECONDS:
+        _usage_log.popleft()
+    if len(_usage_log) > _ANOMALY_THRESHOLD:
+        logger.warning(
+            f"Usage anomaly: {len(_usage_log)} requests in the last hour "
+            f"(threshold {_ANOMALY_THRESHOLD}). Review for possible abuse."
+        )
+
+
+async def verify_widget_key(x_widget_key: Optional[str] = Header(None)) -> None:
     """
-    recommendation-service has no other authentication of its own -- CORS
-    only constrains browsers, not server-to-server or direct callers. Fails
-    closed if no key is configured, so an unconfigured secret never means
-    "open"; accepts recommendation_service_key_previous too for zero-downtime
-    rotation. Same pattern as body-service and tryon-service.
+    Simple shared-secret check between widget.js (calling this service
+    directly) and this service. Not connected to the Next.js proxy path
+    in any way - that's a separate, unused-for-now integration. If
+    RECOMMEND_API_KEY isn't set in .env yet, this check is skipped -
+    permissive for local dev only.
     """
     settings = get_settings()
-    candidates = [
-        key
-        for key in (settings.recommendation_service_key, settings.recommendation_service_key_previous)
-        if key
-    ]
-    if not candidates or not any(
-        hmac.compare_digest(x_manikan_internal_key, key) for key in candidates
-    ):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    if settings.recommend_api_key and x_widget_key != settings.recommend_api_key:
+        raise HTTPException(status_code=401, detail="Invalid or missing internal service key")
+    _track_usage()
 
-
-# --- API Models ---
 
 class ChatRecommendRequest(BaseModel):
-    session_id: str = Field(..., description="Unique session ID for tracking the chatbot conversation.")
-    messages: List[Dict[str, Any]] = Field(..., description="The chat history between the user and the chatbot.")
-    betas: Optional[List[float]] = Field(None, description="10 SMPL body-shape parameters.")
-    retailer_id: Optional[str] = Field(None, description="UUID of the retailer.")
-    product_id: Optional[str] = Field(None, description="UUID of the product.")
-    size_chart: Optional[str] = Field(None, description="Product size chart passed as raw CSV string.")
+    session_id: str
+    messages: List[Dict[str, Any]]
+    betas: Optional[MeasurementInput] = None
+    product_id: Optional[str] = None
+    retailer_id: Optional[str] = None
+    size_chart: Optional[str] = None
+    intent: Optional[str] = "general"
+    selected_category: Optional[str] = None
+    available_categories: Optional[List[str]] = None
 
 
 class ChatRecommendResponse(BaseModel):
     session_id: str
-    reply: str = Field(..., description="The conversational response from the AI Agent.")
-    recommended_size: Optional[str] = Field(None, description="The detected size calculated via Python Fit Engine.")
-    confidence_score: Optional[float] = Field(None, description="Confidence score from 0.0 to 1.0.")
-    explanation: Optional[str] = Field(None, description="Technical reason for this size recommendation.")
-    alternative_size: Optional[str] = Field(None, description="The second closest matching size as an alternative.")
-    recommended_products: Optional[List[ProductRecommendation]] = Field(None, description="List of recommended products if size is already known.")
+    success: bool
+    reply: str
+    action: ActionType
+    recommended_size: Optional[str] = None
+    link: Optional[str] = None
+    provider: Optional[str] = None
+    confidence_score: Optional[float] = None
+    explanation: Optional[str] = None
+    matched_category: Optional[str] = None
+    error_code: Optional[str] = None
 
 
-# --- Dynamic Provider & Ironclad Health Check Endpoint ---
-
-@app.get("/", tags=["health"])
-async def health_check() -> dict:
-    settings = get_settings()
-    
-    cloud_status = "unconfigured"
-    ollama_status = "Standby (Only triggers if Multi-tier Cloud Chain fails)"
-    
-    if settings.openai_api_key and not settings.openai_api_key.startswith("your-"):
-        cloud_status = f"Active Chain Enabled (Primary: {settings.openai_model})"
-        active_runtime_provider = "Multi-tier Cloud Gateway Chain"
-        system_status = "healthy"
-    else:
-        cloud_status = "Disabled or Missing Key"
-        active_runtime_provider = "Ollama Local Fallback (Forced via config)"
-        system_status = "Running on local backup"
+@app.get("/health", tags=["health"])
+async def health_check():
+    provider_results = await check_all_providers()
+    active_provider = next((p["provider"] for p in provider_results if p["status"] == "ok"), None)
 
     return {
         "service": "manikan-recommendation-service",
-        "status": system_status,
-        "version": "3.0.0",
-        "active_primary_provider": active_runtime_provider,
-        "cloud_gateway_chain": cloud_status,
-        "local_fallback_engine": ollama_status,
-        "langgraph_workflow": "active" if recommendation_graph is not None else "failed",
+        "status": "healthy" if active_provider else "degraded",
+        "active_provider": active_provider,
+        "providers": provider_results,
     }
 
-
-# --- Recommendation Endpoint ---
 
 @app.post(
     "/recommend",
     response_model=ChatRecommendResponse,
     tags=["recommendation"],
-    dependencies=[Depends(verify_internal_key)],
+    dependencies=[Depends(verify_widget_key)],
 )
 async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
-    if body.betas is not None and len(body.betas) != 10:
-        raise HTTPException(
-            status_code=420, 
-            detail="The 'betas' parameter must contain exactly 10 floating point values."
-        )
+    _check_rate_limit(body.session_id)
+    logger.debug(f"Received request: session={body.session_id} intent={body.intent}")
 
     initial_state: FitState = {
-        "session_id": body.session_id,
         "messages": body.messages,
         "product_id": body.product_id,
-        "retailer_id": body.retailer_id,
         "betas": body.betas,
         "size_chart": body.size_chart,
-        "known_size": None,
-        "result": None,
-        "recommended_products": None
+        "intent": body.intent,
+        "selected_category": body.selected_category,
+        "available_categories": body.available_categories,
+        "structured_response": None,
     }
 
     try:
-        final_state: FitState = recommendation_graph.invoke(initial_state)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Agent workflow execution failed: {str(e)}")
+        final_state = await recommendation_graph.ainvoke(initial_state)
+        res = final_state.get("structured_response")
 
-    result = final_state.get("result")
-    recommended_products = final_state.get("recommended_products")
-    
-    if result is None:
-        last_ai_message = final_state["messages"][-1]["content"] if final_state["messages"] else "How can I help you today?"
+        if not res:
+            raise ValueError("Agent returned no structured_response")
+
         return ChatRecommendResponse(
             session_id=body.session_id,
-            reply=last_ai_message,
-            recommended_products=recommended_products
+            success=True,
+            reply=res.message,
+            action=res.action,
+            recommended_size=res.recommended_size,
+            link=res.link,
+            provider=res.provider,
+            confidence_score=res.confidence_score,
+            explanation=res.explanation,
+            matched_category=res.matched_category,
         )
-
-    return ChatRecommendResponse(
-        session_id=body.session_id,
-        reply=result.explanation,
-        recommended_size=result.recommended_size,
-        confidence_score=result.confidence_score,
-        explanation=result.explanation,
-        alternative_size=result.alternative_size,
-        recommended_products=None
-    )
+    except Exception as e:
+        logger.error(f"Workflow execution failed: {e}", exc_info=True)
+        fallback_action = (
+            ActionType.FETCH_PRODUCTS if body.intent == "search" else ActionType.PROVIDE_RECOMMENDATION
+        )
+        return ChatRecommendResponse(
+            session_id=body.session_id,
+            success=False,
+            reply="AI service is currently recalibrating. Please try again in a moment.",
+            action=fallback_action,
+            provider="EMERGENCY-FALLBACK",
+            error_code=type(e).__name__,
+        )

@@ -1,43 +1,37 @@
-import os
+from typing import Optional, List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
-    database_url: str
-    direct_url: str
-    next_public_supabase_url: str
-    next_public_supabase_publishable_key: str
-    supabase_service_key: str
-    
+    gemini_api_key_1: Optional[str] = None
+    gemini_api_key_2: Optional[str] = None
+
+    bedrock_api_key: Optional[str] = None
+    bedrock_base_url: Optional[str] = None
+
+    deepseek_api_key: Optional[str] = None
+
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"
-    
-    openai_api_key: str
-    openai_model: str = "anthropic.claude-sonnet-4-6"
 
-    # Shared secret the Store's server-side proxy must present on every
-    # billable request. CORS only constrains browsers -- this is what stops a
-    # server-to-server caller (or anyone who finds this URL) from reaching
-    # this service directly and bypassing the Store's API-key/subscription/
-    # quota gate. Same pattern as body-service's BODY_SERVICE_KEY and
-    # tryon-service's TRYON_SERVICE_KEY. Unset in local dev is allowed (the
-    # request-time check fails closed instead); every non-local deployment
-    # must set it.
-    recommendation_service_key: str | None = None
-    recommendation_service_key_previous: str | None = None
+    allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
-    # Comma-separated allowed origins. Default "*" for local dev; set an
-    # explicit list (e.g. the Store service origin) in production. Same
-    # convention as body-service's CORS_ORIGINS.
-    cors_origins: str = "*"
+    recommend_api_key: Optional[str] = None
 
     model_config = SettingsConfigDict(
-        env_file=os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"),
-        extra="ignore"
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     @property
-    def cors_origins_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+    def allowed_origins_list(self) -> List[str]:
+        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
 
-def get_settings():
+    @property
+    def gemini_keys(self) -> List[str]:
+        return [k for k in (self.gemini_api_key_1, self.gemini_api_key_2) if k]
+
+
+def get_settings() -> Settings:
     return Settings()
