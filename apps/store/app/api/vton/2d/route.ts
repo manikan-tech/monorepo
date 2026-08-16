@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
                 body: upstreamFormData,
                 headers: {
                     "X-Request-Id": requestId,
-                    "X-Manikan-Internal-Key": TRYON_SERVICE_KEY,
+                    "X-Manikan-Internal-Key": process.env.TRYON_SERVICE_KEY || "",
                 },
                 signal: controller.signal,
                 cache: "no-store",

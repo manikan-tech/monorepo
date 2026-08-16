@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from gradio_client.exceptions import AppError
+import requests
 
 from services.vton_client import is_client_initialized, run_tryon_with_retry
 from utils.category_mapper import map_category
@@ -82,12 +82,12 @@ def verify_internal_key(x_manikan_internal_key: str = Header(default="")) -> Non
 
 @app.get("/health")
 def health() -> dict[str, str | bool]:
-    """Return service and OOTDiffusion client health details."""
+    """Return service and FASHN.ai client health details."""
     return {
         "status": "ok",
         "service": "tryon-service",
         "version": "1.0.0",
-        "model": "levihsu/OOTDiffusion",
+        "model": "fashn.ai/v1",
         "client_initialized": is_client_initialized(),
     }
 
@@ -97,7 +97,7 @@ def capabilities() -> dict[str, object]:
     """Return model and validation capabilities for the frontend."""
     return {
         "service": "tryon-service",
-        "model": "levihsu/OOTDiffusion",
+        "model": "fashn.ai/v1",
         "supported_categories": SUPPORTED_CATEGORIES,
         "min_image_dimensions": {
             "human": {"width": MIN_HUMAN_IMAGE_WIDTH, "height": MIN_HUMAN_IMAGE_HEIGHT},
@@ -121,7 +121,7 @@ async def tryon_2d(
     category: str = Form(...),
     session_id: Optional[str] = Form(default=None),
 ) -> FileResponse:
-    """Generate an OOTDiffusion result and delete all images after delivery."""
+    """Generate a FASHN.ai result and delete all images after delivery."""
     del session_id
     files_to_cleanup: list[str] = []
     request_id = request.headers.get("x-request-id", "unknown")
@@ -134,22 +134,22 @@ async def tryon_2d(
         files_to_cleanup.append(garment_image_path)
         result_image_path = run_tryon_with_retry(
             human_img_path=human_image_path,
-            garment_img_path=garment_image_path,
+            garment_img_path=garment_image_url,  # pass the public URL directly — FASHN.ai fetches it
             cloth_type=cloth_type,
         )
         files_to_cleanup.append(result_image_path)
-    except AppError as error:
+    except requests.exceptions.RequestException as error:
         cleanup_files(files_to_cleanup)
-        logger.error("OOTDiffusion processing failed [%s]: %s", request_id, error)
-        _raise_vton_http_error(502, "OOTDIFFUSION_FAILURE", "OOTDiffusion processing failed.")
+        logger.error("FASHN.ai processing failed [%s]: %s", request_id, error)
+        _raise_vton_http_error(502, "FASHN_API_FAILURE", "FASHN.ai processing failed.")
     except ValueError as error:
         cleanup_files(files_to_cleanup)
         status_code, error_code = _validation_error_from_message(str(error))
         _raise_vton_http_error(status_code, error_code, str(error))
     except RuntimeError as error:
         cleanup_files(files_to_cleanup)
-        logger.error("OOTDiffusion processing failed [%s]: %s", request_id, error)
-        _raise_vton_http_error(502, "OOTDIFFUSION_FAILURE", "OOTDiffusion processing failed.")
+        logger.error("FASHN.ai processing failed [%s]: %s", request_id, error)
+        _raise_vton_http_error(502, "FASHN_API_FAILURE", "FASHN.ai processing failed.")
     except OSError as error:
         cleanup_files(files_to_cleanup)
         logger.error("Temporary image processing failed [%s]: %s", request_id, error)
