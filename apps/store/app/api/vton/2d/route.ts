@@ -117,7 +117,10 @@ export async function POST(request: NextRequest) {
             upstream = await fetch(`${VTON_SERVICE_URL}/api/vton/2d`, {
                 method: "POST",
                 body: upstreamFormData,
-                headers: { "X-Request-Id": requestId },
+                headers: {
+                    "X-Request-Id": requestId,
+                    "X-Manikan-Internal-Key": process.env.TRYON_SERVICE_KEY || "",
+                },
                 signal: controller.signal,
                 cache: "no-store",
             });
