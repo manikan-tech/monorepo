@@ -1,6 +1,13 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  // Class-based, not media-query-based: next-themes toggles a `.dark` class
+  // (scoped to app/docs/layout.tsx, not the root layout) rather than
+  // following the OS preference unconditionally -- required for the docs
+  // section's light/dark toggle to work at all. Store-wide, this has no
+  // effect today: no route outside app/docs uses any `dark:` variant, so a
+  // stray `.dark` class elsewhere in the app changes nothing visually.
+  darkMode: "class",
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -128,9 +135,67 @@ const config: Config = {
         'marquee': 'marquee 25s linear infinite',
         'scan': 'scan 3s ease-in-out infinite',
       },
+      // Docs body-copy styling only (the @tailwindcss/typography `prose`
+      // class is applied solely inside app/docs -- nothing in the
+      // storefront/dashboard uses `prose`, so this is additive, not a
+      // restyle of any existing page). Colours reference the real brand
+      // scales directly, light values here, dark values via `prose-invert`
+      // in the DocsProse component rather than a second typography key.
+      typography: ({ theme }: { theme: (path: string) => string }) => ({
+        DEFAULT: {
+          css: {
+            '--tw-prose-body': theme('colors.manikan.text'),
+            '--tw-prose-headings': theme('colors.forest.950'),
+            '--tw-prose-links': theme('colors.manikan.teal'),
+            '--tw-prose-bold': theme('colors.manikan.text'),
+            '--tw-prose-counters': theme('colors.manikan.muted'),
+            '--tw-prose-bullets': theme('colors.gold.400'),
+            '--tw-prose-hr': theme('colors.manikan.border'),
+            '--tw-prose-quotes': theme('colors.manikan.text-secondary'),
+            '--tw-prose-quote-borders': theme('colors.gold.400'),
+            '--tw-prose-captions': theme('colors.manikan.muted'),
+            '--tw-prose-th-borders': theme('colors.manikan.border'),
+            '--tw-prose-td-borders': theme('colors.manikan.border'),
+            '--tw-prose-invert-body': theme('colors.cream.50'),
+            '--tw-prose-invert-headings': theme('colors.cream.50'),
+            '--tw-prose-invert-links': theme('colors.gold.400'),
+            '--tw-prose-invert-bold': theme('colors.cream.50'),
+            '--tw-prose-invert-counters': theme('colors.cream.300'),
+            '--tw-prose-invert-bullets': theme('colors.gold.400'),
+            '--tw-prose-invert-hr': theme('colors.forest.800'),
+            '--tw-prose-invert-quotes': theme('colors.cream.200'),
+            '--tw-prose-invert-quote-borders': theme('colors.gold.400'),
+            '--tw-prose-invert-captions': theme('colors.cream.300'),
+            '--tw-prose-invert-th-borders': theme('colors.forest.800'),
+            '--tw-prose-invert-td-borders': theme('colors.forest.800'),
+            maxWidth: '68ch',
+            a: { textDecoration: 'none', fontWeight: '500' },
+            'a:hover': { textDecoration: 'underline' },
+            // Typography's own code-block theme (dark bg, backtick quote
+            // marks around inline code) fights rehype-pretty-code's Shiki
+            // output, which already carries its own light/dark background
+            // via CSS variables set inline per-block (see globals.css's
+            // code[data-theme] rules) -- neutralised here so Shiki is the
+            // only thing controlling code-block appearance.
+            pre: { backgroundColor: 'transparent', padding: 0, margin: 0, border: 'none' },
+            code: { backgroundColor: 'transparent' },
+            'code::before': { content: 'none' },
+            'code::after': { content: 'none' },
+            'pre code': { backgroundColor: 'transparent' },
+            // Typography auto-decorates blockquote paragraphs with smart
+            // quote glyphs (open-quote/close-quote), which doubles up with
+            // any literal "..." already written in the source markdown --
+            // neutralised so a quoted excerpt only shows the quote marks
+            // that were actually typed.
+            blockquote: { quotes: 'none' },
+            'blockquote p:first-of-type::before': { content: 'none' },
+            'blockquote p:last-of-type::after': { content: 'none' },
+          },
+        },
+      }),
     },
   },
-  plugins: [],
+  plugins: [require('@tailwindcss/typography')],
 };
 
 export default config;

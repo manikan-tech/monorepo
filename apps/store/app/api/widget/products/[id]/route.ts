@@ -29,7 +29,13 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     // ── Security gate (key + fail-closed Origin + allowlist + rate limit) ──
-    const auth = await authorizeWidgetRequest(request, CORS_HEADERS, "RECOMMENDATION");
+    // Scoped to BODY_MODELING, not RECOMMENDATION -- the only real callers of
+    // this route are the 3D try-on widget's product picker (App.jsx) and the
+    // embeddable widget (EmbedWidget.jsx), both of which follow this call
+    // straight into /api/tryon or /api/avatar, which are BODY_MODELING-scoped.
+    // A retailer subscribed only to Body Modeling (not Recommendation) was
+    // getting a 403 here before ever reaching the try-on flow itself.
+    const auth = await authorizeWidgetRequest(request, CORS_HEADERS, "BODY_MODELING");
     if (!auth.ok) {
         return auth.response;
     }
@@ -85,7 +91,7 @@ export async function GET(
     // ── Deduct Quota ──
     if (auth.subscription) {
         const { consumeQuota } = await import("../../../../lib/widget-auth");
-        await consumeQuota(auth.subscription.id, "RECOMMENDATION");
+        await consumeQuota(auth.subscription.id, "BODY_MODELING");
     }
 
     return NextResponse.json(

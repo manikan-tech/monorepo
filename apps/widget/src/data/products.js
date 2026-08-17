@@ -125,6 +125,36 @@ export const PRODUCTS = [
       XXL: { chest_width_cm: 62, body_length_cm: 76, sleeve_length_cm: 23, shoulder_width_cm: 50 },
     },
   },
+  {
+    id: 'pants-001',
+    name: 'Straight-Leg Selvedge Denim',
+    description: "Men's straight-leg selvedge denim, real garment photography, indigo wash.",
+    price: 1649.75,
+    currency: 'EGP',
+    category: 'Pants',
+    image: `${import.meta.env.VITE_STORE_API_URL || 'http://localhost:3000'}/products/pants-indigo.png`,
+    color_name: 'Indigo',
+    color_hex: '#2e4374',
+    sizes: {
+      S: { waist_width_cm: 38 }, M: { waist_width_cm: 44 }, L: { waist_width_cm: 50 },
+      XL: { waist_width_cm: 56 }, XXL: { waist_width_cm: 62 },
+    },
+  },
+  {
+    id: 'pants-f001',
+    name: 'Curved-Seam Barrel Trouser',
+    description: "Women's curved-seam barrel trouser, real garment photography, olive.",
+    price: 1549.75,
+    currency: 'EGP',
+    category: 'Pants',
+    image: `${import.meta.env.VITE_STORE_API_URL || 'http://localhost:3000'}/products/pants-female-olive.png`,
+    color_name: 'Olive',
+    color_hex: '#6b5729',
+    sizes: {
+      S: { waist_width_cm: 38 }, M: { waist_width_cm: 44 }, L: { waist_width_cm: 50 },
+      XL: { waist_width_cm: 56 }, XXL: { waist_width_cm: 62 },
+    },
+  },
 ]
 
 export function getProducts() {
