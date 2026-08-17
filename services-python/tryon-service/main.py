@@ -73,9 +73,11 @@ def verify_internal_key(x_manikan_internal_key: str = Header(default="")) -> Non
     if no key is configured, so an unconfigured secret never means "open";
     accepts TRYON_SERVICE_KEY_PREVIOUS too for zero-downtime rotation.
     """
-    candidates = [key for key in (TRYON_SERVICE_KEY, TRYON_SERVICE_KEY_PREVIOUS) if key]
+    key = os.getenv("TRYON_SERVICE_KEY") or TRYON_SERVICE_KEY
+    prev_key = os.getenv("TRYON_SERVICE_KEY_PREVIOUS") or TRYON_SERVICE_KEY_PREVIOUS
+    candidates = [k for k in (key, prev_key) if k]
     if not candidates or not any(
-        hmac.compare_digest(x_manikan_internal_key, key) for key in candidates
+        hmac.compare_digest(x_manikan_internal_key, k) for k in candidates
     ):
         raise HTTPException(status_code=401, detail="Unauthorized")
 

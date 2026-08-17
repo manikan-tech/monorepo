@@ -11,8 +11,11 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-load_dotenv()
-FASHN_API_KEY = os.getenv("FASHN_API_KEY", "")
+load_dotenv(override=True)
+
+def get_fashn_api_key() -> str:
+    return os.getenv("FASHN_API_KEY", "")
+
 FASHN_BASE_URL = "https://api.fashn.ai/v1"
 
 _POLL_INTERVAL_SECONDS = 3
@@ -21,7 +24,8 @@ _MAX_POLL_ATTEMPTS = 30
 
 def is_client_initialized() -> bool:
     """Return True if a FASHN_API_KEY is present in the environment."""
-    return bool(FASHN_API_KEY)
+    load_dotenv(override=True)
+    return bool(get_fashn_api_key())
 
 
 def _map_cloth_type_to_fashn_category(cloth_type: str) -> str:
@@ -37,7 +41,7 @@ def _map_cloth_type_to_fashn_category(cloth_type: str) -> str:
 
 
 def _auth_headers() -> dict[str, str]:
-    return {"Authorization": f"Bearer {FASHN_API_KEY}"}
+    return {"Authorization": f"Bearer {get_fashn_api_key()}"}
 
 
 def run_tryon(human_img_path: str, garment_img_path: str, cloth_type: str) -> str:
