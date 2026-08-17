@@ -160,3 +160,85 @@ input[type="range"]:hover::-webkit-slider-thumb {
 .animate-logo-shine {
   animation: logoShine 4s ease-in-out infinite;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Docs-only styles (app/docs). Every selector below is scoped to class
+   names that only ever appear inside compiled doc content or docs UI, so
+   nothing here touches the storefront/dashboard.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Callout boxes (:::note / :::warning / :::tip, see app/docs/_lib/mdx.ts) ── */
+.callout {
+  margin: 1.25em 0;
+  padding: 0.9em 1.1em;
+  border-radius: 0.5rem;
+  border-left-width: 3px;
+  border-left-style: solid;
+  font-size: 0.95em;
+}
+.callout > p:last-child { margin-bottom: 0; }
+.callout-note {
+  background: #EDF4F5; /* forest-50 */
+  border-left-color: #4A8F99; /* forest-400 */
+  color: #12343b; /* forest-900 */
+}
+.callout-warning {
+  background: #FDF7EE; /* gold-50 */
+  border-left-color: #D49B63; /* gold-500 */
+  color: #6E4A2C; /* gold-900 */
+}
+.callout-tip {
+  background: #F4F8F8; /* cream-50 */
+  border-left-color: #38A169; /* manikan-success */
+  color: #12343b; /* forest-900 */
+}
+.dark .callout-note {
+  background: #163c44; /* forest-800 */
+  border-left-color: #72B0BA; /* forest-300 */
+  color: #F4F8F8; /* cream-50 */
+}
+.dark .callout-warning {
+  background: #2a1c05;
+  border-left-color: #e1b382; /* gold-400 */
+  color: #F5D9B0; /* gold-200 */
+}
+.dark .callout-tip {
+  background: #163c44; /* forest-800 */
+  border-left-color: #4FBE84; /* dark-mode success */
+  color: #F4F8F8; /* cream-50 */
+}
+
+/* ── Syntax-highlighted code blocks (rehype-pretty-code, dual light/dark theme) ──
+   rehype-pretty-code sets --shiki-light/--shiki-dark(-bg) as inline CSS
+   custom properties on BOTH <pre> and <code> (both carry
+   data-theme="github-light github-dark"). Background lives on <pre>
+   specifically, not <code>, so it fills the same box as <pre>'s padding
+   below -- putting it on <code> instead left a mismatched transparent
+   margin around the text, which is what the first version of this file
+   actually shipped and looked broken in a real screenshot. Text colour
+   still comes from each token <span>'s own --shiki-light/--shiki-dark.
+   Tailwind Typography's own default pre/code theme is neutralised in
+   tailwind.config.ts's typography.DEFAULT.css so it can't compete with
+   this for the same elements. */
+[data-rehype-pretty-code-figure] pre {
+  padding: 1rem 1.1rem;
+  border-radius: 0.6rem;
+  overflow-x: auto;
+  font-size: 0.86em;
+  line-height: 1.6;
+  background-color: var(--shiki-light-bg);
+}
+[data-rehype-pretty-code-figure] code {
+  display: grid;
+  counter-reset: line;
+  background-color: transparent;
+}
+code[data-theme*=" "] span {
+  color: var(--shiki-light);
+}
+.dark [data-rehype-pretty-code-figure] pre {
+  background-color: var(--shiki-dark-bg);
+}
+.dark code[data-theme*=" "] span {
+  color: var(--shiki-dark);
+}
