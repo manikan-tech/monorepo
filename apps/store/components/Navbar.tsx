@@ -42,7 +42,7 @@ const DashboardIcon = () => (
 const shopperNavLinks = [
   { name: "Collection", href: "/store" },
   { name: "Virtual Try-On", href: "/visualize" },
-  { name: "Size Assistant", href: "/wardrobe" },
+  { name: "Size Assistant", href: "#" },
   { name: "For Business", href: "/business" },
 ];
 
@@ -61,7 +61,6 @@ export default function Navbar() {
   const [pendingTryOnHref, setPendingTryOnHref] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
 
-  // Check if the logged-in user is a Retailer
   const checkRole = async (email: string | undefined) => {
     if (!email) {
       setIsRetailer(false);
@@ -95,7 +94,6 @@ export default function Navbar() {
     });
 
     return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -131,13 +129,9 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-manikan-border/50 shadow-[0_4px_30px_rgba(18,52,59,0.03)] backdrop-blur-xl transition-all duration-300">
-      {/* Manikan widget script (updated): only static, retailer-wide
-          config here. Product-specific data is read dynamically by
-          widget.js from window.currentProductContext instead, since
-          this tag only mounts once and its attributes never update
-          during client-side navigation. */}
+      {/* تم تغيير المسار هنا إلى recommend-widget.js الصحيح */}
       <Script
-        src="/widget.js"
+        src="/recommend-widget.js"
         strategy="afterInteractive"
         data-retailer-id="haneen"
         data-recommend-api={process.env.NEXT_PUBLIC_RECOMMEND_API_URL}
@@ -167,13 +161,13 @@ export default function Navbar() {
             shopperNavLinks.map((link) => {
               const isActive = pathname === link.href;
               const isTryOn = link.href === "/visualize";
-              const isWardrobe = link.href === "/wardrobe";
+              const isSizeAssistant = link.name === "Size Assistant";
               return (
-                <Link
+                <a
                   key={link.name}
                   href={link.href}
                   onClick={(e) => {
-                    if (isWardrobe) {
+                    if (isSizeAssistant) {
                       e.preventDefault();
                       if (typeof window !== "undefined" && (window as any).ManikanWidget) {
                         (window as any).ManikanWidget.open();
@@ -182,7 +176,7 @@ export default function Navbar() {
                       handleNavTryOnClick(e, link.href);
                     }
                   }}
-                  className={`relative font-sans text-[15px] font-medium tracking-wide transition-all duration-300 group py-2 ${
+                  className={`relative font-sans text-[15px] font-medium tracking-wide transition-all duration-300 group py-2 cursor-pointer ${
                     isActive ? "text-forest-900" : "text-forest-700/80 hover:text-gold-600"
                   }`}
                 >
@@ -192,7 +186,7 @@ export default function Navbar() {
                       isActive ? "w-full" : "w-0 group-hover:w-full"
                     }`}
                   />
-                </Link>
+                </a>
               );
             })}
         </div>
@@ -215,12 +209,9 @@ export default function Navbar() {
                     🧵
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-[22px] font-semibold leading-tight text-white">Backstage pass needed</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-white">
+                    <h3 className="text-[22px] font-semibold leading-tight text-[#5C3E21]">Backstage pass needed</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-[#5C3E21]/80">
                       Clothes need a backstage pass — please sign in first 😄
-                    </p>
-                    <p className="mt-2 text-xs leading-relaxed text-white/80">
-                      We'll keep your try-on waiting and take you there right after login.
                     </p>
                   </div>
                 </div>
