@@ -86,6 +86,10 @@ class ChatRecommendRequest(BaseModel):
     intent: Optional[str] = "general"
     selected_category: Optional[str] = None
     available_categories: Optional[List[str]] = None
+    # Compact catalog (id, name, category, description) used for RAG
+    # retrieval on open-ended style questions - not stored, not persisted,
+    # used in-memory for this one request only.
+    catalog_products: Optional[List[Dict[str, Any]]] = None
 
 
 class ChatRecommendResponse(BaseModel):
@@ -99,6 +103,7 @@ class ChatRecommendResponse(BaseModel):
     confidence_score: Optional[float] = None
     explanation: Optional[str] = None
     matched_category: Optional[str] = None
+    retrieved_product_ids: Optional[List[str]] = None
     error_code: Optional[str] = None
 
 
@@ -133,6 +138,7 @@ async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
         "intent": body.intent,
         "selected_category": body.selected_category,
         "available_categories": body.available_categories,
+        "catalog_products": body.catalog_products,
         "structured_response": None,
     }
 
@@ -154,6 +160,7 @@ async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
             confidence_score=res.confidence_score,
             explanation=res.explanation,
             matched_category=res.matched_category,
+            retrieved_product_ids=res.retrieved_product_ids,
         )
     except Exception as e:
         logger.error(f"Workflow execution failed: {e}", exc_info=True)
