@@ -161,16 +161,23 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
             setResultSource("live");
         } catch (err: any) {
             clearInterval(stepInterval);
-            console.error("VTON 2D Error:", err);
 
             if (err?.status && err.status < 500) {
+                // Expected, user-fixable input problem (bad photo dimensions,
+                // unsupported category, etc.) -- already surfaced inline via
+                // apiError below. console.warn (not .error) so Next.js's dev
+                // overlay doesn't promote a normal validation response into a
+                // full-screen interstitial that hides that inline message.
+                console.warn("VTON 2D validation error:", err);
                 setApiError(err?.message || "Please check your inputs and try again.");
             } else if (selectedGarment) {
+                console.error("VTON 2D Error:", err);
                 const cachedPreviewUrl = await getCachedPreviewResultUrl(selectedGarment);
                 setResultUrl(cachedPreviewUrl);
                 setResultSource("cached");
                 setApiError(null);
             } else {
+                console.error("VTON 2D Error:", err);
                 setApiError(err?.message || "Something went wrong during try-on synthesis. Please try again.");
             }
         } finally {
