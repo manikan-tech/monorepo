@@ -71,21 +71,15 @@ export default function ProductDetailPage() {
     if (slug) fetchProduct();
   }, [slug]);
 
-  // ── Manikan widget integration (added) ──────────────────────────
+  // ── Manikan widget integration ──────────────────────────────
+  // Sets the current product context so the widget knows which product
+  // page the user is currently viewing.
   useEffect(() => {
     if (!product) return;
 
     (window as any).currentProductContext = {
       id: product.id,
       name: product.name,
-      size_chart_json: JSON.stringify(
-        (product.variants ?? []).map((v: any) => ({
-          size: v.sizeLabel,
-          chest_cm: v.chestCm,
-          waist_cm: v.waistCm,
-          hip_cm: v.hipCm,
-        }))
-      ),
     };
 
     return () => {

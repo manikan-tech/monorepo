@@ -83,6 +83,69 @@ def _find_stated_size_and_confidence(messages: list[dict]) -> tuple[Optional[str
     return label, confidence
 
 
+_QUESTION_MARKERS = (
+    "?", "what", "how", "max", "min", "maximum", "minimum",
+    "which size", "does this", "is this", "range", "largest", "smallest",
+    "waist", "chest", "hip", "length",
+)
+
+
+def _is_descriptive_question(text: str) -> bool:
+    lowered = (text or "").lower()
+    if lowered.startswith("my measurements:"):
+        return False
+    return any(marker in lowered for marker in _QUESTION_MARKERS)
+
+
+def _try_answer_from_size_chart_locally(question: str, size_chart_raw: str) -> Optional[str]:
+    """
+    Answers informational questions about a product's real size chart
+    directly (e.g. "what's the max chest size?") without invoking the LLM
+    or the personal fit-match calculation - this is a different intent
+    from "does this fit ME", and must not be hijacked by the body-fit
+    guardrail just because measurements happen to be present in this
+    session.
+    """
+    try:
+        size_chart = json.loads(size_chart_raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not size_chart:
+        return None
+
+    question = question.lower()
+    field = None
+    if "chest" in question:
+        field = "chest_cm"
+    elif "waist" in question:
+        field = "waist_cm"
+    elif "hip" in question:
+        field = "hip_cm"
+
+    if not field:
+        available_sizes = [e.get("size") for e in size_chart if e.get("size")]
+        if not available_sizes:
+            return None
+        if any(w in question for w in ("what size", "which size", "sizes do you", "available size")):
+            return f"This item comes in these sizes: {', '.join(available_sizes)}."
+        if any(w in question for w in ("max", "largest", "biggest", "up to")):
+            return f"The largest size we carry for this item is {available_sizes[-1]}."
+        if any(w in question for w in ("min", "smallest")):
+            return f"The smallest size we carry for this item is {available_sizes[0]}."
+        return None
+
+    values = [e[field] for e in size_chart if isinstance(e.get(field), (int, float))]
+    if not values:
+        return None
+
+    label = field.replace("_cm", "")
+    if any(w in question for w in ("max", "largest", "biggest", "up to")):
+        return f"The maximum {label} in our size chart for this item is {max(values)}cm."
+    if any(w in question for w in ("min", "smallest")):
+        return f"The minimum {label} in our size chart for this item is {min(values)}cm."
+    return f"Our {label} sizing for this item ranges from {min(values)}cm to {max(values)}cm."
+
+
 def compute_recommended_size(betas: MeasurementInput, size_chart_raw: str) -> SizeMatchResult:
     try:
         size_chart = json.loads(size_chart_raw)
@@ -94,20 +157,31 @@ def compute_recommended_size(betas: MeasurementInput, size_chart_raw: str) -> Si
 
     available_sizes = [entry.get("size") for entry in size_chart if entry.get("size")]
 
+    # waist_cm is the one field every category's chart is expected to
+    # have (pants/skirts included) - required. chest_cm and hip_cm are
+    # both optional now: pants/skirts commonly have no chest_cm at all
+    # (garment-fit data, not a body measurement that applies to them),
+    # so a row missing it is still matched on whatever fields it does
+    # have, instead of being skipped entirely. This mirrors how hip_cm
+    # was already handled - chest_cm just joins it as optional.
     best_size = None
     best_distance = float("inf")
     for entry in size_chart:
         try:
-            squared_diff = (
-                (entry["chest_cm"] - betas.chest_cm) ** 2
-                + (entry["waist_cm"] - betas.waist_cm) ** 2
-            )
-            hip_value = entry.get("hip_cm")
-            if isinstance(hip_value, (int, float)):
-                squared_diff += (hip_value - betas.hips_cm) ** 2
-            distance = squared_diff ** 0.5
+            waist_value = entry["waist_cm"]
+            squared_diff = (waist_value - betas.waist_cm) ** 2
         except (KeyError, TypeError):
             continue
+
+        chest_value = entry.get("chest_cm")
+        if isinstance(chest_value, (int, float)):
+            squared_diff += (chest_value - betas.chest_cm) ** 2
+
+        hip_value = entry.get("hip_cm")
+        if isinstance(hip_value, (int, float)):
+            squared_diff += (hip_value - betas.hips_cm) ** 2
+
+        distance = squared_diff ** 0.5
         if distance < best_distance:
             best_distance = distance
             best_size = entry.get("size")
@@ -263,8 +337,11 @@ def build_general_instruction(available_categories: Optional[List[str]]) -> str:
         "FLOW:\n"
         "1. If the user describes a STYLE, OCCASION, or VIBE without naming one exact "
         "category (e.g. 'something formal', 'an outfit for a wedding'): ask which "
-        "category they want from what's relevant and available (e.g. 'Are you thinking "
-        "a blouse or a skirt?'). action='provide_recommendation', no products shown yet.\n"
+        "category they want, using 2-3 of the ACTUAL category names from the list "
+        "above (never a hardcoded example category - always pull from what this "
+        "store genuinely carries, so the question fits the real catalog rather than "
+        "assuming who's asking or what's available). "
+        "action='provide_recommendation', no products shown yet.\n"
         "2. If the user names or confirms a SPECIFIC category that exactly matches one "
         "from the list above (e.g. 'a blouse'): action='fetch_products', matched_category "
         "set to that EXACT string from the list, and a short 1-sentence intro (e.g. "
@@ -305,6 +382,29 @@ async def call_conversational_agent(state: FitState) -> FitState:
     product_id = state.get("product_id")
     betas = state.get("betas")
     size_chart = state.get("size_chart")
+
+    # On a specific product page: check FIRST whether this message is an
+    # informational question about the item's own size chart (e.g. "what's
+    # the max size?") rather than a personal fit request - this must win
+    # over the betas/label branches below, since the widget currently keeps
+    # resending betas on every message once they've been filled in once,
+    # which was wrongly forcing every follow-up question into the strict
+    # body-fit rejection message regardless of what was actually asked.
+    if product_id and size_chart:
+        last_user_text = ""
+        for m in reversed(state["messages"]):
+            if m.get("role") == "user":
+                last_user_text = m.get("content") or ""
+                break
+        if _is_descriptive_question(last_user_text):
+            local_answer = _try_answer_from_size_chart_locally(last_user_text, size_chart)
+            if local_answer:
+                state["structured_response"] = RecommendationOutput(
+                    action=ActionType.PROVIDE_RECOMMENDATION,
+                    message=local_answer,
+                    provider="STATIC-LOCAL",
+                )
+                return state
 
     # On a specific product page, waiting on measurements: check first
     # whether the user stated a size label (e.g. "I'm XL") instead of
