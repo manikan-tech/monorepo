@@ -36,8 +36,12 @@ export async function POST(request: NextRequest) {
     let body: {
         session_id?: string;
         messages?: unknown[];
-        betas?: number[];
+        betas?: unknown;
         product_id?: string;
+        intent?: string;
+        selected_category?: string;
+        available_categories?: string[];
+        catalog_products?: unknown[];
     };
     try {
         body = await request.json();
@@ -49,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     // size_chart is intentionally not read from the body at all — see below.
-    const { session_id, messages, betas, product_id } = body;
+    const { session_id, messages, betas, product_id, intent, selected_category, available_categories, catalog_products } = body;
     if (!session_id || !Array.isArray(messages)) {
         return NextResponse.json(
             { error: "session_id and messages are required" },
@@ -102,6 +106,10 @@ export async function POST(request: NextRequest) {
                 betas,
                 product_id,
                 retailer_id: retailer.id,
+                intent,
+                selected_category,
+                available_categories,
+                catalog_products,
                 ...(sizeChart ? { size_chart: sizeChart } : {}),
             }),
         });

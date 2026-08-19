@@ -100,12 +100,6 @@
     let availableCategories = [];
     const categoryProductsCache = {};
 
-    // The catalog can span many pages (seen: 119 products / 10 pages at
-    // the API's default page size of 12) - fetching only page 1 meant
-    // availableCategories only ever reflected whichever category happened
-    // to fill the first page (e.g. all "pants"), so the AI never even
-    // knew blouses/shirts existed. Paginate through everything instead,
-    // capped at a sane number of requests as a safety net.
     async function loadCategories() {
         const MAX_PAGES = 15;
         try {
@@ -186,9 +180,6 @@
         products.slice(0, 4).forEach((product) => {
             const card = document.createElement('a');
             card.className = 'ai-product-card';
-            // ?open_sizing=true tells the product page's widget instance
-            // to auto-open the chat with measurement fields ready, instead
-            // of the user having to find and click "Find My Size" again.
             card.href = `/store/${product.slug || product.id}?open_sizing=true`;
             card.target = '_blank';
             const price = product.priceEgp ?? product.price ?? '';
@@ -238,10 +229,20 @@
         }
     }
 
+    async function waitForProductContext(maxWaitMs = 2000) {
+        const isProductPage = window.location.pathname.includes('/store/') && window.location.pathname.split('/').length > 2;
+        if (!isProductPage) return;
+        const start = Date.now();
+        while (!window.currentProductContext && Date.now() - start < maxWaitMs) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+    }
+
     async function sendMessage() {
         const input = document.getElementById('widgetInput');
         const sendBtn = document.getElementById('widgetSend');
         let text = input.value.trim();
+        await waitForProductContext();
         readMeasurementsIfProvided();
         if (!text && userMeasurements) {
             text = `My measurements: height ${userMeasurements.height_cm}cm, weight ${userMeasurements.weight_kg}kg, chest ${userMeasurements.chest_cm}cm, waist ${userMeasurements.waist_cm}cm, hip ${userMeasurements.hips_cm}cm`;
@@ -263,14 +264,11 @@
         showThinking();
 
         try {
-            // Direct connection to the Python recommendation-service - NOT
-            // connected to the Next.js proxy in any way. X-Widget-Key is
-            // a simple shared secret this service checks itself.
-            const response = await fetch(`${RECOMMEND_API_BASE}/recommend`, {
+            const response = await fetch(`${STORE_API_BASE}/api/widget/recommend`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(WIDGET_API_KEY ? { 'X-Widget-Key': WIDGET_API_KEY } : {}),
+                    ...(WIDGET_API_KEY ? { 'X-Manikan-Key': WIDGET_API_KEY } : {}),
                 },
                 signal: controller.signal,
                 body: JSON.stringify({
@@ -282,9 +280,6 @@
                     betas: userMeasurements,
                     size_chart: sizeChart,
                     available_categories: availableCategories,
-                    // For RAG: the full catalog we already gathered via
-                    // loadCategories()'s pagination, trimmed to just the
-                    // fields the backend's retrieval step needs.
                     catalog_products: Object.values(categoryProductsCache)
                         .flat()
                         .map((p) => ({
@@ -314,11 +309,6 @@
 
             const botMessage = data.message || data.reply || "I'm here to help you find your exact size!";
 
-            // A failed backend response (all providers down) still carries
-            // an action field for the widget to fall back to, but it must
-            // never trigger an actual product fetch - that's what was
-            // showing random/wrong products on a plain "hi" when every
-            // LLM provider failed at once.
             if (data.success === false) {
                 appendMessage(botMessage, 'bot');
                 conversationHistory.push({ role: "assistant", content: botMessage });
@@ -331,11 +321,6 @@
                 try {
                     const queryParams = new URLSearchParams();
                     if (data.recommended_size) queryParams.set('size', data.recommended_size);
-                    // Real category from the AI's structured response -
-                    // matched against the actual available_categories list,
-                    // instead of guessing from free-text keywords (broke
-                    // for Arabic input and any category name that wasn't
-                    // hardcoded, e.g. "بلوز" never matched 'blouse').
                     if (data.matched_category) queryParams.set('category', data.matched_category);
 
                     const res = await fetch(`${STORE_API_BASE}/api/products?${queryParams.toString()}`);
@@ -352,10 +337,6 @@
                     appendMessage("I found a match but couldn't load the product details right now.", 'bot');
                 }
             } else {
-                // RAG-grounded style answers: the LLM's text stays a short
-                // intro (see agent.py's brevity rule) - the actual products
-                // are rendered as cards from our own cached catalog data,
-                // looked up by the ids the backend's retrieval step found.
                 if (data.retrieved_product_ids && data.retrieved_product_ids.length > 0) {
                     appendMessage(botMessage, 'bot');
                     conversationHistory.push({ role: "assistant", content: botMessage });
@@ -388,6 +369,10 @@
                         }),
                     }).catch((err) => console.warn('Could not log measurement session:', err));
                 }
+
+                if (data.provider === "STATIC-CALC" || data.provider === "STATIC-LABEL-TRUSTED" || data.provider === "STATIC-LABEL-UNTRUSTED") {
+                    userMeasurements = null;
+                }
             }
         } catch (error) {
             clearTimeout(timeoutId);
@@ -411,11 +396,6 @@
         document.getElementById('measurementsToggle').textContent = '📏 Hide measurements';
     }
 
-    // General chat can't compute an exact size anyway (see agent.py's
-    // rule 7 - no real chart to compare against outside a specific
-    // product page), so showing measurement fields there implies a
-    // precision the chat can't deliver. Hidden entirely in that context;
-    // shown automatically once there's a real product to compute against.
     function hideMeasurementsForGeneralChat() {
         const measurementsRow = document.getElementById('measurementsRow');
         const toggle = document.getElementById('measurementsToggle');
@@ -449,20 +429,44 @@
         },
     };
 
-    // Deep link from a product card in the general chat: ?open_sizing=true
-    // auto-opens this page's chat straight into sizing mode, instead of
-    // the user having to find the "Find My Size" button themselves after
-    // navigating here. A short delay gives the product page's own script
-    // time to set window.currentProductContext first.
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('open_sizing') === 'true') {
         setTimeout(() => {
             window.ManikanWidget.openForSizing();
-            // Clean the URL so a refresh/back-navigation doesn't re-trigger it.
             urlParams.delete('open_sizing');
             const newSearch = urlParams.toString();
             const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
             window.history.replaceState({}, '', newUrl);
         }, 300);
     }
+
+    let lastContextKey = null;
+    setInterval(() => {
+        const { productId, productName } = getCurrentProductContext();
+        const currentKey = productId || 'general';
+        if (lastContextKey === null) {
+            lastContextKey = currentKey;
+            return;
+        }
+        if (currentKey !== lastContextKey) {
+            lastContextKey = currentKey;
+            conversationHistory = [];
+            isInitialized = false;
+            userMeasurements = null;
+            document.getElementById('widgetMessages').innerHTML = '';
+            
+            const widgetBox = document.getElementById('widgetBox');
+            if (widgetBox && widgetBox.style.display === 'flex') {
+                if (productId) {
+                    isInitialized = true;
+                    const label = productName ? productName : "this item";
+                    appendMessage(`Let's find your size for "${label}". Please enter your height, weight, chest, and waist measurements below.`, 'bot');
+                    ensureMeasurementsVisible();
+                } else {
+                    initChat();
+                    hideMeasurementsForGeneralChat();
+                }
+            }
+        }
+    }, 500);
 })();

@@ -155,13 +155,40 @@ async function main() {
     // 1. Create or link default Retailer
     const retailer = await prisma.retailer.upsert({
         where: { email: "retailer@manikan.com" },
-        update: {},
+        update: {
+            widgetSettings: { allowedOrigins: ["http://localhost:3000"] }
+        },
         create: {
             authId: "default-retailer-auth-id",
             email: "retailer@manikan.com",
             storeName: "Manikan Official Store",
+            widgetSettings: { allowedOrigins: ["http://localhost:3000"] }
         },
     });
+    console.log(`Linked Retailer: ${retailer.storeName}`);
+
+    // Ensure the RECOMMENDATION service key and subscription are seeded
+    await prisma.serviceApiKey.upsert({
+        where: { retailerId_service: { retailerId: retailer.id, service: "RECOMMENDATION" } },
+        update: { apiKey: "pk_live_632dba109f17b0a768f77addefa42f81a86c9f3653a3b40c" },
+        create: { retailerId: retailer.id, service: "RECOMMENDATION", apiKey: "pk_live_632dba109f17b0a768f77addefa42f81a86c9f3653a3b40c" },
+    });
+
+    const starterPlan = await prisma.plan.findFirst({ where: { service: "RECOMMENDATION", name: "Starter" } });
+    if (starterPlan) {
+        await prisma.subscription.upsert({
+            where: { stripeSubscriptionId: "sub_demo_recommendation" },
+            update: { status: "ACTIVE" },
+            create: {
+                retailerId: retailer.id,
+                service: "RECOMMENDATION",
+                stripeCustomerId: "cus_demo_recommendation",
+                stripeSubscriptionId: "sub_demo_recommendation",
+                status: "ACTIVE",
+                planId: starterPlan.id
+            }
+        });
+    }
     console.log(`Linked Retailer: ${retailer.storeName}`);
 
     // Clean Catalog tables to avoid duplicates and variant SKU conflicts
