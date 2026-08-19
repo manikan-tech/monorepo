@@ -34,6 +34,7 @@ import { garmentFieldsFor, isProductTryOnEnabled } from "../../app/lib/tryon-sta
    ───────────────────────────────────────────────────────────────────────── */
 
 const WIDGET_SRC = "/manikan-widget.js";
+const INTERACTIVE_GUIDE_SEEN_KEY = "manikan_3d_interactive_tour_seen_v1";
 
 // Public by design — it lives in retailer page HTML and is paired with an
 // Origin allowlist server-side. Configurable per deployment; falls back to the
@@ -177,6 +178,11 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
       // bare shadow host at the end of <body> — no wrapper chrome from us.
       const host = document.createElement("div");
       host.setAttribute("data-manikan-3d", "");
+      // The recommendation chat bubble uses z-index 10000. Keep the active
+      // full-screen 3D experience (including its interactive coachmarks)
+      // above it so mobile tutorial controls cannot be covered.
+      host.style.position = "relative";
+      host.style.zIndex = "20000";
       document.body.appendChild(host);
       hostRef.current = host;
       document.body.style.overflow = "hidden";
@@ -197,6 +203,15 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
     }
   }, [product, status, teardown]);
 
+  const openGuided = useCallback(() => {
+    try {
+      window.localStorage.removeItem(INTERACTIVE_GUIDE_SEEN_KEY);
+    } catch {
+      // The widget still opens and offers its header help button.
+    }
+    void open();
+  }, [open]);
+
   const enabled = isProductTryOnEnabled({
     category: product.category,
     garmentColorHex: product.garmentColorHex ?? null,
@@ -206,6 +221,7 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
   return (
     <>
       <button
+        id="product-3d-tryon"
         type="button"
         onClick={open}
         disabled={status === "loading"}
@@ -250,6 +266,17 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
           measurements on every size, plus a garment colour.
         </p>
       )}
+      <button
+        type="button"
+        onClick={openGuided}
+        className="mx-auto mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-forest-700/55 transition hover:text-gold-700"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M9.7 9a2.5 2.5 0 1 1 4.1 1.9c-.75.55-1.3 1.05-1.3 1.85M12.5 16.5h.01" />
+        </svg>
+        Open the guided 3D tour
+      </button>
     </>
   );
 }

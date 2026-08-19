@@ -200,7 +200,9 @@ export default function TryOnViewer({ modelUrl, isLoading }) {
       )}
 
       <Canvas
-        shadows
+        // Three.js r184 deprecated PCFSoftShadowMap. R3F's `percentage`
+        // preset selects the supported PCFShadowMap implementation.
+        shadows="percentage"
         camera={{ position: [0, 0.5, 2.5], fov: 45, near: 0.1, far: 100 }}
         gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}
         style={{ background: 'transparent' }}

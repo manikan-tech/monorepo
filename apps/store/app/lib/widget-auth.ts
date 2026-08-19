@@ -38,11 +38,21 @@ function forbidden(cors: Record<string, string>): NextResponse {
 }
 
 // Normalise to `scheme://host[:port]` — lowercased host, no trailing slash.
+// Browsers may open a local Store through either `localhost` or `127.0.0.1`.
+// Treat those loopback aliases as the same host so an allowlist entry for one
+// does not reject the identical local server reached through the other.
 function normalizeOrigin(origin: string): string {
     try {
         const u = new URL(origin);
         const port = u.port ? `:${u.port}` : "";
-        return `${u.protocol}//${u.hostname.toLowerCase()}${port}`;
+        const rawHostname = u.hostname.toLowerCase();
+        const hostname =
+            rawHostname === "127.0.0.1" ||
+            rawHostname === "::1" ||
+            rawHostname === "[::1]"
+                ? "localhost"
+                : rawHostname;
+        return `${u.protocol}//${hostname}${port}`;
     } catch {
         return origin.trim().toLowerCase().replace(/\/+$/, "");
     }
@@ -242,4 +252,3 @@ export function consumeQuota(subscriptionId: string, scope: Service) {
         }
     });
 }
-

@@ -8,8 +8,9 @@ import { prisma } from "../../app/lib/prisma";
 // different colourways, so pants-006/007 are added as new products rather
 // than leaving two photos unused.
 //
-// Safe to re-run: every write is an update or an upsert-style existence
-// check (see NEW_PRODUCTS loop) keyed on a fixed id, not an insert-only op.
+// Safe to re-run: all writes are updates/upserts keyed on fixed ids, and the
+// whole catalog change is committed in one transaction. The live retailer is
+// resolved from pants-001 instead of being hard-coded to one environment.
 
 const UPDATES = [
   {
@@ -97,64 +98,113 @@ const NEW_PRODUCTS = [
   },
 ];
 
-const DEMO_RETAILER_ID = "cms73igx50003vlf0lx66ozoi";
-
 async function main() {
-  for (const u of UPDATES) {
-    const updated = await prisma.product.update({
-      where: { id: u.id },
-      data: {
-        name: u.name,
-        fabric: u.fabric,
-        garmentColorHex: u.garmentColorHex,
-        imageUrl: u.imageUrl,
-        images: [u.imageUrl],
-        description: u.description,
-      },
-    });
-    console.log(`Updated ${u.id} -> "${updated.name}"`);
+  const catalogAnchor = await prisma.product.findUnique({
+    where: { id: "pants-001" },
+    select: { retailerId: true, categoryId: true },
+  });
+
+  if (!catalogAnchor) {
+    throw new Error("pants-001 was not found; refusing to guess the live retailer");
   }
 
-  for (const p of NEW_PRODUCTS) {
-    const existing = await prisma.product.findUnique({ where: { id: p.id } });
-    if (existing) {
-      console.log(`${p.id} already exists, skipping create.`);
-      continue;
-    }
-    await prisma.product.create({
-      data: {
-        id: p.id,
-        retailerId: DEMO_RETAILER_ID,
-        productCode: p.productCode,
-        name: p.name,
-        slug: p.slug,
-        description: p.description,
-        category: "pants",
-        gender: "unisex",
-        brand: "Manikan",
-        fabric: p.fabric,
-        priceEgp: p.priceEgp,
-        discountPct: 0,
-        imageUrl: p.imageUrl,
-        images: [p.imageUrl],
-        stock: 250,
-        isActive: true,
-        garmentColorHex: p.garmentColorHex,
-        variants: {
-          create: Object.entries(SIZE_GRID).map(([sizeLabel, m]) => ({
-            sku: `${p.productCode}-${sizeLabel}`,
-            sizeLabel,
-            stock: 50,
-            garmentWaistCm: m.waist,
-            garmentHipCm: m.hip,
-            garmentInseamCm: m.inseam,
-            garmentRiseCm: m.rise,
-          })),
-        },
-      },
-    });
-    console.log(`Created ${p.id} -> "${p.name}" with ${Object.keys(SIZE_GRID).length} variants`);
-  }
+  await prisma.$transaction(
+    async (tx) => {
+      for (const u of UPDATES) {
+        const updated = await tx.product.update({
+          where: { id: u.id },
+          data: {
+            categoryId: catalogAnchor.categoryId,
+            name: u.name,
+            description: u.description,
+            category: "pants",
+            gender: "men",
+            brand: "Manikan",
+            fabric: u.fabric,
+            garmentColorHex: u.garmentColorHex,
+            imageUrl: u.imageUrl,
+            images: [u.imageUrl],
+            stock: 250,
+            isActive: true,
+          },
+        });
+        console.log(`Updated ${u.id} -> "${updated.name}"`);
+      }
+
+      for (const p of NEW_PRODUCTS) {
+        await tx.product.upsert({
+          where: { id: p.id },
+          update: {
+            retailerId: catalogAnchor.retailerId,
+            categoryId: catalogAnchor.categoryId,
+            productCode: p.productCode,
+            name: p.name,
+            slug: p.slug,
+            description: p.description,
+            category: "pants",
+            gender: "men",
+            brand: "Manikan",
+            fabric: p.fabric,
+            priceEgp: p.priceEgp,
+            discountPct: 0,
+            imageUrl: p.imageUrl,
+            images: [p.imageUrl],
+            stock: 250,
+            isActive: true,
+            garmentColorHex: p.garmentColorHex,
+          },
+          create: {
+            id: p.id,
+            retailerId: catalogAnchor.retailerId,
+            categoryId: catalogAnchor.categoryId,
+            productCode: p.productCode,
+            name: p.name,
+            slug: p.slug,
+            description: p.description,
+            category: "pants",
+            gender: "men",
+            brand: "Manikan",
+            fabric: p.fabric,
+            priceEgp: p.priceEgp,
+            discountPct: 0,
+            imageUrl: p.imageUrl,
+            images: [p.imageUrl],
+            stock: 250,
+            isActive: true,
+            garmentColorHex: p.garmentColorHex,
+          },
+        });
+
+        for (const [sizeLabel, m] of Object.entries(SIZE_GRID)) {
+          const sku = `${p.productCode}-${sizeLabel}`;
+          await tx.productVariant.upsert({
+            where: { sku },
+            update: {
+              productId: p.id,
+              sizeLabel,
+              stock: 50,
+              garmentWaistCm: m.waist,
+              garmentHipCm: m.hip,
+              garmentInseamCm: m.inseam,
+              garmentRiseCm: m.rise,
+            },
+            create: {
+              productId: p.id,
+              sku,
+              sizeLabel,
+              stock: 50,
+              garmentWaistCm: m.waist,
+              garmentHipCm: m.hip,
+              garmentInseamCm: m.inseam,
+              garmentRiseCm: m.rise,
+            },
+          });
+        }
+        console.log(`Upserted ${p.id} -> "${p.name}" with ${Object.keys(SIZE_GRID).length} variants`);
+      }
+    },
+    { maxWait: 20_000, timeout: 20_000 },
+  );
 }
 
 main().finally(() => prisma.$disconnect());

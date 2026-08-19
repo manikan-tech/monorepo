@@ -9,6 +9,7 @@ import { useCart } from "../../../../components/CartContext";
 import { useWishlist } from "../../../../components/WishlistContext";
 import Modal from "../../../../components/Modal";
 import Manikan3DTryOn from "../../../../components/product/Manikan3DTryOn";
+import FitToolsOnboarding from "../../../../components/product/FitToolsOnboarding";
 
 type Review = {
   id: string;
@@ -330,6 +331,7 @@ export default function ProductDetailPage() {
                 </button>
 
                 <Link
+                  id="product-2d-tryon"
                   href={`/visualize?productId=${product.id}`}
                   onClick={(e) => {
                     e.preventDefault();
@@ -359,6 +361,7 @@ export default function ProductDetailPage() {
                 <Manikan3DTryOn product={product} />
               </div>
             </div>
+            <FitToolsOnboarding productName={product.name} />
           </div>
 
           {/* Shipping Info */}

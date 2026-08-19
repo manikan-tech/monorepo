@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import MeasurementSlider from './MeasurementSlider'
 import TryOnViewer from './TryOnViewer'
+import InteractiveGuide from './InteractiveGuide'
 import { generateDressedAvatar } from '../lib/api'
 import { getLayerableGarment, wearGarment, removeGarment } from '../lib/outfit'
 
@@ -70,6 +71,7 @@ export default function ManikanWidget({ product, onClose }) {
   const [tryOnUrl, setTryOnUrl] = useState(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState(null)
+  const [guideRestartToken, setGuideRestartToken] = useState(0)
   const previousUrlRef = useRef(null)
 
   // What the shopper already has on from an earlier product, if it can be
@@ -201,13 +203,23 @@ export default function ManikanWidget({ product, onClose }) {
     }
   }, [])
 
-  // Auto-generate for returning users
+  // Auto-generate for returning users. `!error` is load-bearing: without it,
+  // a FAILED generation also leaves tryOnUrl null and isGenerating false, so
+  // this effect's own condition stays true and it immediately retries --
+  // forever, since every retry fails the same way. That was a real, live bug
+  // (confirmed: 487 requests to /api/tryon in 30 seconds, spinner stuck the
+  // whole time) -- `saveProfile()` in handleGenerateBody runs BEFORE the
+  // first try-on request even resolves, so `isReturningUser` is already true
+  // by the very next render, including on that very first request's own
+  // failure. `error` is cleared at the start of every real attempt and set
+  // on failure, so it cleanly distinguishes "never tried" / "succeeded" from
+  // "just failed" without adding new state.
   useEffect(() => {
-    if (isReturningUser && step === 3 && !tryOnUrl && !isGenerating) {
+    if (isReturningUser && step === 3 && !tryOnUrl && !isGenerating && !error) {
       const timer = setTimeout(() => generateTryOn(recommendedSize), 0)
       return () => clearTimeout(timer)
     }
-  }, [isReturningUser, step, tryOnUrl, isGenerating, generateTryOn, recommendedSize])
+  }, [isReturningUser, step, tryOnUrl, isGenerating, error, generateTryOn, recommendedSize])
 
   // Products without garment data can't be rendered in 3D yet — show a graceful
   // "coming soon" state instead of walking the shopper into a failed try-on.
@@ -226,11 +238,24 @@ export default function ManikanWidget({ product, onClose }) {
               <p className="mw-brand-sub">Virtual Try-On</p>
             </div>
           </div>
-          <button onClick={onClose} className="mw-close" id="close-widget">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="mw-header-actions">
+            <button
+              onClick={() => setGuideRestartToken(token => token + 1)}
+              className="mw-guide-restart"
+              aria-label="Show the interactive 3D tutorial"
+              title="3D tutorial"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <circle cx="12" cy="12" r="9" />
+                <path strokeLinecap="round" d="M9.7 9a2.5 2.5 0 1 1 4.1 1.9c-.75.55-1.3 1.05-1.3 1.85M12.5 16.5h.01" />
+              </svg>
+            </button>
+            <button onClick={onClose} className="mw-close" id="close-widget">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* ── Step indicator ─────────────────────────────────────────── */}
@@ -312,7 +337,7 @@ export default function ManikanWidget({ product, onClose }) {
                 <p className="mw-section-desc">Adjust the sliders to match your body. We'll use these to create your personalized 3D avatar.</p>
 
                 {/* Sex toggle */}
-                <div className="mw-sex-toggle">
+                <div className="mw-sex-toggle" id="body-type-control">
                   <button
                     onClick={() => setSex('male')}
                     className={`mw-sex-btn ${sex === 'male' ? 'active' : ''}`}
@@ -327,7 +352,7 @@ export default function ManikanWidget({ product, onClose }) {
                   </button>
                 </div>
 
-                <div className="mw-sliders">
+                <div className="mw-sliders" id="body-measurements">
                   <MeasurementSlider label="Height" unit="cm" value={height} onChange={setHeight} min={120} max={220}
                     icon={<svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m0-16l-3 3m3-3l3 3m-3 13l-3-3m3 3l3-3" /></svg>} />
                   <MeasurementSlider label="Weight" unit="kg" value={weight} onChange={setWeight} min={35} max={200}
@@ -362,7 +387,7 @@ export default function ManikanWidget({ product, onClose }) {
             <div className="mw-step-content mw-tryon-step animate-fade-in">
               <div className="mw-tryon-layout">
                 {/* Left: 3D Viewer */}
-                <div className="mw-tryon-viewer">
+                <div className="mw-tryon-viewer" id="tryon-3d-viewer">
                   <TryOnViewer
                     modelUrl={tryOnUrl}
                     isLoading={isGenerating}
@@ -410,7 +435,7 @@ export default function ManikanWidget({ product, onClose }) {
                     </div>
                   )}
 
-                  <div className="mw-tryon-size-section">
+                  <div className="mw-tryon-size-section" id="tryon-size-options">
                     <h4 className="mw-tryon-label">Select Size</h4>
                     <div className="mw-tryon-size-pills">
                       {sizeKeys.map(size => (
@@ -490,6 +515,11 @@ export default function ManikanWidget({ product, onClose }) {
           </div>
         </div>
       </div>
+      <InteractiveGuide
+        widgetStep={step}
+        isGenerating={isGenerating}
+        restartToken={guideRestartToken}
+      />
     </div>
   )
 }
