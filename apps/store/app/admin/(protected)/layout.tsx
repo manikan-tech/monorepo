@@ -6,6 +6,8 @@ import AdminSidebarNav from "./AdminSidebarNav";
 export const metadata = {
   title: "Admin | Manikan Platform",
 };
+// Protected pages read the current session and live platform data at request time.
+export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({
   children,

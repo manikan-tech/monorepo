@@ -1,0 +1,24 @@
+.git
+.github
+.agents
+.codex
+
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/dist-lib
+
+**/.env
+**/.env.*
+**/.venv
+**/venv
+**/__pycache__
+**/*.pyc
+
+# The Store image does not need Python services. This also guarantees that
+# licensed Body model files can never enter the Store build context.
+services-python
+
+*.log
+*.glb

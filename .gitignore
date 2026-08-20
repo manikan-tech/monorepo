@@ -54,6 +54,13 @@ htmlcov/
 .env.production.local
 .env*.local
 
+# Phase 1 deployment environment files. The generic `env/` rule above would
+# otherwise hide this directory, so re-include only placeholder templates.
+!infra/
+!infra/env/
+infra/env/*
+!infra/env/*.env.example
+
 # Misc
 .DS_Store
 *.pem

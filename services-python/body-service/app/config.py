@@ -23,6 +23,12 @@ MODEL_DIR = Path(os.environ.get("BODY_MODEL_DIR", str(SERVICE_ROOT / "models")))
 # ─── Server ─────────────────────────────────────────────────────────────
 PORT: int = int(os.environ.get("PORT", "8001"))
 
+# Body generation is CPU- and memory-intensive. Phase 1 intentionally queues
+# requests inside this single process instead of running them concurrently.
+MAX_CONCURRENT_GENERATIONS: int = max(
+    1, int(os.environ.get("MAX_CONCURRENT_GENERATIONS", "1"))
+)
+
 # Comma-separated allowed origins. Default "*" for local dev; set an explicit
 # list (e.g. the Store service origin) in production.
 CORS_ORIGINS: list[str] = [
