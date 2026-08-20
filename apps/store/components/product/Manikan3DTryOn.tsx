@@ -266,17 +266,6 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
           measurements on every size, plus a garment colour.
         </p>
       )}
-      <button
-        type="button"
-        onClick={openGuided}
-        className="mx-auto mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-forest-700/55 transition hover:text-gold-700"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M9.7 9a2.5 2.5 0 1 1 4.1 1.9c-.75.55-1.3 1.05-1.3 1.85M12.5 16.5h.01" />
-        </svg>
-        Open the guided 3D tour
-      </button>
     </>
   );
 }

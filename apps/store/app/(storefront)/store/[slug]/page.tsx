@@ -48,6 +48,7 @@ export default function ProductDetailPage() {
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isTryOnRouting, setIsTryOnRouting] = useState(false);
+  const [manualGuideTrigger, setManualGuideTrigger] = useState(0);
 
   // Reviews
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -291,15 +292,32 @@ export default function ProductDetailPage() {
             <div className="relative rounded-3xl border border-gold-200/70 bg-gradient-to-br from-gold-50 via-cream-50 to-white p-5 shadow-soft overflow-hidden">
               <div aria-hidden className="pointer-events-none absolute -top-20 -right-20 w-48 h-48 rounded-full bg-gold-200/40 blur-3xl" />
 
-              <div className="relative flex items-center gap-2 mb-4">
-                <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-forest-900 text-gold-300">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2Z" />
-                  </svg>
-                </span>
-                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-forest-700/70">
-                  AI-Powered Fit Tools
-                </p>
+              <div className="relative flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-forest-900 text-gold-300">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2Z" />
+                    </svg>
+                  </span>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-forest-700/70">
+                    AI-Powered Fit Tools
+                  </p>
+                </div>
+                <button
+                  onClick={() => setManualGuideTrigger(prev => prev + 1)}
+                  className="relative flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold text-white overflow-hidden transition-all duration-300 hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
+                  style={{ background: "linear-gradient(135deg, #12343b 0%, #c89666 100%)" }}
+                  title="How it works"
+                >
+                  {/* Animated shimmer */}
+                  <span className="pointer-events-none absolute inset-0 animate-btn-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                  <span className="relative flex items-center gap-1.5">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-gold-300 shrink-0">
+                      <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2Z" />
+                    </svg>
+                    How it works
+                  </span>
+                </button>
               </div>
 
               <div className="relative flex flex-col gap-3">
@@ -355,7 +373,7 @@ export default function ProductDetailPage() {
                 <Manikan3DTryOn product={product} />
               </div>
             </div>
-            <FitToolsOnboarding productName={product.name} />
+            <FitToolsOnboarding productName={product.name} manualTrigger={manualGuideTrigger} />
           </div>
 
           {/* Shipping Info */}

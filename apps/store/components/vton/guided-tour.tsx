@@ -369,21 +369,21 @@ export default function GuidedTour() {
 
     return (
         <>
-            {/* ── Floating Restart Button — Dark outer circle, light gray inner circle matching webbg, z-index below navbar ── */}
+            {/* ── Inline Restart Button (Premium Design) ── */}
             <button
                 type="button"
                 id="guided-tour-restart"
                 onClick={restartTour}
-                className="fixed bottom-5 right-5 z-[49] flex h-14 w-14 items-center justify-center rounded-full border border-forest-800/80 bg-forest-950 shadow-lift transition-all duration-300 hover:scale-110 hover:bg-forest-900 focus:outline-none focus:ring-2 focus:ring-forest-500/30 focus:ring-offset-2 focus:ring-offset-transparent animate-float"
-                aria-label="Restart guided tour"
-                title="Restart tour"
+                className="group relative flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold text-white overflow-hidden transition-all duration-300 hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
+                style={{ background: "linear-gradient(135deg, #12343b 0%, #c89666 100%)" }}
+                aria-label="How it works"
             >
-                {/* Subtle pulse ring to attract attention */}
-                <span className="absolute inset-0 rounded-full bg-forest-500/20 animate-pulse-glow" aria-hidden="true" />
-                <span className="relative flex h-10 w-10 items-center justify-center rounded-full border border-forest-200/30 bg-[#EDF4F5] backdrop-blur-md shadow-inner text-forest-950">
-                    <span className="h-5 w-5">
-                        <HelpIcon />
-                    </span>
+                <span className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-20deg]" />
+                <span className="relative flex items-center gap-1.5">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-gold-300 shrink-0">
+                        <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2Z" />
+                    </svg>
+                    How it works
                 </span>
             </button>
 

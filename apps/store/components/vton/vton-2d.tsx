@@ -238,8 +238,6 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
 
     return (
         <div className="flex flex-col gap-8 max-w-7xl mx-auto px-4 py-8 bg-forest-50/20 min-h-screen">
-            <GuidedTour />
-
             {/* Top Banner */}
             <div className="flex flex-col gap-2 border-b border-forest-100 pb-5">
                 <div className="flex items-center gap-2">
@@ -249,9 +247,12 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
                     <span className="h-1.5 w-1.5 rounded-full bg-forest-300" />
                     <span className="text-xs text-forest-500 font-medium">Try-On Studio v1.0</span>
                 </div>
-                <h1 className="font-display text-3xl font-bold tracking-tight text-forest-950">
-                    2D Virtual Try-On
-                </h1>
+                <div className="flex items-center gap-3">
+                    <h1 className="font-display text-2xl md:text-3xl text-forest-900 font-semibold">
+                        Virtual Try-On
+                    </h1>
+                    <GuidedTour />
+                </div>
                 <p className="text-sm text-forest-650 max-w-xl">
                     Mix and match any product from our catalog using advanced artificial intelligence shape alignment mechanisms.
                 </p>
