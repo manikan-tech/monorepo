@@ -4,6 +4,9 @@ import { prisma } from "../lib/prisma";
 import { redirect } from "next/navigation";
 import SidebarNav from "./SidebarNav";
 
+// Retailer pages depend on the authenticated request and live tenant data.
+export const dynamic = "force-dynamic";
+
 export default async function DashboardLayout({
   children,
 }: {

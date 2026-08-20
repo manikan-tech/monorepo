@@ -16,3 +16,12 @@ models/smpl/*.npz
 # Local artifacts
 *.glb
 .env
+
+# Offline bake pipelines, tests, and documentation are development inputs, not
+# runtime dependencies. The bake folders alone can contain hundreds of MB.
+tools/
+tests/
+docs/
+.pytest_cache/
+.mypy_cache/
+README.md

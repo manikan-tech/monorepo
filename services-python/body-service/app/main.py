@@ -28,6 +28,7 @@ import logging
 import math
 from contextlib import asynccontextmanager
 from enum import Enum
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -36,7 +37,7 @@ import trimesh
 from PIL import Image
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from . import garment  # Pipeline 1 / Tier 1 garment engine (real garment mesh)
@@ -47,6 +48,7 @@ from .config import (
     BODY_SERVICE_KEY_PREVIOUS,
     CORS_ORIGINS,
     DEVICE,
+    MAX_CONCURRENT_GENERATIONS,
     MODEL_DIR,
     NUM_BETAS,
     OPT_BETA_CLAMP,
@@ -431,22 +433,45 @@ def solve_betas(
 _smpl_models: Dict[str, object] = {}
 
 
+def _required_asset_paths() -> List[Path]:
+    """Cheap readiness contract for every Phase 1 generation path."""
+    required = [
+        MODEL_DIR / "smpl" / "SMPL_MALE.pkl",
+        MODEL_DIR / "smpl" / "SMPL_FEMALE.pkl",
+    ]
+    if USE_GARMENT_V2:
+        required.extend(
+            [
+                MODEL_DIR / "garments" / "tshirt_mgn" / "tshirt_male.obj",
+                MODEL_DIR / "garments" / "tshirt_mgn" / "tshirt_crew_base.obj",
+                MODEL_DIR / "garments" / "pants" / "pants_male.npz",
+                MODEL_DIR / "garments" / "pants" / "pants_female.npz",
+            ]
+        )
+    if USE_GARMENT_V2 and USE_PHYSICS_DRAPE:
+        required.extend(
+            [
+                MODEL_DIR / "garments" / "tshirt_physics" / "template.npz",
+                MODEL_DIR / "garments" / "tshirt_physics" / "ref_body.npz",
+                MODEL_DIR / "garments" / "tshirt_physics" / "delta_library.npz",
+            ]
+        )
+    return required
+
+
+def _missing_required_assets() -> List[Path]:
+    return [path for path in _required_asset_paths() if not path.is_file()]
+
+
 def _verify_model_files() -> None:
-    """Verify that the cleaned SMPL model .pkl files exist."""
-    smpl_dir = MODEL_DIR / "smpl"
-    for name in ("SMPL_MALE.pkl", "SMPL_FEMALE.pkl"):
-        path = smpl_dir / name
-        if path.exists():
+    """Log the Phase 1 runtime asset state without performing generation."""
+    for path in _required_asset_paths():
+        relative_path = path.relative_to(MODEL_DIR)
+        if path.is_file():
             size_mb = path.stat().st_size / 1_048_576
-            logger.info("✓  %s  (%.1f MB)", name, size_mb)
+            logger.info("✓  %s  (%.1f MB)", relative_path, size_mb)
         else:
-            logger.error(
-                "✗  %s not found in %s.  Run:\n"
-                "     python tools/clean_smpl_pkl.py\n"
-                "   to convert the original SMPL .pkl files.",
-                name,
-                smpl_dir,
-            )
+            logger.error("✗  Required runtime asset is missing: %s", relative_path)
 
 
 def _load_smpl_model(gender: str):
@@ -567,8 +592,12 @@ def generate_avatar_mesh(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Verify model files and signal readiness."""
+    app.state.generation_semaphore = asyncio.Semaphore(MAX_CONCURRENT_GENERATIONS)
     _verify_model_files()
-    logger.info("Manikan SMPL Engine v2 (Optimisation) is ready.")
+    logger.info(
+        "Manikan SMPL Engine v2 started (max concurrent generations: %d).",
+        MAX_CONCURRENT_GENERATIONS,
+    )
     yield
     logger.info("Shutting down.")
 
@@ -609,10 +638,35 @@ def verify_internal_key(x_manikan_internal_key: str = Header(default="")) -> Non
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+async def acquire_generation_slot():
+    """Queue generation requests so CPU/RAM-heavy work cannot overlap."""
+    semaphore = app.state.generation_semaphore
+    if semaphore.locked():
+        logger.info("Generation request queued: all %d slot(s) are busy", MAX_CONCURRENT_GENERATIONS)
+    async with semaphore:
+        yield
+
+
 @app.get("/health")
 async def health():
     """Liveness probe."""
     return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready():
+    """Cheap readiness probe: validate assets, never generate an avatar."""
+    missing = _missing_required_assets()
+    payload = {
+        "status": "ready" if not missing else "not_ready",
+        "device": str(DEVICE),
+        "max_concurrent_generations": MAX_CONCURRENT_GENERATIONS,
+        "loaded_models": sorted(_smpl_models.keys()),
+        "missing_assets": [str(path.relative_to(MODEL_DIR)) for path in missing],
+    }
+    if missing:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @app.post(
@@ -625,7 +679,7 @@ async def health():
             "description": "Binary GLB file containing the generated 3D avatar mesh.",
         }
     },
-    dependencies=[Depends(verify_internal_key)],
+    dependencies=[Depends(verify_internal_key), Depends(acquire_generation_slot)],
 )
 async def generate_avatar(payload: MeasurementsPayload):
     """
@@ -1435,7 +1489,7 @@ def generate_dressed_avatar_mesh_v2(
             "description": "Binary GLB file with the body mesh wearing a t-shirt.",
         }
     },
-    dependencies=[Depends(verify_internal_key)],
+    dependencies=[Depends(verify_internal_key), Depends(acquire_generation_slot)],
 )
 async def generate_dressed_avatar(payload: DressedAvatarPayload):
     """

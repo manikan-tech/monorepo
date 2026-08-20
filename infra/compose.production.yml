@@ -1,0 +1,94 @@
+name: manikan
+
+# Phase 1 production topology:
+#   Internet -> Caddy -> Store -> Body
+# Only Caddy publishes host ports. `store` and `body` communicate over the
+# default Docker bridge network via service DNS; neither has a host port.
+services:
+  proxy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      store:
+        condition: service_healthy
+    ports:
+      - "${PROXY_HTTP_PORT:-80}:80"
+      - "${PROXY_HTTPS_PORT:-443}:443"
+    environment:
+      CADDY_SITE_ADDRESS: ${CADDY_SITE_ADDRESS:?Set CADDY_SITE_ADDRESS in the Compose environment}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging: &json_logs
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  store:
+    image: manikan-store:phase1
+    build:
+      context: ..
+      dockerfile: apps/store/Dockerfile
+      args:
+        VITE_STORE_API_URL: ${VITE_STORE_API_URL:-}
+        NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-}
+        NEXT_PUBLIC_MANIKAN_WIDGET_KEY: ${NEXT_PUBLIC_MANIKAN_WIDGET_KEY:-}
+        NEXT_PUBLIC_MANIKAN_RECOMMEND_KEY: ${NEXT_PUBLIC_MANIKAN_RECOMMEND_KEY:-}
+        NEXT_PUBLIC_WIDGET_API_KEY: ${NEXT_PUBLIC_WIDGET_API_KEY:-}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ${STORE_ENV_FILE:?Set STORE_ENV_FILE to a private Store environment file}
+    environment:
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      BODY_SERVICE_URL: http://body:8001
+      STORE_PUBLIC_URL: "${STORE_PUBLIC_URL:-}"
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *json_logs
+
+  body:
+    image: manikan-body:phase1
+    build:
+      context: ../services-python/body-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ${BODY_ENV_FILE:?Set BODY_ENV_FILE to a private Body environment file}
+    environment:
+      PORT: "8001"
+      BODY_MODEL_DIR: /app/models
+      MAX_CONCURRENT_GENERATIONS: "${MAX_CONCURRENT_GENERATIONS:-1}"
+      # Browser CORS is unnecessary for an internal-only service. Store calls
+      # it server-to-server over the Docker network.
+      CORS_ORIGINS: "${BODY_CORS_ORIGINS:-http://store:3000}"
+    volumes:
+      # Only licensed SMPL assets are host-mounted. The image keeps the
+      # non-licensed garment templates under /app/models/garments intact.
+      - ${BODY_MODEL_HOST_DIR:?Set BODY_MODEL_HOST_DIR to the private licensed-SMPL directory}:/app/models/smpl:ro
+    expose:
+      - "8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys, urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8001/ready', timeout=4); sys.exit(0 if r.status == 200 else 1)"]
+      interval: 20s
+      timeout: 7s
+      retries: 5
+      start_period: 30s
+    logging: *json_logs
+
+volumes:
+  caddy_data:
+  caddy_config:
