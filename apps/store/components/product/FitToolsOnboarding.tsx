@@ -7,6 +7,7 @@ const FIT_TOOLS_SEEN_KEY = "manikan_fit_tools_intro_seen_v1";
 
 type FitToolsOnboardingProps = {
   productName: string;
+  manualTrigger?: number;
 };
 
 function CloseIcon() {
@@ -69,7 +70,7 @@ function DialogShell({
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const focusTimer = window.setTimeout(() => closeRef.current?.focus(), 80);
+    const focusTimer = window.setTimeout(() => closeRef.current?.focus({ preventScroll: true }), 80);
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
@@ -139,9 +140,16 @@ function ThreeDBodyVisual({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export default function FitToolsOnboarding({ productName }: FitToolsOnboardingProps) {
+export default function FitToolsOnboarding({ productName, manualTrigger = 0 }: FitToolsOnboardingProps) {
   const [open, setOpen] = useState(false);
   const titleId = useId();
+
+  // Watch for manual trigger
+  useEffect(() => {
+    if (manualTrigger > 0) {
+      setOpen(true);
+    }
+  }, [manualTrigger]);
 
   useEffect(() => {
     let seen = true;

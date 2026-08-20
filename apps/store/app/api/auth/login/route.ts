@@ -49,6 +49,19 @@ export async function POST(request: NextRequest) {
 
     const cookieStore = await cookies();
 
+    // ── Prevent PlatformAdmins from logging in here ─────────
+    const admin = await prisma.platformAdmin.findUnique({
+      where: { email: email.toLowerCase().trim() },
+    });
+
+    if (admin) {
+      await supabase.auth.signOut();
+      return NextResponse.json({ 
+        success: false, 
+        error: "Platform Admins cannot login to the Retailer or Shopper portals. Please use the Admin dashboard at /admin." 
+      }, { status: 200 });
+    }
+
     // ── Check Role in Database ─────────────────────────────
     // To know where to redirect, we check if they are a Customer or Retailer
     const customer = await prisma.customer.findUnique({
