@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import ProductCard, { Garment } from "./product-card";
 
 interface GarmentCatalogProps {
@@ -76,6 +76,7 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment, initi
     const [search, setSearch] = useState<string>("");
     const [selectedStyle, setSelectedStyle] = useState<string>("all");
     const [selectedAudience, setSelectedAudience] = useState<string>("all");
+    const appliedInitialSelectionId = useRef<string | null>(null);
 
     const STYLE_FILTERS = [
         { id: "all", label: "All clothes" },
@@ -205,11 +206,14 @@ export default function GarmentCatalog({ selectedGarment, onSelectGarment, initi
 
     useEffect(() => {
         if (!initialSelectedGarmentId || garments.length === 0) return;
+        if (appliedInitialSelectionId.current === initialSelectedGarmentId) return;
+
         const matched = garments.find((garment) => garment.id === initialSelectedGarmentId);
-        if (matched && selectedGarment?.id !== matched.id) {
+        if (matched) {
+            appliedInitialSelectionId.current = initialSelectedGarmentId;
             onSelectGarment(matched);
         }
-    }, [garments, initialSelectedGarmentId, onSelectGarment, selectedGarment?.id]);
+    }, [garments, initialSelectedGarmentId, onSelectGarment]);
 
     // Filtering Logic
     const filteredGarments = garments.filter((g) => {
