@@ -135,12 +135,26 @@ async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
     initial_state: FitState = {
         "messages": body.messages,
         "product_id": body.product_id,
+        "query": next(
+            (
+                message["content"]
+                for message in reversed(body.messages)
+                if message.get("role") == "user" and isinstance(message.get("content"), str)
+            ),
+            "",
+        ),
+        "user_measurements": body.betas,
         "betas": body.betas,
         "size_chart": body.size_chart,
         "intent": body.intent,
         "selected_category": body.selected_category,
         "available_categories": body.available_categories,
         "catalog_products": body.catalog_products,
+        "retrieved_products": [],
+        "size_math_result": None,
+        "reasoning_output": None,
+        "final_response": None,
+        "trace_id": body.session_id,
         "structured_response": None,
     }
 

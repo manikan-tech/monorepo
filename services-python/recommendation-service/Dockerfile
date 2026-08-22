@@ -9,17 +9,15 @@ ENV PORT=8002
 # Set the working directory
 WORKDIR /app
 
-# Install system dependencies if any are needed
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
 # Install python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY . .
+
+# Fail the image build immediately if the dependency set cannot import the app.
+RUN python -c "import app.retrieval, app.agent, app.main"
 
 # Expose port and run
 EXPOSE ${PORT}
