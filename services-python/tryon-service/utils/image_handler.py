@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 
-import requests
+import httpx
 from fastapi import UploadFile
 from PIL import Image, ImageOps
 
@@ -98,26 +98,26 @@ def _reject_disallowed_host(url: str) -> None:
             raise ValueError("garment_image_url resolves to a disallowed address.")
 
 
-def download_url_to_temp(url: str, temp_dir: str, max_bytes: int) -> str:
+async def download_url_to_temp(url: str, temp_dir: str, max_bytes: int) -> str:
     """Download an image URL to a UUID-named temporary file."""
     if not url.startswith(("https://", "http://")):
         raise ValueError("garment_image_url must be an HTTP(S) image URL.")
     _reject_disallowed_host(url)
 
     try:
-        response = requests.get(url, stream=True, timeout=10)
-        response.raise_for_status()
-    except requests.RequestException as error:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+    except httpx.HTTPError as error:
         raise ValueError("Unable to download garment image URL.") from error
 
     content_type = response.headers.get("Content-Type", "").split(";", 1)[0].lower()
     if not content_type.startswith("image/"):
-        response.close()
         raise ValueError("garment_image_url did not return an image content type.")
 
     destination = Path(temp_dir) / f"{uuid.uuid4()}.jpg"
     try:
-        data = _read_capped(response.raw, max_bytes, label="garment_image_url")
+        data = _read_capped(io.BytesIO(response.content), max_bytes, label="garment_image_url")
         _save_as_rgb_jpeg(
             io.BytesIO(data),
             destination,
@@ -131,8 +131,6 @@ def download_url_to_temp(url: str, temp_dir: str, max_bytes: int) -> str:
     except OSError as error:
         cleanup_files([str(destination)])
         raise ValueError("garment_image_url did not return a valid image file.") from error
-    finally:
-        response.close()
     return str(destination)
 
 
