@@ -23,6 +23,12 @@ MODEL_DIR = Path(os.environ.get("BODY_MODEL_DIR", str(SERVICE_ROOT / "models")))
 # ─── Server ─────────────────────────────────────────────────────────────
 PORT: int = int(os.environ.get("PORT", "8001"))
 
+# Body generation is CPU- and memory-intensive. Phase 1 intentionally queues
+# requests inside this single process instead of running them concurrently.
+MAX_CONCURRENT_GENERATIONS: int = max(
+    1, int(os.environ.get("MAX_CONCURRENT_GENERATIONS", "1"))
+)
+
 # Comma-separated allowed origins. Default "*" for local dev; set an explicit
 # list (e.g. the Store service origin) in production.
 CORS_ORIGINS: list[str] = [
@@ -39,7 +45,9 @@ BODY_SERVICE_KEY: str | None = os.environ.get("BODY_SERVICE_KEY") or None
 # Lets the Store rotate BODY_SERVICE_KEY with zero downtime: deploy the new
 # value as BODY_SERVICE_KEY there while the old value still validates here
 # via BODY_SERVICE_KEY_PREVIOUS, then retire the old value once rolled out.
-BODY_SERVICE_KEY_PREVIOUS: str | None = os.environ.get("BODY_SERVICE_KEY_PREVIOUS") or None
+BODY_SERVICE_KEY_PREVIOUS: str | None = (
+    os.environ.get("BODY_SERVICE_KEY_PREVIOUS") or None
+)
 
 # ─── SMPL / Torch ───────────────────────────────────────────────────────
 DEVICE = torch.device("cpu")
@@ -59,10 +67,10 @@ USE_PHYSICS_DRAPE: bool = os.environ.get("MANIKAN_PHYSICS_DRAPE", "1") != "0"
 # ─── Optimisation hyper-parameters (tuned for SMPL on CPU) ──────────────
 OPT_ITERATIONS: int = int(os.environ.get("OPT_ITERATIONS", "80"))
 OPT_LR: float = float(os.environ.get("OPT_LR", "0.05"))
-OPT_EARLY_STOP_LOSS: float = 5.0    # stop when total loss < this
-OPT_SHAPE_PRIOR: float = 0.05       # L2 shape prior — keeps body "athletic" unless forced
-OPT_BETA_CLAMP: float = 4.0         # general clamp for β₂…β₉
-OPT_BETA_CLAMP_01: float = 5.0      # looser clamp for β₀, β₁ (mass & height PCA)
-OPT_BETA_INIT: float = 0.1          # small positive init — nudge optimizer off saddle point
-RING_Y_BAND: float = 0.012          # ±1.2 cm Y-band (tighter = fewer vertices = cleaner ring)
-RING_X_MAX: float = 0.25            # exclude arm/leg vertices beyond this |X|
+OPT_EARLY_STOP_LOSS: float = 5.0  # stop when total loss < this
+OPT_SHAPE_PRIOR: float = 0.05  # L2 shape prior — keeps body "athletic" unless forced
+OPT_BETA_CLAMP: float = 4.0  # general clamp for β₂…β₉
+OPT_BETA_CLAMP_01: float = 5.0  # looser clamp for β₀, β₁ (mass & height PCA)
+OPT_BETA_INIT: float = 0.1  # small positive init — nudge optimizer off saddle point
+RING_Y_BAND: float = 0.012  # ±1.2 cm Y-band (tighter = fewer vertices = cleaner ring)
+RING_X_MAX: float = 0.25  # exclude arm/leg vertices beyond this |X|

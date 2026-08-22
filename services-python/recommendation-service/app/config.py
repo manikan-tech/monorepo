@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     recommend_api_key: Optional[str] = None
+    recommend_service_key: Optional[str] = None
+    recommend_service_key_previous: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -1,0 +1,10 @@
+{$CADDY_SITE_ADDRESS} {
+    encode zstd gzip
+
+    # Store is intentionally reachable only on the private Docker network.
+    # Preserve the browser-facing authority so Next.js can construct absolute
+    # product-image URLs for the private Body worker (instead of 0.0.0.0:3000).
+    reverse_proxy store:3000 {
+        header_up Host {http.request.host}
+    }
+}

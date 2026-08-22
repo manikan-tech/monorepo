@@ -1,21 +1,17 @@
 import { prisma } from "./prisma";
-import { BODY_FIT_FIELDS, BODY_FIT_MATCH_FIELDS, csvColumnFor } from "./measurement-fields";
+import { BODY_FIT_MATCH_FIELDS } from "./measurement-fields";
 
-// Builds the CSV string /api/widget/recommend hands to recommendation-service.
-// Server-built from ProductVariant, replacing a client-supplied size_chart --
-// product_id is attacker-controlled, so a fallback that trusted the client
-// whenever a product had no ingested data would just move the hole to
-// whichever product an attacker points at (see the security review for this
-// change). This is the only source now; the caller must not accept a client
-// value at all.
+// Builds the JSON string /api/widget/recommend hands to recommendation-service
+// as size_chart. Server-built from ProductVariant, replacing a
+// client-supplied size_chart -- product_id is attacker-controlled, so a
+// fallback that trusted the client whenever a product had no ingested data
+// would just move the hole to whichever product an attacker points at (see
+// the security review for this change). This is the only source now; the
+// caller must not accept a client value at all.
 //
-// Emits the same header shape parse_size_chart_csv already expects
-// (size_label,chest_cm,waist_cm,hip_cm,length_cm,inseam_cm), so the Python
-// side needs no change.
-
-function csvEscape(value: string): string {
-  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-}
+// Emits the JSON array shape compute_recommended_size (app/agent.py) parses
+// via json.loads and is tested against in tests/test_agent.py:
+// [{"size": ..., "chest_cm": ..., "waist_cm": ..., "hip_cm": ...}, ...].
 
 export async function buildBodyFitChartCsv(
   productId: string,
@@ -27,25 +23,25 @@ export async function buildBodyFitChartCsv(
   });
   if (!product || product.retailerId !== retailerId) return null;
 
-  // compute_best_size_match only ever reads chest/waist/hip; a variant with
-  // none of those contributes nothing (agent.py's own `chart_chest == 0.0 and
-  // chart_waist == 0.0: continue` skip), so exclude it here rather than
-  // emitting a row with three "" cells the matcher would just discard anyway.
+  // compute_recommended_size only ever reads chest/waist/hip; a variant with
+  // none of those contributes nothing (agent.py's own KeyError skip on a
+  // missing chest_cm/waist_cm), so exclude it here rather than emitting an
+  // entry the matcher would just discard anyway.
   const usable = product.variants.filter((v) =>
-    BODY_FIT_MATCH_FIELDS.some((f) => v[f] != null),
+    BODY_FIT_MATCH_FIELDS.some((f) => (v as any)[f] != null) || v.garmentWaistCm != null || v.garmentHipCm != null
   );
-  // Never emit a header-only string: parse_size_chart_csv("") -> DictReader
-  // returns [] -> compute_best_size_match's `if not distances` branch
-  // fabricates a size with 0.5 confidence. null lets the caller omit
-  // size_chart entirely so the agent asks for measurements instead.
+  // Never emit an empty array: json.loads("[]") -> compute_recommended_size's
+  // `if not size_chart` branch returns is_out_of_range=True cleanly. null
+  // lets the caller omit size_chart entirely so the agent asks for
+  // measurements instead.
   if (usable.length === 0) return null;
 
-  const header = ["size_label", ...BODY_FIT_FIELDS.map(csvColumnFor)];
-  const lines = usable.map((v) =>
-    [
-      csvEscape(v.sizeLabel),
-      ...BODY_FIT_FIELDS.map((f) => (v[f] != null ? String(v[f]) : "")),
-    ].join(","),
+  return JSON.stringify(
+    usable.map((v) => ({
+      size: v.sizeLabel,
+      ...(v.chestCm != null ? { chest_cm: v.chestCm } : {}),
+      ...(v.waistCm != null ? { waist_cm: v.waistCm } : v.garmentWaistCm != null ? { waist_cm: v.garmentWaistCm } : {}),
+      ...(v.hipCm != null ? { hip_cm: v.hipCm } : v.garmentHipCm != null ? { hip_cm: v.garmentHipCm } : {}),
+    })),
   );
-  return [header.join(","), ...lines].join("\n");
 }

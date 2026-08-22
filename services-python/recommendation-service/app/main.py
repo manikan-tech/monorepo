@@ -1,3 +1,4 @@
+import hmac
 import logging
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -62,17 +63,18 @@ def _track_usage() -> None:
         )
 
 
-async def verify_widget_key(x_widget_key: Optional[str] = Header(None)) -> None:
+async def verify_internal_key(x_manikan_internal_key: str = Header(default="")) -> None:
     """
-    Simple shared-secret check between widget.js (calling this service
-    directly) and this service. Not connected to the Next.js proxy path
-    in any way - that's a separate, unused-for-now integration. If
-    RECOMMEND_API_KEY isn't set in .env yet, this check is skipped -
-    permissive for local dev only.
+    Zero Trust Proxy Gate. This service no longer accepts direct client connections.
+    It expects the Next.js proxy to validate the client's API key, quotas, and subscription,
+    and then forward the request using the securely injected internal shared secret.
     """
     settings = get_settings()
-    if settings.recommend_api_key and x_widget_key != settings.recommend_api_key:
-        raise HTTPException(status_code=401, detail="Invalid or missing internal service key")
+    candidates = [key for key in (settings.recommend_service_key, settings.recommend_service_key_previous) if key]
+    if not candidates or not any(
+        hmac.compare_digest(x_manikan_internal_key, key) for key in candidates
+    ):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     _track_usage()
 
 
@@ -86,6 +88,10 @@ class ChatRecommendRequest(BaseModel):
     intent: Optional[str] = "general"
     selected_category: Optional[str] = None
     available_categories: Optional[List[str]] = None
+    # Compact catalog (id, name, category, description) used for RAG
+    # retrieval on open-ended style questions - not stored, not persisted,
+    # used in-memory for this one request only.
+    catalog_products: Optional[List[Dict[str, Any]]] = None
 
 
 class ChatRecommendResponse(BaseModel):
@@ -99,6 +105,7 @@ class ChatRecommendResponse(BaseModel):
     confidence_score: Optional[float] = None
     explanation: Optional[str] = None
     matched_category: Optional[str] = None
+    retrieved_product_ids: Optional[List[str]] = None
     error_code: Optional[str] = None
 
 
@@ -119,7 +126,7 @@ async def health_check():
     "/recommend",
     response_model=ChatRecommendResponse,
     tags=["recommendation"],
-    dependencies=[Depends(verify_widget_key)],
+    dependencies=[Depends(verify_internal_key)],
 )
 async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
     _check_rate_limit(body.session_id)
@@ -133,6 +140,7 @@ async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
         "intent": body.intent,
         "selected_category": body.selected_category,
         "available_categories": body.available_categories,
+        "catalog_products": body.catalog_products,
         "structured_response": None,
     }
 
@@ -154,6 +162,7 @@ async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
             confidence_score=res.confidence_score,
             explanation=res.explanation,
             matched_category=res.matched_category,
+            retrieved_product_ids=res.retrieved_product_ids,
         )
     except Exception as e:
         logger.error(f"Workflow execution failed: {e}", exc_info=True)

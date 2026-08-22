@@ -25,6 +25,11 @@ const BODY_SERVICE_URL = process.env.BODY_SERVICE_URL || "http://localhost:8001"
 // Shared secret body-service verifies on every call — proves this request
 // came from this proxy, not just from something that can reach the URL.
 const BODY_SERVICE_KEY = process.env.BODY_SERVICE_KEY || "";
+// When Store sits behind a reverse proxy, Next's internal bind address can be
+// different from the browser-facing origin. Product photos must use the
+// latter because Body fetches the URL independently. Keep this server-only:
+// it is deployment configuration, not a browser API.
+const STORE_PUBLIC_URL = process.env.STORE_PUBLIC_URL?.replace(/\/$/, "");
 
 // Embeddable widget runs cross-origin on retailer sites → CORS must allow the
 // key header. NOTE: CORS is NOT the security boundary (it's browser-enforced);
@@ -160,8 +165,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 3. Resolve product + variant (DB is source of truth for garment data) ──
+    const publicOrigin = STORE_PUBLIC_URL || request.nextUrl.origin;
     const primary = await resolveGarment(
-        product_id, size, retailer.id, request.nextUrl.origin);
+        product_id, size, retailer.id, publicOrigin);
     if (!primary.ok) {
         return NextResponse.json(
             { error: primary.error },

@@ -161,6 +161,19 @@ input[type="range"]:hover::-webkit-slider-thumb {
   animation: logoShine 4s ease-in-out infinite;
 }
 
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes btn-shimmer {
+  0% { transform: translateX(-100%) skewX(-20deg); }
+  60%, 100% { transform: translateX(200%) skewX(-20deg); }
+}
+.animate-btn-shimmer {
+  animation: btn-shimmer 2.5s ease-in-out infinite;
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    Docs-only styles (app/docs). Every selector below is scoped to class
    names that only ever appear inside compiled doc content or docs UI, so

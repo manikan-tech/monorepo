@@ -34,6 +34,7 @@ import { garmentFieldsFor, isProductTryOnEnabled } from "../../app/lib/tryon-sta
    ───────────────────────────────────────────────────────────────────────── */
 
 const WIDGET_SRC = "/manikan-widget.js";
+const INTERACTIVE_GUIDE_SEEN_KEY = "manikan_3d_interactive_tour_seen_v1";
 
 // Public by design — it lives in retailer page HTML and is paired with an
 // Origin allowlist server-side. Configurable per deployment; falls back to the
@@ -177,6 +178,11 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
       // bare shadow host at the end of <body> — no wrapper chrome from us.
       const host = document.createElement("div");
       host.setAttribute("data-manikan-3d", "");
+      // The recommendation chat bubble uses z-index 10000. Keep the active
+      // full-screen 3D experience (including its interactive coachmarks)
+      // above it so mobile tutorial controls cannot be covered.
+      host.style.position = "relative";
+      host.style.zIndex = "20000";
       document.body.appendChild(host);
       hostRef.current = host;
       document.body.style.overflow = "hidden";
@@ -197,6 +203,15 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
     }
   }, [product, status, teardown]);
 
+  const openGuided = useCallback(() => {
+    try {
+      window.localStorage.removeItem(INTERACTIVE_GUIDE_SEEN_KEY);
+    } catch {
+      // The widget still opens and offers its header help button.
+    }
+    void open();
+  }, [open]);
+
   const enabled = isProductTryOnEnabled({
     category: product.category,
     garmentColorHex: product.garmentColorHex ?? null,
@@ -206,6 +221,7 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
   return (
     <>
       <button
+        id="product-3d-tryon"
         type="button"
         onClick={open}
         disabled={status === "loading"}

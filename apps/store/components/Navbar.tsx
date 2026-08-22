@@ -24,9 +24,9 @@ const WishlistIcon = () => (
 
 const CartIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-    <path d="M3 6h18" />
-    <path d="M16 10a4 4 0 0 1-8 0" />
+    <circle cx="9" cy="21" r="1" />
+    <circle cx="20" cy="21" r="1" />
+    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
   </svg>
 );
 
@@ -42,7 +42,7 @@ const DashboardIcon = () => (
 const shopperNavLinks = [
   { name: "Collection", href: "/store" },
   { name: "Virtual Try-On", href: "/visualize" },
-  { name: "Size Assistant", href: "/wardrobe" },
+  { name: "Size Assistant", href: "#" },
   { name: "For Business", href: "/business" },
 ];
 
@@ -61,7 +61,6 @@ export default function Navbar() {
   const [pendingTryOnHref, setPendingTryOnHref] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
 
-  // Check if the logged-in user is a Retailer
   const checkRole = async (email: string | undefined) => {
     if (!email) {
       setIsRetailer(false);
@@ -95,7 +94,6 @@ export default function Navbar() {
     });
 
     return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -131,13 +129,9 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-manikan-border/50 shadow-[0_4px_30px_rgba(18,52,59,0.03)] backdrop-blur-xl transition-all duration-300">
-      {/* Manikan widget script (updated): only static, retailer-wide
-          config here. Product-specific data is read dynamically by
-          widget.js from window.currentProductContext instead, since
-          this tag only mounts once and its attributes never update
-          during client-side navigation. */}
+      {/* تم تغيير المسار هنا إلى recommend-widget.js الصحيح */}
       <Script
-        src="/widget.js"
+        src="/recommend-widget.js"
         strategy="afterInteractive"
         data-retailer-id="haneen"
         data-recommend-api={process.env.NEXT_PUBLIC_RECOMMEND_API_URL}
@@ -167,13 +161,13 @@ export default function Navbar() {
             shopperNavLinks.map((link) => {
               const isActive = pathname === link.href;
               const isTryOn = link.href === "/visualize";
-              const isWardrobe = link.href === "/wardrobe";
+              const isSizeAssistant = link.name === "Size Assistant";
               return (
-                <Link
+                <a
                   key={link.name}
                   href={link.href}
                   onClick={(e) => {
-                    if (isWardrobe) {
+                    if (isSizeAssistant) {
                       e.preventDefault();
                       if (typeof window !== "undefined" && (window as any).ManikanWidget) {
                         (window as any).ManikanWidget.open();
@@ -182,7 +176,7 @@ export default function Navbar() {
                       handleNavTryOnClick(e, link.href);
                     }
                   }}
-                  className={`relative font-sans text-[15px] font-medium tracking-wide transition-all duration-300 group py-2 ${
+                  className={`relative font-sans text-[15px] font-medium tracking-wide transition-all duration-300 group py-2 cursor-pointer ${
                     isActive ? "text-forest-900" : "text-forest-700/80 hover:text-gold-600"
                   }`}
                 >
@@ -192,7 +186,7 @@ export default function Navbar() {
                       isActive ? "w-full" : "w-0 group-hover:w-full"
                     }`}
                   />
-                </Link>
+                </a>
               );
             })}
         </div>
@@ -215,12 +209,9 @@ export default function Navbar() {
                     🧵
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-[22px] font-semibold leading-tight text-white">Backstage pass needed</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-white">
+                    <h3 className="text-[22px] font-semibold leading-tight text-[#5C3E21]">Backstage pass needed</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-[#5C3E21]/80">
                       Clothes need a backstage pass — please sign in first 😄
-                    </p>
-                    <p className="mt-2 text-xs leading-relaxed text-white/80">
-                      We'll keep your try-on waiting and take you there right after login.
                     </p>
                   </div>
                 </div>
@@ -308,43 +299,46 @@ export default function Navbar() {
 
           <div className="flex items-center gap-3">
             {user ? (
-              <>
-                {isRetailer ? (
-                  <Link
-                    href="/dashboard"
-                    className="hidden md:flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gold-700 bg-gold-50 border border-gold-200 rounded-xl hover:bg-gold-100 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
-                  >
-                    <DashboardIcon />
-                    Dashboard
-                  </Link>
-                ) : (
-                  <Link
-                    href="/account"
-                    className="hidden md:flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-forest-700 bg-forest-50 border border-forest-200 rounded-xl hover:bg-forest-100 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.75"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                      <circle cx="12" cy="7" r="4" />
-                    </svg>
-                    Profile
-                  </Link>
-                )}
-                <button
-                  onClick={handleSignOut}
-                  className="relative overflow-hidden flex items-center justify-center px-6 py-2.5 text-sm font-medium text-forest-900 bg-white border border-forest-200 rounded-xl hover:bg-forest-50 shadow-soft transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
-                >
-                  Sign Out
+              <div className="relative group">
+                <button className="flex items-center justify-center w-11 h-11 rounded-full bg-forest-50 border border-forest-200 text-forest-700 hover:bg-forest-100 hover:text-gold-600 transition-colors focus:outline-none">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
                 </button>
-              </>
+                
+                {/* Dropdown Menu */}
+                <div className="absolute right-0 top-full pt-2 w-48 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-50">
+                  <div className="bg-white/95 backdrop-blur-xl border border-forest-900/10 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.08)] p-2 flex flex-col gap-1">
+                    <div className="px-3 py-2 mb-1">
+                      <p className="text-xs font-semibold text-forest-900/40 uppercase tracking-wider">My Account</p>
+                    </div>
+                    {isRetailer ? (
+                      <Link href="/dashboard" className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-forest-800 rounded-xl hover:bg-forest-50 hover:text-gold-600 transition-colors">
+                        <DashboardIcon />
+                        Dashboard
+                      </Link>
+                    ) : (
+                      <Link href="/account" className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-forest-800 rounded-xl hover:bg-forest-50 hover:text-gold-600 transition-colors">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                        Profile
+                      </Link>
+                    )}
+                    <div className="h-px w-full bg-forest-900/5 my-1" />
+                    <button onClick={handleSignOut} className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-red-600 rounded-xl hover:bg-red-50 transition-colors text-left w-full">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                        <polyline points="16 17 21 12 16 7" />
+                        <line x1="21" x2="9" y1="12" y2="12" />
+                      </svg>
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              </div>
             ) : (
               <Link
                 href="/login"

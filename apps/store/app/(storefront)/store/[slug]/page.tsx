@@ -9,7 +9,7 @@ import { useCart } from "../../../../components/CartContext";
 import { useWishlist } from "../../../../components/WishlistContext";
 import Modal from "../../../../components/Modal";
 import Manikan3DTryOn from "../../../../components/product/Manikan3DTryOn";
-import ManikanRecommendWidget from "../../../../components/product/ManikanRecommendWidget";
+import FitToolsOnboarding from "../../../../components/product/FitToolsOnboarding";
 
 type Review = {
   id: string;
@@ -48,6 +48,7 @@ export default function ProductDetailPage() {
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isTryOnRouting, setIsTryOnRouting] = useState(false);
+  const [manualGuideTrigger, setManualGuideTrigger] = useState(0);
 
   // Reviews
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -72,25 +73,15 @@ export default function ProductDetailPage() {
     if (slug) fetchProduct();
   }, [slug]);
 
-  // ── Manikan widget integration (added) ──────────────────────────
-  // Exposes the current product's size chart on window so the chatbot
-  // (loaded once, globally, from the Navbar) knows which product the
-  // shopper is currently viewing and can fetch a size recommendation
-  // for it. This does not touch any existing state or logic above.
+  // ── Manikan widget integration ──────────────────────────────
+  // Sets the current product context so the widget knows which product
+  // page the user is currently viewing.
   useEffect(() => {
     if (!product) return;
 
     (window as any).currentProductContext = {
       id: product.id,
       name: product.name,
-      size_chart_json: JSON.stringify(
-        (product.variants ?? []).map((v: any) => ({
-          size: v.sizeLabel,
-          chest_cm: v.chestCm,
-          waist_cm: v.waistCm,
-          hip_cm: v.hipCm,
-        }))
-      ),
     };
 
     return () => {
@@ -142,7 +133,7 @@ export default function ProductDetailPage() {
       setShowSizeModal(true);
       return;
     }
-    if (selectedVariant.stock === 0) return; // Paranoia check
+    if (selectedVariant.stock === 0) return;
 
     setIsAdding(true);
     setCartError("");
@@ -171,7 +162,6 @@ export default function ProductDetailPage() {
     if (res.ok) {
       setReviewMsg("✓ Review submitted!");
       setReviewForm({ rating: 5, title: "", comment: "" });
-      // Refresh reviews
       const r = await fetch(`/api/products/${slug}/reviews`);
       const d = await r.json();
       setReviews(d.reviews ?? []);
@@ -316,27 +306,62 @@ export default function ProductDetailPage() {
               </button>
             </div>
 
-            {/* AI-powered fit tools — 2D photo try-on (VTON service) and 3D
-                body-modelling try-on (body-service) grouped as one premium
-                capability, not two disconnected buttons. Distinct icon +
-                copy per tool so shoppers know these are two different
-                features, not a duplicate control. */}
+            {/* AI-powered fit tools */}
             <div className="relative rounded-3xl border border-gold-200/70 bg-gradient-to-br from-gold-50 via-cream-50 to-white p-5 shadow-soft overflow-hidden">
               <div aria-hidden className="pointer-events-none absolute -top-20 -right-20 w-48 h-48 rounded-full bg-gold-200/40 blur-3xl" />
 
-              <div className="relative flex items-center gap-2 mb-4">
-                <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-forest-900 text-gold-300">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2Z" />
-                  </svg>
-                </span>
-                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-forest-700/70">
-                  AI-Powered Fit Tools
-                </p>
+              <div className="relative flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-forest-900 text-gold-300">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2Z" />
+                    </svg>
+                  </span>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-forest-700/70">
+                    AI-Powered Fit Tools
+                  </p>
+                </div>
+                <button
+                  onClick={() => setManualGuideTrigger(prev => prev + 1)}
+                  className="relative flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold text-white overflow-hidden transition-all duration-300 hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
+                  style={{ background: "linear-gradient(135deg, #12343b 0%, #c89666 100%)" }}
+                  title="How it works"
+                >
+                  {/* Animated shimmer */}
+                  <span className="pointer-events-none absolute inset-0 animate-btn-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                  <span className="relative flex items-center gap-1.5">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-gold-300 shrink-0">
+                      <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2Z" />
+                    </svg>
+                    How it works
+                  </span>
+                </button>
               </div>
 
               <div className="relative flex flex-col gap-3">
+                {/* Size Assistant Button (Dark Theme) - unchanged: opens the
+                    shared window.ManikanWidget loaded once via Navbar.tsx,
+                    for a visitor who lands directly on this product page
+                    without coming from the general chat first. */}
+                <button
+                  onClick={() => {
+                    if ((window as any).ManikanWidget && typeof (window as any).ManikanWidget.openForSizing === 'function') {
+                      (window as any).ManikanWidget.openForSizing();
+                    }
+                  }}
+                  className="group relative flex items-center justify-center gap-3 py-3 px-6 rounded-2xl font-medium text-sm border-2 border-forest-900 text-white bg-forest-900 hover:bg-forest-800 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98] overflow-hidden cursor-pointer shadow-soft"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="relative text-gold-400">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                  </svg>
+                  <span className="relative">Size Assistant</span>
+                  <span className="relative text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-gold-500/20 text-gold-300 border border-gold-500/20">
+                    AI
+                  </span>
+                </button>
+
                 <Link
+                  id="product-2d-tryon"
                   href={`/visualize?productId=${product.id}`}
                   onClick={(e) => {
                     e.preventDefault();
@@ -366,12 +391,8 @@ export default function ProductDetailPage() {
                 <Manikan3DTryOn product={product} />
               </div>
             </div>
+            <FitToolsOnboarding productName={product.name} manualTrigger={manualGuideTrigger} />
           </div>
-
-          {/* Recommendation chat widget (recommendation-service). Floating,
-              fixed-position bubble — renders nowhere in this column's flow,
-              it just needs to exist once per product page. */}
-          <ManikanRecommendWidget productId={product.id} />
 
           {/* Shipping Info */}
           <div className="flex items-center gap-6 mt-4 pt-6 border-t border-forest-900/5 animate-fade-in-up" style={{ animationDelay: '300ms' }}>

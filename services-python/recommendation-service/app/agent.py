@@ -13,6 +13,7 @@ from langgraph.graph import StateGraph, END
 from .config import get_settings
 from .schemas import ActionType, RecommendationOutput, MeasurementInput
 from .Bedrock import _call_bedrock_gateway
+from .retrieval import retrieve_relevant_products, format_retrieved_context
 
 logger = logging.getLogger("manikan.agent")
 
@@ -25,6 +26,7 @@ class FitState(typing_extensions.TypedDict):
     intent: Optional[str]
     selected_category: Optional[str]
     available_categories: Optional[List[str]]
+    catalog_products: Optional[List[dict]]
     structured_response: Optional[RecommendationOutput]
 
 
@@ -42,6 +44,107 @@ class SizeMatchResult:
 
 OUT_OF_RANGE_THRESHOLD_CM = 15.0
 
+_SIZE_LABEL_PATTERN = re.compile(r'\b(XXS|XS|S|M|L|XL|XXL|XXXL)\b', re.IGNORECASE)
+_CONFIDENCE_PATTERN = re.compile(r'\b(\d{1,3})\s*%')
+
+
+def _extract_size_label(text: str) -> Optional[str]:
+    match = _SIZE_LABEL_PATTERN.search(text or "")
+    return match.group(1).upper() if match else None
+
+
+def _extract_confidence_pct(text: str) -> Optional[int]:
+    match = _CONFIDENCE_PATTERN.search(text or "")
+    if not match:
+        return None
+    value = int(match.group(1))
+    return value if 0 <= value <= 100 else None
+
+
+def _find_stated_size_and_confidence(messages: list[dict]) -> tuple[Optional[str], Optional[int]]:
+    """
+    Scans user messages for the most recently stated size label, and the
+    most recent user message for a confidence percentage (they may arrive
+    in the same message, e.g. "XL, about 70% sure", or across two turns:
+    "I'm size XL" then "70%").
+    """
+    user_messages = [m.get("content", "") for m in messages if m.get("role") == "user"]
+    if not user_messages:
+        return None, None
+
+    confidence = _extract_confidence_pct(user_messages[-1])
+
+    label = None
+    for text in reversed(user_messages):
+        label = _extract_size_label(text)
+        if label:
+            break
+
+    return label, confidence
+
+
+_QUESTION_MARKERS = (
+    "?", "what", "how", "max", "min", "maximum", "minimum",
+    "which size", "does this", "is this", "range", "largest", "smallest",
+    "waist", "chest", "hip", "length",
+)
+
+
+def _is_descriptive_question(text: str) -> bool:
+    lowered = (text or "").lower()
+    if lowered.startswith("my measurements:"):
+        return False
+    return any(marker in lowered for marker in _QUESTION_MARKERS)
+
+
+def _try_answer_from_size_chart_locally(question: str, size_chart_raw: str) -> Optional[str]:
+    """
+    Answers informational questions about a product's real size chart
+    directly (e.g. "what's the max chest size?") without invoking the LLM
+    or the personal fit-match calculation - this is a different intent
+    from "does this fit ME", and must not be hijacked by the body-fit
+    guardrail just because measurements happen to be present in this
+    session.
+    """
+    try:
+        size_chart = json.loads(size_chart_raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not size_chart:
+        return None
+
+    question = question.lower()
+    field = None
+    if "chest" in question:
+        field = "chest_cm"
+    elif "waist" in question:
+        field = "waist_cm"
+    elif "hip" in question:
+        field = "hip_cm"
+
+    if not field:
+        available_sizes = [e.get("size") for e in size_chart if e.get("size")]
+        if not available_sizes:
+            return None
+        if any(w in question for w in ("what size", "which size", "sizes do you", "available size")):
+            return f"This item comes in these sizes: {', '.join(available_sizes)}."
+        if any(w in question for w in ("max", "largest", "biggest", "up to")):
+            return f"The largest size we carry for this item is {available_sizes[-1]}."
+        if any(w in question for w in ("min", "smallest")):
+            return f"The smallest size we carry for this item is {available_sizes[0]}."
+        return None
+
+    values = [e[field] for e in size_chart if isinstance(e.get(field), (int, float))]
+    if not values:
+        return None
+
+    label = field.replace("_cm", "")
+    if any(w in question for w in ("max", "largest", "biggest", "up to")):
+        return f"The maximum {label} in our size chart for this item is {max(values)}cm."
+    if any(w in question for w in ("min", "smallest")):
+        return f"The minimum {label} in our size chart for this item is {min(values)}cm."
+    return f"Our {label} sizing for this item ranges from {min(values)}cm to {max(values)}cm."
+
 
 def compute_recommended_size(betas: MeasurementInput, size_chart_raw: str) -> SizeMatchResult:
     try:
@@ -54,20 +157,31 @@ def compute_recommended_size(betas: MeasurementInput, size_chart_raw: str) -> Si
 
     available_sizes = [entry.get("size") for entry in size_chart if entry.get("size")]
 
+    # waist_cm is the one field every category's chart is expected to
+    # have (pants/skirts included) - required. chest_cm and hip_cm are
+    # both optional now: pants/skirts commonly have no chest_cm at all
+    # (garment-fit data, not a body measurement that applies to them),
+    # so a row missing it is still matched on whatever fields it does
+    # have, instead of being skipped entirely. This mirrors how hip_cm
+    # was already handled - chest_cm just joins it as optional.
     best_size = None
     best_distance = float("inf")
     for entry in size_chart:
         try:
-            squared_diff = (
-                (entry["chest_cm"] - betas.chest_cm) ** 2
-                + (entry["waist_cm"] - betas.waist_cm) ** 2
-            )
-            hip_value = entry.get("hip_cm")
-            if isinstance(hip_value, (int, float)):
-                squared_diff += (hip_value - betas.hips_cm) ** 2
-            distance = squared_diff ** 0.5
+            waist_value = entry["waist_cm"]
+            squared_diff = (waist_value - betas.waist_cm) ** 2
         except (KeyError, TypeError):
             continue
+
+        chest_value = entry.get("chest_cm")
+        if isinstance(chest_value, (int, float)):
+            squared_diff += (chest_value - betas.chest_cm) ** 2
+
+        hip_value = entry.get("hip_cm")
+        if isinstance(hip_value, (int, float)):
+            squared_diff += (hip_value - betas.hips_cm) ** 2
+
+        distance = squared_diff ** 0.5
         if distance < best_distance:
             best_distance = distance
             best_size = entry.get("size")
@@ -217,33 +331,49 @@ def build_general_instruction(available_categories: Optional[List[str]]) -> str:
     base = (
         "You are Manikan AI, the interactive shopping and sizing assistant for an online "
         f"clothing store. Available store categories (EXACT strings, case-sensitive): {categories_str}.\n\n"
-        "CRITICAL RULE - NEVER INVENT DATA: Never state a specific size (S, M, L, XL, "
-        "a number, etc.) unless the user explicitly typed that size themselves in this "
-        "conversation, OR it was computed from real measurements you were given. If you "
-        "don't actually know the user's size yet, do not mention any size at all - ask "
-        "for it instead. Never invent product names, prices, or stock availability either.\n\n"
+        "This is the GENERAL chat (not a specific product page). You have NO real size "
+        "chart here - you can never compute or verify an exact fit. Exact sizing only "
+        "happens later, on a specific product's own page.\n\n"
         "FLOW:\n"
-        "1. If the user names an item/category (e.g. 'I want a blouse') without giving a "
-        "size or measurements: respond with action='provide_recommendation' and ask about "
-        "their style preference AND whether they know their size for it - don't show "
-        "products yet.\n"
-        "2. If the user states a size label (e.g. 'Large') for a specific category: ask "
-        "'How confident are you in this size, from 0-100%?' - respond with "
-        "action='provide_recommendation'.\n"
-        "3. Once the user gives a confidence percentage for a stated label:\n"
-        "   - If confidence >= 70%: trust the label. Set action='fetch_products', "
-        "recommended_size to the exact label the user gave, and matched_category to the "
-        "EXACT matching string from the categories list above.\n"
-        "   - If confidence < 70%: do NOT trust the label. Set action='ask_measurements' "
-        "and ask for their real height, weight, chest, waist measurements instead - a "
-        "label they're unsure about isn't reliable enough to shop by.\n"
-        "4. If the user is just browsing/asking to see items with NO fit question implied "
-        "at all (e.g. 'show me your shirts'): action='fetch_products', matched_category "
-        "set to the exact matching category string, recommended_size left null.\n"
-        "5. Otherwise: action='provide_recommendation', reply conversationally.\n"
-        "matched_category must ALWAYS be copied EXACTLY (same spelling/case) from the "
-        "categories list - never invent a category not in that list. If the user asks for "
-        "something not in the list, say so honestly and mention what IS available instead."
+        "1. If the user describes a STYLE, OCCASION, or VIBE without naming one exact "
+        "category (e.g. 'something formal', 'an outfit for a wedding'): ask which "
+        "category they want, using 2-3 of the ACTUAL category names from the list "
+        "above (never a hardcoded example category - always pull from what this "
+        "store genuinely carries, so the question fits the real catalog rather than "
+        "assuming who's asking or what's available). "
+        "action='provide_recommendation', no products shown yet.\n"
+        "2. If the user names or confirms a SPECIFIC category that exactly matches one "
+        "from the list above (e.g. 'a blouse'): action='fetch_products', matched_category "
+        "set to that EXACT string from the list, and a short 1-sentence intro (e.g. "
+        "'Here are our blouses:'). You may casually ask if they know their usual size "
+        "in the same message, purely as small talk - you will not act on their answer.\n"
+        "3. If the user is just browsing generally with no occasion/category context at "
+        "all (e.g. 'show me what you have'): action='fetch_products' with matched_category "
+        "null (retrieval will ground it), short intro.\n"
+        "4. If the user states anything about size or fit here - a label like 'Large'/"
+        "'XL', raw measurements (height/weight/chest/waist/hips), or a question like "
+        "'what size should I get' - you have NO real chart for any specific product to "
+        "check it against in this general chat. Do NOT ask about confidence here, do "
+        "NOT accept or state any size as fact. Immediately respond with "
+        "action='provide_recommendation' (no products) and redirect them: 'Pick the "
+        "item you like from the options and click **View Item** - I will calculate "
+        "your exact size for that specific piece right there.' NEVER ask them to type "
+        "in height/weight/measurements in this general chat - that only happens "
+        "automatically after they click View Item on a product.\n"
+        "5. action='fetch_products' means you are ACTIVELY showing items right now, in "
+        "this exact response - product cards render ONLY for this action. Any question "
+        "or clarification you're asking (not yet showing items) must use "
+        "action='provide_recommendation' instead, or the cards shown will contradict "
+        "what you just asked.\n"
+        "6. Never invent product names, prices, stock, or a category not in the list "
+        "above. If the user asks for something not carried, say so honestly and mention "
+        "what IS available.\n\n"
+        "BREVITY - CRITICAL: Keep your message to 1-2 short sentences MAX. Never list, "
+        "name, or describe individual products in your text reply - if relevant items "
+        "were retrieved, they will be shown to the user as visual cards separately, so "
+        "your text should just be a brief intro or a short clarifying question. Do not "
+        "repeat product names/descriptions from the retrieved-items context - that "
+        "context is for you to understand what exists, not to recite back."
     )
     return base
 
@@ -253,8 +383,63 @@ async def call_conversational_agent(state: FitState) -> FitState:
     betas = state.get("betas")
     size_chart = state.get("size_chart")
 
-    # On a specific product page, waiting on measurements: prompt for them
+    # On a specific product page: check FIRST whether this message is an
+    # informational question about the item's own size chart (e.g. "what's
+    # the max size?") rather than a personal fit request - this must win
+    # over the betas/label branches below, since the widget currently keeps
+    # resending betas on every message once they've been filled in once,
+    # which was wrongly forcing every follow-up question into the strict
+    # body-fit rejection message regardless of what was actually asked.
+    if product_id and size_chart:
+        last_user_text = ""
+        for m in reversed(state["messages"]):
+            if m.get("role") == "user":
+                last_user_text = m.get("content") or ""
+                break
+        if _is_descriptive_question(last_user_text):
+            local_answer = _try_answer_from_size_chart_locally(last_user_text, size_chart)
+            if local_answer:
+                state["structured_response"] = RecommendationOutput(
+                    action=ActionType.PROVIDE_RECOMMENDATION,
+                    message=local_answer,
+                    provider="STATIC-LOCAL",
+                )
+                return state
+
+    # On a specific product page, waiting on measurements: check first
+    # whether the user stated a size label (e.g. "I'm XL") instead of
+    # filling in real measurements - if so, ask how confident they are,
+    # and only trust the label (skip the real chart calculation) at
+    # high confidence. This is the user's own self-reported estimate,
+    # not an AI-invented guess - different from hallucinating a size.
     if product_id and size_chart and not betas:
+        stated_label, confidence_pct = _find_stated_size_and_confidence(state["messages"])
+
+        if stated_label and confidence_pct is not None:
+            if confidence_pct >= 80:
+                state["structured_response"] = RecommendationOutput(
+                    action=ActionType.PROVIDE_RECOMMENDATION,
+                    recommended_size=stated_label,
+                    message=f"Your size is {stated_label}.",
+                    provider="STATIC-LABEL-TRUSTED",
+                    confidence_score=confidence_pct / 100,
+                )
+            else:
+                state["structured_response"] = RecommendationOutput(
+                    action=ActionType.PROVIDE_RECOMMENDATION,
+                    message="No worries - please enter your exact height, weight, chest, and waist measurements below so I can calculate your precise size for this item.",
+                    provider="STATIC-LABEL-UNTRUSTED",
+                )
+            return state
+
+        if stated_label and confidence_pct is None:
+            state["structured_response"] = RecommendationOutput(
+                action=ActionType.PROVIDE_RECOMMENDATION,
+                message=f"You mentioned {stated_label} - how confident are you in that size, from 0-100%?",
+                provider="STATIC-ASK-CONFIDENCE",
+            )
+            return state
+
         state["structured_response"] = RecommendationOutput(
             action=ActionType.PROVIDE_RECOMMENDATION,
             message="Please enter your height, weight, chest, and waist measurements below, and I'll calculate your exact size and confidence score.",
@@ -289,7 +474,25 @@ async def call_conversational_agent(state: FitState) -> FitState:
         return state
 
     available_categories = state.get("available_categories") or []
-    instruction = {"role": "system", "content": build_general_instruction(available_categories)}
+
+    # RAG: for open-ended style questions, ground the LLM's answer in the
+    # retailer's REAL product descriptions (retrieved by TF-IDF similarity
+    # to the user's message) instead of letting it improvise style advice
+    # about items that may not exist. Size charts and categories stay
+    # exact-match lookups (see above) - this is specifically for the
+    # free-text "what would suit me" kind of question.
+    last_user_text = ""
+    for m in reversed(state["messages"]):
+        if m.get("role") == "user":
+            last_user_text = m.get("content") or ""
+            break
+    retrieved = retrieve_relevant_products(last_user_text, state.get("catalog_products"))
+    retrieval_context = format_retrieved_context(retrieved)
+
+    instruction_text = build_general_instruction(available_categories)
+    if retrieval_context:
+        instruction_text += "\n\n" + retrieval_context
+    instruction = {"role": "system", "content": instruction_text}
     response, provider_tag = await call_llm_with_fallback([instruction] + state["messages"])
     response.provider = provider_tag
 
@@ -312,6 +515,18 @@ async def call_conversational_agent(state: FitState) -> FitState:
                     f"Could you tell me which of these categories you're looking for? "
                     f"{', '.join(available_categories)}"
                 )
+
+    # Attach the RAG-retrieved product ids so the widget can render visual
+    # cards (image/price/link) from its own already-cached product data -
+    # the LLM's text reply stays a short intro, never the source of the
+    # product details shown.
+    # CRITICAL: only when the LLM itself decided action='fetch_products'
+    # (i.e. it's actively suggesting items now) - never on a clarifying
+    # question or general chat turn, even if the retrieval step found a
+    # loose text match. This is what was causing cards to show up
+    # disconnected from what the text was actually saying.
+    if retrieved and response.action == ActionType.FETCH_PRODUCTS:
+        response.retrieved_product_ids = [p["id"] for p in retrieved if p.get("id")]
 
     state["structured_response"] = response
     return state
