@@ -51,3 +51,55 @@ export function generateAvatar(measurements) {
 export function generateDressedAvatar(payload) {
   return postForGlb('/api/tryon', payload)
 }
+
+async function postJson(path, payload, { timeoutMs = 30_000 } = {}) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetch(`${STORE_API_URL}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Manikan-Key': getRetailerKey() ?? '',
+      },
+      signal: controller.signal,
+      body: JSON.stringify(payload),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(data.error || `Server error: ${response.status}`)
+    return data
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+/** Request the Store's recommendation + 3D orchestration workflow. */
+export function processWidgetFit({ productId, measurements }) {
+  return postJson('/api/widget/process', { productId, measurements })
+}
+
+/** Upload an optional shopper photo for a 2D virtual try-on preview. */
+export async function uploadVirtualTryOn(productId, photo, { timeoutMs = 120_000 } = {}) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  const formData = new FormData()
+  formData.append('product_id', productId)
+  formData.append('human_image', photo)
+
+  try {
+    const response = await fetch(`${STORE_API_URL}/api/widget/vton`, {
+      method: 'POST',
+      headers: { 'X-Manikan-Key': getRetailerKey() ?? '' },
+      signal: controller.signal,
+      body: formData,
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || `Virtual try-on failed (${response.status})`)
+    }
+    return URL.createObjectURL(await response.blob())
+  } finally {
+    clearTimeout(timeout)
+  }
+}

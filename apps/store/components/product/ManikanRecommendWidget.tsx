@@ -29,7 +29,7 @@ const WIDGET_SRC = "/recommend-widget.js";
 // dev (and if that key is ever rotated from the dashboard, update this too).
 const RETAILER_KEY =
   process.env.NEXT_PUBLIC_MANIKAN_RECOMMEND_KEY ||
-  "pk_live_ef208d3d1b767eeddef67e6ff9402bb11526b14e2aed9689";
+  "pk_live_632dba109f17b0a768f77addefa42f81a86c9f3653a3b40c";
 
 function teardownExistingWidget() {
   document.querySelector(".ai-widget-container")?.remove();
@@ -56,7 +56,7 @@ export default function ManikanRecommendWidget({ productId }: { productId: strin
       const script = document.createElement("script");
       script.src = WIDGET_SRC;
       script.async = true;
-      script.dataset.retailerKey = RETAILER_KEY;
+      script.dataset.widgetKey = RETAILER_KEY;
       script.dataset.productId = productId;
       script.dataset.manikanRecommend = "1";
       document.body.appendChild(script);

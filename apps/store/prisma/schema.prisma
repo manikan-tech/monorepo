@@ -337,6 +337,7 @@ model Product {
   name            String
   slug            String                       @unique
   description     String?
+  fitNotes        String?
   category        String
   gender          String
   brand           String

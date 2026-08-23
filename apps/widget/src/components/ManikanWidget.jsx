@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import MeasurementSlider from './MeasurementSlider'
 import TryOnViewer from './TryOnViewer'
 import InteractiveGuide from './InteractiveGuide'
-import { generateDressedAvatar } from '../lib/api'
+import { generateDressedAvatar, processWidgetFit, uploadVirtualTryOn } from '../lib/api'
 import { getLayerableGarment, wearGarment, removeGarment } from '../lib/outfit'
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -22,7 +22,6 @@ function getSavedProfile() {
     return saved ? JSON.parse(saved) : null
   } catch { return null }
 }
-
 function saveProfile(profile) {
   localStorage.setItem('manikan_profile', JSON.stringify(profile))
 }
@@ -49,7 +48,7 @@ export default function ManikanWidget({ product, onClose }) {
     pants: { key: 'waist_width_cm', body: 'waist' },
     default: { key: 'chest_width_cm', body: 'chest' },
   }
-  const recommendedSize = useMemo(() => {
+  const localRecommendedSize = useMemo(() => {
     const driver = SIZE_DRIVER[product.category] || SIZE_DRIVER.default
     const userCirc = driver.body === 'waist' ? waist : chest
     let best = null
@@ -67,12 +66,19 @@ export default function ManikanWidget({ product, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chest, waist, product.sizes, product.category])
 
+  const [fitResult, setFitResult] = useState(null)
+  const recommendedSize = fitResult?.recommendation?.recommendedSize || localRecommendedSize
+
   const [selectedSize, setSelectedSize] = useState(() => isReturningUser ? recommendedSize : 'M')
   const [tryOnUrl, setTryOnUrl] = useState(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState(null)
+  const [isVtonLoading, setIsVtonLoading] = useState(false)
+  const [vtonPreviewUrl, setVtonPreviewUrl] = useState(null)
+  const photoInputRef = useRef(null)
   const [guideRestartToken, setGuideRestartToken] = useState(0)
   const previousUrlRef = useRef(null)
+  const previousVtonUrlRef = useRef(null)
 
   // What the shopper already has on from an earlier product, if it can be
   // layered with this one (a top with a bottom). Read once on mount so it
@@ -175,8 +181,9 @@ export default function ManikanWidget({ product, onClose }) {
   // Handle "Generate My Body Model" click
   const handleGenerateBody = async () => {
     setStep(2) // show generating
+    setError(null)
+    setIsGenerating(true)
 
-    // Save profile
     const profile = {
       sex, height_cm: height, weight_kg: weight,
       chest_cm: chest, waist_cm: waist, hips_cm: hips,
@@ -184,10 +191,61 @@ export default function ManikanWidget({ product, onClose }) {
     }
     saveProfile(profile)
 
-    // Generate the dressed avatar with recommended size
-    await generateTryOn(recommendedSize)
-    setSelectedSize(recommendedSize)
-    setStep(3) // show try-on
+    const measurements = { heightCm: height, weightKg: weight, chestCm: chest, waistCm: waist, hipsCm: hips }
+    try {
+      console.info('[Manikan Widget] Sending measurements to Store orchestrator', { productId: product.id })
+      const result = await processWidgetFit({ productId: product.id, measurements })
+      setFitResult(result)
+      const serverSize = result?.recommendation?.recommendedSize
+      const size = serverSize && product.sizes[serverSize] ? serverSize : localRecommendedSize
+      setSelectedSize(size)
+      console.info('[Manikan Widget] Orchestrator fit result received', {
+        productId: product.id,
+        recommendedSize: serverSize ?? null,
+        hasBodyScene: Boolean(result?.body3d?.meshData),
+      })
+
+      // The current Store contract may return scene metadata, a URL, or no
+      // scene if its optional body service is unavailable. Reuse the existing
+      // Store-backed GLB path only in that last case so R3F remains useful.
+      const meshData = result?.body3d?.meshData
+      const modelUrl = typeof meshData === 'string'
+        ? meshData
+        : meshData?.modelUrl || meshData?.glbUrl || null
+      if (modelUrl) {
+        setTryOnUrl(modelUrl)
+      } else if (product.isTryOnEnabled) {
+        await generateTryOn(size)
+      }
+      setStep(3)
+    } catch (err) {
+      console.error('[Manikan Widget] Store orchestrator failed', err)
+      setError(err.message || 'Could not calculate your fit. Please try again.')
+      setStep(1)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleVtonUpload = async (event) => {
+    const photo = event.target.files?.[0]
+    if (!photo) return
+    setIsVtonLoading(true)
+    setError(null)
+    try {
+      console.info('[Manikan Widget] Uploading photo for virtual try-on', { productId: product.id })
+      const url = await uploadVirtualTryOn(product.id, photo)
+      if (previousVtonUrlRef.current) URL.revokeObjectURL(previousVtonUrlRef.current)
+      previousVtonUrlRef.current = url
+      setVtonPreviewUrl(url)
+      console.info('[Manikan Widget] Virtual try-on preview received', { productId: product.id })
+    } catch (err) {
+      console.error('[Manikan Widget] Virtual try-on failed', err)
+      setError(err.message || 'Could not create a virtual try-on preview.')
+    } finally {
+      setIsVtonLoading(false)
+      event.target.value = ''
+    }
   }
 
   // Handle size change in try-on view
@@ -200,6 +258,7 @@ export default function ManikanWidget({ product, onClose }) {
   useEffect(() => {
     return () => {
       if (previousUrlRef.current) URL.revokeObjectURL(previousUrlRef.current)
+      if (previousVtonUrlRef.current) URL.revokeObjectURL(previousVtonUrlRef.current)
     }
   }, [])
 
@@ -220,12 +279,6 @@ export default function ManikanWidget({ product, onClose }) {
       return () => clearTimeout(timer)
     }
   }, [isReturningUser, step, tryOnUrl, isGenerating, error, generateTryOn, recommendedSize])
-
-  // Products without garment data can't be rendered in 3D yet — show a graceful
-  // "coming soon" state instead of walking the shopper into a failed try-on.
-  if (!product.isTryOnEnabled) {
-    return <ComingSoon product={product} onClose={onClose} />
-  }
 
   return (
     <div className="mw-overlay" onClick={onClose}>
@@ -393,6 +446,9 @@ export default function ManikanWidget({ product, onClose }) {
                     isLoading={isGenerating}
                     productColor={product.color_hex}
                   />
+                  {!product.isTryOnEnabled && !tryOnUrl && (
+                    <p className="mw-3d-unavailable">A 3D garment preview is not available for this item yet. Your fit recommendation is still ready below.</p>
+                  )}
                 </div>
 
                 {/* Right: Size controls */}
@@ -460,6 +516,33 @@ export default function ManikanWidget({ product, onClose }) {
                       </p>
                     )}
                   </div>
+
+                  {fitResult?.recommendation && (
+                    <section className="mw-fit-result" aria-live="polite">
+                      <p className="mw-fit-result-kicker">AI Fit Result</p>
+                      <strong className="mw-fit-result-size">
+                        Recommended Size: {fitResult.recommendation.recommendedSize || 'No close match'}
+                      </strong>
+                      {typeof fitResult.recommendation.confidence === 'number' && (
+                        <span className="mw-fit-result-confidence">
+                          {Math.round(fitResult.recommendation.confidence * 100)}% confidence
+                        </span>
+                      )}
+                      <p className="mw-fit-result-explanation">
+                        {fitResult.recommendation.explanation || fitResult.recommendation.reasoning}
+                      </p>
+                    </section>
+                  )}
+
+                  <section className="mw-vton-section">
+                    <h4 className="mw-tryon-label">Virtual Try-On</h4>
+                    <p className="mw-vton-hint">Optional: upload a shopper photo for a 2D preview.</p>
+                    <input ref={photoInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={handleVtonUpload} />
+                    <button className="mw-vton-btn" disabled={isVtonLoading} onClick={() => photoInputRef.current?.click()}>
+                      {isVtonLoading ? 'Creating preview…' : 'Upload Photo for Virtual Try-On'}
+                    </button>
+                    {vtonPreviewUrl && <img className="mw-vton-preview" src={vtonPreviewUrl} alt="Virtual try-on preview" />}
+                  </section>
 
                   {/* Garment specs for selected size */}
                   <div className="mw-tryon-specs">
@@ -590,53 +673,6 @@ function GeneratingOverlay() {
 
       <div className="mw-gen-progress">
         <div className="mw-gen-progress-bar" />
-      </div>
-    </div>
-  )
-}
-
-
-/* ─────────────────────────────────────────────────────────────────────────
-   Coming Soon — shown for products that don't have 3D garment data yet
-   (isTryOnEnabled === false). Keeps the shopper informed instead of erroring.
-   ───────────────────────────────────────────────────────────────────────── */
-function ComingSoon({ product, onClose }) {
-  return (
-    <div className="mw-overlay" onClick={onClose}>
-      <div className="mw-container" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
-        <div className="mw-header">
-          <div className="mw-header-brand">
-            <div>
-              <h2 className="mw-brand-name">Manikan</h2>
-              <p className="mw-brand-sub">Virtual Try-On</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="mw-close" id="close-widget">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="mw-body" style={{ textAlign: 'center' }}>
-          {product.image && (
-            <img
-              src={product.image}
-              alt={product.name}
-              style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 12, margin: '8px auto 20px' }}
-            />
-          )}
-          <h3 className="mw-welcome-title">{product.name}</h3>
-          <p className="mw-section-desc" style={{ marginTop: 8 }}>
-            3D virtual try-on isn’t available for this product yet — we’re adding
-            it soon. In the meantime, check the size guide on the product page.
-          </p>
-        </div>
-
-        <div className="mw-footer">
-          <span className="mw-footer-text">Powered by</span>
-          <div className="mw-footer-logo"><span>Manikan</span></div>
-        </div>
       </div>
     </div>
   )

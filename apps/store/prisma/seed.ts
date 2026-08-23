@@ -289,6 +289,7 @@ async function main() {
                 name: firstRow.productName,
                 slug: productSlug,
                 description: `High-quality ${firstRow.productName} by ${firstRow.brand}, crafted from premium ${firstRow.fabric}. Designed with a focus on fit, style, and everyday comfort.`,
+                fitNotes: `Use the product's published body-fit chart for ${firstRow.productName}. Compare chest, waist, and hip measurements to the listed variant before recommending a size; ${firstRow.fabric} may affect ease and drape.`,
                 category: firstRow.category,
                 gender: firstRow.gender,
                 brand: firstRow.brand,

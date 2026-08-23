@@ -82,3 +82,25 @@ def test_tfidf_retrieval():
     results = retrieve_relevant_products("weddings", catalog, top_k=1)
     assert len(results) == 1
     assert results[0]["id"] == "p1"
+
+
+def test_out_of_scope_query():
+    state: FitState = {
+        "messages": [{"role": "user", "content": "what is the capital of egypt"}],
+        "product_id": "prod_1",
+        "betas": None,
+        "size_chart": '[{"size":"S", "chest_cm": 85, "waist_cm": 70, "hip_cm": 93}]',
+        "intent": "general",
+        "selected_category": None,
+        "available_categories": [],
+        "catalog_products": [],
+        "structured_response": None
+    }
+    
+    new_state = asyncio.run(call_conversational_agent(state))
+    resp = new_state.get("structured_response")
+    
+    assert resp is not None
+    assert resp.provider == "STATIC-OUT-OF-SCOPE"
+    assert "outside my scope" in resp.message
+

@@ -135,7 +135,10 @@ export default function Navbar() {
         strategy="afterInteractive"
         data-retailer-id="haneen"
         data-recommend-api={process.env.NEXT_PUBLIC_RECOMMEND_API_URL}
-        data-widget-key={process.env.NEXT_PUBLIC_WIDGET_API_KEY}
+        data-widget-key={
+          process.env.NEXT_PUBLIC_MANIKAN_RECOMMEND_KEY ||
+          "pk_live_632dba109f17b0a768f77addefa42f81a86c9f3653a3b40c"
+        }
         data-store-api={process.env.NEXT_PUBLIC_SITE_URL}
       />
       <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] w-full bg-transparent overflow-hidden">

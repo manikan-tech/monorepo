@@ -3,9 +3,17 @@
     if (typeof window === 'undefined') return;
     const currentScript = document.currentScript || Array.from(document.querySelectorAll('script')).find(s => s.src.includes('widget.js'));
     const RECOMMEND_API_BASE = (currentScript && currentScript.getAttribute('data-recommend-api')) || "http://127.0.0.1:8000";
-    const WIDGET_API_KEY = (currentScript && currentScript.getAttribute('data-widget-key')) || "manikan_secure_widget_key_2026_prod";
+    // `data-widget-key` is the current attribute. Keep `data-retailer-key`
+    // for existing dashboard snippets while they are migrated.
+    const WIDGET_API_KEY = (currentScript && (
+        currentScript.getAttribute('data-widget-key') ||
+        currentScript.getAttribute('data-retailer-key')
+    )) || "";
 
-    const STORE_API_BASE = (currentScript && currentScript.getAttribute('data-store-url'))
+    const STORE_API_BASE = (currentScript && (
+        currentScript.getAttribute('data-store-url') ||
+        currentScript.getAttribute('data-store-api')
+    ))
         || (currentScript && currentScript.src ? new URL(currentScript.src).origin : null)
         || window.location.origin;
 
