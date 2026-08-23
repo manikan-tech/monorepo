@@ -1,14 +1,16 @@
 # FastAPI application configuration and Virtual Try-On HTTP routes.
 import hmac
+import hashlib
 import logging
 import os
+import time as _time
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional, Tuple
 
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-import requests
+import httpx
 
 from services.vton_client import is_client_initialized, run_tryon_with_retry
 from utils.category_mapper import map_category
@@ -34,6 +36,11 @@ MIN_GARMENT_IMAGE_WIDTH = 300
 MIN_GARMENT_IMAGE_HEIGHT = 300
 MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024
 
+# In-memory dedup cache: key → (result_path, expires_at)
+# Entries expire after 5 minutes to prevent memory growth
+_DEDUP_CACHE: Dict[str, Tuple[str, float]] = {}
+_DEDUP_TTL_SECONDS = 300  # 5 minutes
+
 
 def _raise_vton_http_error(status_code: int, code: str, message: str) -> None:
     raise HTTPException(status_code=status_code, detail={"code": code, "error": message})
@@ -50,6 +57,21 @@ def _validation_error_from_message(message: str) -> tuple[int, str]:
     if "garment_image_url" in normalized:
         return 400, "INVALID_GARMENT_IMAGE_URL"
     return 400, "INVALID_INPUT"
+
+
+def _make_dedup_key(garment_image_url: str, category: str, session_id: str | None) -> str:
+    """Create a cache key from the request inputs."""
+    raw = f"{garment_image_url}:{category}:{session_id or ''}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _cleanup_expired_cache() -> None:
+    """Remove expired entries and their cached result files from the dedup cache."""
+    now = _time.time()
+    expired = [key for key, (_, expires_at) in _DEDUP_CACHE.items() if expires_at < now]
+    for key in expired:
+        result_path, _ = _DEDUP_CACHE.pop(key)
+        cleanup_files([result_path])
 
 # Comma-separated allowed origins. Default "*" for local dev; set an explicit
 # list (e.g. the Store service origin) in production. Same convention as
@@ -124,23 +146,51 @@ async def tryon_2d(
     session_id: Optional[str] = Form(default=None),
 ) -> FileResponse:
     """Generate a FASHN.ai result and delete all images after delivery."""
-    del session_id
     files_to_cleanup: list[str] = []
     request_id = request.headers.get("x-request-id", "unknown")
 
     try:
         cloth_type = map_category(category)
+
+        human_image.file.seek(0)
+        image_bytes = human_image.file.read(MAX_UPLOAD_SIZE_BYTES + 1)
+        human_image.file.seek(0)
+        dedup_key: Optional[str] = None
+        if len(image_bytes) <= MAX_UPLOAD_SIZE_BYTES:
+            image_fingerprint = hashlib.sha256(image_bytes).hexdigest()
+            dedup_key = _make_dedup_key(
+                garment_image_url,
+                category,
+                f"{session_id or ''}:{image_fingerprint}",
+            )
+        _cleanup_expired_cache()
+        cached_result = _DEDUP_CACHE.get(dedup_key) if dedup_key else None
+        if cached_result:
+            cached_path, _ = cached_result
+            if os.path.exists(cached_path):
+                return FileResponse(
+                    path=cached_path,
+                    media_type="image/png",
+                    filename="tryon_result.png",
+                )
+            if dedup_key:
+                _DEDUP_CACHE.pop(dedup_key, None)
+
         human_image_path = save_upload_to_temp(human_image, TEMP_DIR, MAX_UPLOAD_SIZE_BYTES)
         files_to_cleanup.append(human_image_path)
-        garment_image_path = download_url_to_temp(garment_image_url, TEMP_DIR, MAX_UPLOAD_SIZE_BYTES)
+        garment_image_path = await download_url_to_temp(garment_image_url, TEMP_DIR, MAX_UPLOAD_SIZE_BYTES)
         files_to_cleanup.append(garment_image_path)
-        result_image_path = run_tryon_with_retry(
+        result_image_path = await run_tryon_with_retry(
             human_img_path=human_image_path,
             garment_img_path=garment_image_url,  # pass the public URL directly — FASHN.ai fetches it
             cloth_type=cloth_type,
         )
-        files_to_cleanup.append(result_image_path)
-    except requests.exceptions.RequestException as error:
+        if dedup_key:
+            _DEDUP_CACHE[dedup_key] = (
+                result_image_path,
+                _time.time() + _DEDUP_TTL_SECONDS,
+            )
+    except httpx.HTTPError as error:
         cleanup_files(files_to_cleanup)
         logger.error("FASHN.ai processing failed [%s]: %s", request_id, error)
         _raise_vton_http_error(502, "FASHN_API_FAILURE", "FASHN.ai processing failed.")

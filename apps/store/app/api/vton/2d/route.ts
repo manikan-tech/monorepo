@@ -10,7 +10,7 @@ const VTON_SERVICE_URL = process.env.VTON_SERVICE_URL || "http://localhost:8003"
 // that can reach the Python service's URL.
 const TRYON_SERVICE_KEY = process.env.TRYON_SERVICE_KEY || "";
 const MAX_HUMAN_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
-const REQUEST_TIMEOUT_MS = 90_000;
+const REQUEST_TIMEOUT_MS = 150_000; // 150s: VTON needs up to 120s polling + 30s buffer
 const ALLOWED_IMAGE_HOSTS = new Set(
     (process.env.VTON_ALLOWED_IMAGE_HOSTS || "")
         .split(",")
@@ -115,6 +115,10 @@ export async function POST(request: NextRequest) {
         upstreamFormData.append("human_image", humanImage);
         upstreamFormData.append("garment_image_url", garmentImageUrl);
         upstreamFormData.append("category", category);
+        const sessionId = formData.get("session_id");
+        if (typeof sessionId === "string" && sessionId) {
+            upstreamFormData.append("session_id", sessionId);
+        }
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
         let upstream: Response;

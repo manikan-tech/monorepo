@@ -201,29 +201,27 @@ Content-Type: application/json
 
 ## 3. Virtual Try-On (VTON) Service
 * **Base URL**: `http://localhost:8003`
-* **Purpose**: Integrates diffusion-based VTON algorithms utilizing Replicate APIs to overlay target garments onto user person images.
+* **Purpose**: Internal FastAPI worker that validates inputs, coordinates an asynchronous FASHN.ai Try-On Max prediction, and streams the generated image. Browser clients access the worker through the Store VTON gateway, not directly.
 
-### **POST** `/tryon/generate`
-Generates a virtual try-on image queue ticket using a target human model image and target apparel image.
+### **POST** `/api/vton/2d`
+Generates a try-on image using a shopper image, an approved product image URL, and a supported product category.
 
 #### **Request Header**
 ```http
-Content-Type: application/json
+Content-Type: multipart/form-data
 ```
 
-#### **Request Body**
-```json
-{
-  "person_image_url": "https://img.manikan.ai/profiles/usr_99824_front.jpg",
-  "garment_image_url": "https://img.manikan.ai/catalog/outfit_01_jacket.jpg"
-}
-```
+#### **Form fields**
 
-#### **Response Body (202 Accepted)**
-```json
-{
-  "status": "queued",
-  "prediction_id": "mock_replicate_pred_12345",
-  "info": "To trigger actual model, configure REPLICATE_API_TOKEN environment variable."
-}
-```
+| Field | Type | Rule |
+| --- | --- | --- |
+| `human_image` | Image file | Minimum `400 × 600` px |
+| `garment_image_url` | String | HTTP(S) image URL; minimum `300 × 300` px |
+| `category` | String | `blouse`, `shirt`, `jacket`, `pants`, `skirt`, or `dress` |
+| `session_id` | String, optional | Accepted for compatibility and not used by the worker |
+
+#### **Response**
+
+Success returns `200 OK` with an `image/png` binary body and `Content-Disposition: attachment; filename="tryon_result.png"`. Validation failures return `400` or `422`; FASHN/provider failures return `502` with `FASHN_API_FAILURE`; local temporary image failures return `500` with `TEMPORARY_IMAGE_PROCESSING_FAILED`.
+
+See `docs/vton-service.md` for the full lifecycle, gateway controls, benchmark methodology, and cost model.

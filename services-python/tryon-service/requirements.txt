@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 python-dotenv
-requests
+httpx
 python-multipart
 pydantic
 Pillow

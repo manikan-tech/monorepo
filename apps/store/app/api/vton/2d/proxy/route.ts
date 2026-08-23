@@ -104,6 +104,7 @@ export async function POST(request: NextRequest) {
         const upstreamFormData = new FormData();
         upstreamFormData.append("human_image", humanImage);
         upstreamFormData.append("product_id", product.id);
+        upstreamFormData.append("session_id", customer.sub);
 
         const upstream = await fetch(new URL("/api/vton/2d", request.url), {
             method: "POST",

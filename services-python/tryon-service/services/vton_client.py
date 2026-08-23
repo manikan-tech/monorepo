@@ -1,12 +1,12 @@
 # FASHN.ai REST API client — virtual try-on inference and retry logic.
 import base64
+import asyncio
 import logging
 import os
-import time
 import uuid
 from pathlib import Path
 
-import requests
+import httpx
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,8 @@ def get_fashn_api_key() -> str:
 FASHN_BASE_URL = "https://api.fashn.ai/v1"
 
 _POLL_INTERVAL_SECONDS = 3
-_MAX_POLL_ATTEMPTS = 30
+# 40 attempts × 3s = 120s max, must finish before Store timeout
+_MAX_POLL_ATTEMPTS = 40
 
 
 def is_client_initialized() -> bool:
@@ -44,7 +45,7 @@ def _auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {get_fashn_api_key()}"}
 
 
-def run_tryon(human_img_path: str, garment_img_path: str, cloth_type: str) -> str:
+async def run_tryon(human_img_path: str, garment_img_path: str, cloth_type: str) -> str:
     """Submit one image pair to FASHN.ai and return the local result file path.
 
     FASHN.ai API schema (current):
@@ -55,7 +56,7 @@ def run_tryon(human_img_path: str, garment_img_path: str, cloth_type: str) -> st
     1. Build model_image value (base64 data URI for local file, URL as-is).
     2. Build product_image value (URL passed directly from main.py).
     3. POST /run — receive prediction id.
-    4. Poll GET /status/{id} every 3 s, up to 30 attempts (90 s).
+    4. Poll GET /status/{id} every 3 s, up to 40 attempts (120 s).
     5. On completion, download output[0] → save locally → return path.
     6. On failure or timeout, raise RuntimeError.
     """
@@ -90,12 +91,12 @@ def run_tryon(human_img_path: str, garment_img_path: str, cloth_type: str) -> st
         },
     }
     logger.info("Starting FASHN.ai prediction (category=%s).", category)
-    response = requests.post(
-        f"{FASHN_BASE_URL}/run",
-        json=payload,
-        headers=_auth_headers(),
-        timeout=30,
-    )
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(
+            f"{FASHN_BASE_URL}/run",
+            headers=_auth_headers(),
+            json=payload,
+        )
     response.raise_for_status()
     run_data = response.json()
 
@@ -110,12 +111,12 @@ def run_tryon(human_img_path: str, garment_img_path: str, cloth_type: str) -> st
 
     # --- Step 3: poll for result ---
     for attempt in range(1, _MAX_POLL_ATTEMPTS + 1):
-        time.sleep(_POLL_INTERVAL_SECONDS)
-        status_response = requests.get(
-            f"{FASHN_BASE_URL}/status/{prediction_id}",
-            headers=_auth_headers(),
-            timeout=15,
-        )
+        await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            status_response = await client.get(
+                f"{FASHN_BASE_URL}/status/{prediction_id}",
+                headers=_auth_headers(),
+            )
         status_response.raise_for_status()
         status_data = status_response.json()
         status = status_data.get("status", "")
@@ -143,7 +144,8 @@ def run_tryon(human_img_path: str, garment_img_path: str, cloth_type: str) -> st
 
     # --- Step 4: download result image ---
     logger.info("FASHN.ai prediction completed; downloading result from %s.", result_url)
-    img_response = requests.get(result_url, timeout=60)
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        img_response = await client.get(result_url)
     img_response.raise_for_status()
 
     result_filename = f"{uuid.uuid4()}.png"
@@ -155,7 +157,7 @@ def run_tryon(human_img_path: str, garment_img_path: str, cloth_type: str) -> st
     return result_path
 
 
-def run_tryon_with_retry(
+async def run_tryon_with_retry(
     human_img_path: str,
     garment_img_path: str,
     cloth_type: str,
@@ -168,7 +170,7 @@ def run_tryon_with_retry(
     """
     for attempt in range(1, max_retries + 1):
         try:
-            return run_tryon(human_img_path, garment_img_path, cloth_type)
+            return await run_tryon(human_img_path, garment_img_path, cloth_type)
         except RuntimeError as error:
             if attempt == max_retries:
                 raise
@@ -179,6 +181,6 @@ def run_tryon_with_retry(
                 wait_seconds,
                 error,
             )
-            time.sleep(wait_seconds)
+            await asyncio.sleep(wait_seconds)
 
     raise RuntimeError("FASHN.ai retry loop ended unexpectedly.")
