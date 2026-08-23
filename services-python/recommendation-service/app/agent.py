@@ -7,13 +7,10 @@ from typing import Optional, List
 
 import httpx
 from openai import AsyncOpenAI
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph, END
 
 from .config import get_settings
 from .schemas import ActionType, RecommendationOutput, MeasurementInput
-from .Bedrock import _call_bedrock_gateway
 from .retrieval import retrieve_relevant_products, format_retrieved_context
 
 logger = logging.getLogger("manikan.agent")
@@ -107,6 +104,23 @@ _QUESTION_MARKERS = (
     "which size", "does this", "is this", "range", "largest", "smallest",
     "waist", "chest", "hip", "length",
 )
+
+# Keywords that signal a fashion / sizing intent.
+_FASHION_KEYWORDS = (
+    "size", "fit", "chest", "waist", "hip", "measurement", "measure",
+    "shirt", "blouse", "dress", "pants", "skirt", "jacket", "coat",
+    "jeans", "trousers", "top", "bottom", "outfit", "wear", "cloth",
+    "garment", "fashion", "style", "look", "color", "colour", "fabric",
+    "sleeve", "length", "shoulder", "xl", "xs", "xxl", "small", "medium",
+    "large", "brand", "product", "item", "collection", "category",
+    "recommend", "suggest", "show me", "browse", "shop",
+)
+
+
+def _is_fashion_related(text: str) -> bool:
+    """Return True only when the query is clearly about fashion, clothing, or sizing."""
+    lowered = (text or "").lower()
+    return any(kw in lowered for kw in _FASHION_KEYWORDS)
 
 
 def _is_descriptive_question(text: str) -> bool:
@@ -219,15 +233,6 @@ def compute_recommended_size(betas: MeasurementInput, size_chart_raw: str) -> Si
     return SizeMatchResult(best_size, round(confidence, 2), explanation, available_sizes, False)
 
 
-def _build_gemini_client(api_key: str) -> ChatGoogleGenerativeAI:
-    return ChatGoogleGenerativeAI(
-        model="gemini-flash-latest",
-        google_api_key=api_key,
-        timeout=10,
-        max_retries=0,
-    )
-
-
 def _strip_json_fences(text: str) -> str:
     return re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
 
@@ -271,29 +276,7 @@ async def call_llm_with_fallback(messages: list[dict]) -> tuple[RecommendationOu
             logger.warning(f"Provider DEEPSEEK failed: {type(e).__name__}: {e}")
             last_error = e
 
-    for key in settings.gemini_keys:
-        try:
-            llm = _build_gemini_client(key)
-            structured_llm = llm.with_structured_output(RecommendationOutput)
-            response = await structured_llm.ainvoke(messages)
-            response.provider = "GEMINI"
-            return response, "GEMINI"
-        except Exception as e:
-            logger.warning(f"Provider GEMINI failed: {type(e).__name__}: {e}")
-            last_error = e
-            continue
-
-    try:
-        ollama_llm = ChatOllama(model=settings.ollama_model, base_url=settings.ollama_base_url)
-        structured_llm = ollama_llm.with_structured_output(RecommendationOutput)
-        response = await asyncio.wait_for(structured_llm.ainvoke(messages), timeout=10)
-        response.provider = "OLLAMA-FALLBACK"
-        return response, "OLLAMA-FALLBACK"
-    except Exception as e:
-        logger.warning(f"Provider OLLAMA-FALLBACK failed: {type(e).__name__}: {e}")
-        last_error = e
-
-    raise RuntimeError(f"All LLM providers failed. Last error: {last_error}")
+    raise RuntimeError(f"DeepSeek provider failed. Last error: {last_error}")
 
 
 async def check_all_providers() -> list[dict]:
@@ -310,30 +293,6 @@ async def check_all_providers() -> list[dict]:
     else:
         results.append({"provider": "DEEPSEEK", "status": "not_configured", "error": "missing api_key"})
 
-    if getattr(settings, "bedrock_base_url", None) and getattr(settings, "bedrock_api_key", None):
-        try:
-            await _call_bedrock_gateway([{"role": "user", "content": "ping"}])
-            results.append({"provider": "BEDROCK", "status": "ok"})
-        except Exception as e:
-            results.append({"provider": "BEDROCK", "status": "failed", "error": str(e)})
-    else:
-        results.append({"provider": "BEDROCK", "status": "not_configured", "error": "missing base_url or api_key"})
-
-    for idx, key in enumerate(settings.gemini_keys, start=1):
-        try:
-            llm = _build_gemini_client(key)
-            await llm.ainvoke("ping")
-            results.append({"provider": f"GEMINI_KEY_{idx}", "status": "ok"})
-        except Exception as e:
-            results.append({"provider": f"GEMINI_KEY_{idx}", "status": "failed", "error": str(e)})
-
-    try:
-        ollama_llm = ChatOllama(model=settings.ollama_model, base_url=settings.ollama_base_url)
-        await asyncio.wait_for(ollama_llm.ainvoke("ping"), timeout=10)
-        results.append({"provider": "OLLAMA", "status": "ok"})
-    except Exception as e:
-        results.append({"provider": "OLLAMA", "status": "failed", "error": str(e)})
-
     return results
 
 
@@ -345,6 +304,14 @@ def build_general_instruction(available_categories: Optional[List[str]]) -> str:
         "This is the GENERAL chat (not a specific product page). You have NO real size "
         "chart here - you can never compute or verify an exact fit. Exact sizing only "
         "happens later, on a specific product's own page.\n\n"
+        "SCOPE - CRITICAL: You ONLY answer questions about fashion, clothing, sizing, "
+        "outfit recommendations, and this store's catalog. If the user asks about "
+        "anything outside fashion and clothing (geography, history, science, current "
+        "events, general knowledge, etc.) you MUST reply ONLY with: \"I'm Manikan AI, "
+        "your fashion and sizing assistant — I can only help with clothing "
+        "recommendations and size matching. That question is outside my scope.\", "
+        "action='provide_recommendation'. Never answer off-topic questions, even "
+        "partially.\n\n"
         "FLOW:\n"
         "1. If the user describes a STYLE, OCCASION, or VIBE without naming one exact "
         "category (e.g. 'something formal', 'an outfit for a wedding'): ask which "
@@ -420,9 +387,9 @@ async def retrieve_rag_context(state: FitState) -> FitState:
     retrieved: list[dict] = []
     settings = get_settings()
 
-    if settings.store_service_base_url and query:
+    if settings.store_base_url and query:
         try:
-            url = f"{settings.store_service_base_url.rstrip('/')}/api/products/search"
+            url = f"{get_settings().store_base_url}/api/products/search"
             async with httpx.AsyncClient(timeout=settings.store_service_rag_timeout_seconds) as client:
                 response = await client.post(url, json={"queryText": query, "category": state.get("selected_category")})
                 response.raise_for_status()
@@ -459,7 +426,11 @@ async def compute_size_math(state: FitState) -> FitState:
         if product and isinstance(product.get("variants"), list):
             chart_raw = json.dumps(_chart_from_variants(product["variants"]))
 
-    if state.get("product_id") and chart_raw and _is_descriptive_question(state["query"]):
+    # Only use the size-chart shortcut when the query is genuinely about
+    # sizing/fashion. Generic questions like "what is the capital of egypt"
+    # match _is_descriptive_question() (because of "what") but must NOT be
+    # answered from the chart - they are out-of-scope and handled later.
+    if state.get("product_id") and chart_raw and _is_descriptive_question(state["query"]) and _is_fashion_related(state["query"]):
         answer = _try_answer_from_size_chart_locally(state["query"], chart_raw)
         if answer:
             state["final_response"] = RecommendationOutput(action=ActionType.PROVIDE_RECOMMENDATION, message=answer, provider="STATIC-LOCAL")
@@ -500,9 +471,9 @@ def _rule_based_response(state: FitState) -> RecommendationOutput:
                 confidence_score=confidence,
                 explanation=f"Nearest chart match; garment-minus-body deltas: {deltas or 'not available'}.",
                 message=f"Based on the size chart, {math['recommended_size']} is your closest match ({round(confidence * 100)}% confidence).",
-                provider="RULE-BASED-FALLBACK",
+                provider="STATIC-CALC",
             )
-        return RecommendationOutput(action=ActionType.PROVIDE_RECOMMENDATION, message="I couldn't find a size that fits your measurements closely enough.", provider="RULE-BASED-FALLBACK")
+        return RecommendationOutput(action=ActionType.PROVIDE_RECOMMENDATION, message="I couldn't find a size that fits your measurements closely enough.", provider="STATIC-CALC")
     categories = state.get("available_categories") or []
     query = state.get("query", "").lower()
     for category in categories:
@@ -512,20 +483,51 @@ def _rule_based_response(state: FitState) -> RecommendationOutput:
                 action=ActionType.FETCH_PRODUCTS,
                 matched_category=category,
                 message=f"Here are our {category.lower()}.",
-                provider="RULE-BASED-FALLBACK",
+                provider="STATIC-LOCAL",
             )
     if categories:
         return RecommendationOutput(
             action=ActionType.PROVIDE_RECOMMENDATION,
             message=f"Which category would you like to browse? We have {', '.join(categories[:3])}.",
-            provider="RULE-BASED-FALLBACK",
+            provider="STATIC",
         )
-    return RecommendationOutput(action=ActionType.PROVIDE_RECOMMENDATION, message="Please select an item and provide its measurements so I can calculate your fit.", provider="RULE-BASED-FALLBACK")
+    return RecommendationOutput(action=ActionType.PROVIDE_RECOMMENDATION, message="Please select an item and provide its measurements so I can calculate your fit.", provider="STATIC")
+
+
+# ── Out-of-scope pre-flight ────────────────────────────────────────────────
+_OUT_OF_SCOPE_REPLY = (
+    "I'm Manikan AI, your fashion and sizing assistant — I can only help with "
+    "clothing recommendations, size matching, and outfit ideas. "
+    "That question is outside my scope. Try asking me something like "
+    "'What size blouse should I get?' or 'Show me your dresses.'"
+)
 
 
 async def fit_reasoning_agent(state: FitState) -> FitState:
     """Ask the LLM to explain math/fabric trade-offs; never let its failure break sizing."""
     if state.get("final_response"):
+        return state
+
+    # ── Out-of-scope guard (rule-based, before any LLM call) ──────────────
+    # If the query contains a question marker but zero fashion/sizing keywords,
+    # it is almost certainly off-topic. Return a deterministic refusal so we
+    # never waste an LLM call or echo a size-chart result for e.g.
+    # "what is the capital of egypt".
+    query = state.get("query", "")
+    if query and _is_descriptive_question(query) and not _is_fashion_related(query):
+        state["reasoning_output"] = RecommendationOutput(
+            action=ActionType.PROVIDE_RECOMMENDATION,
+            message=_OUT_OF_SCOPE_REPLY,
+            provider="STATIC-OUT-OF-SCOPE",
+        )
+        return state
+
+    # ── Direct/Click Sizing Guard (messages empty) ────────────────────────
+    # If the user has sent no messages (just clicked "Calculate Size"),
+    # there is no conversational query. Complete sizing immediately and
+    # bypass any LLM calls entirely.
+    if not state.get("messages") or len(state["messages"]) == 0:
+        state["reasoning_output"] = _rule_based_response(state)
         return state
 
     if state.get("product_id") and not state.get("user_measurements") and not state.get("betas"):
