@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { seededCatalogImageUrl } from "./catalog-assets";
 
 // ─── Manikan demo T-shirts ──────────────────────────────────────────────
 // Try-on-enabled demo products for the embeddable widget. These MIRROR the
@@ -44,7 +45,7 @@ export const DEMO_TSHIRTS: DemoTshirt[] = [
         name: "Essential Cotton Crew",
         description: "Premium 100% organic cotton crew-neck tee. Soft, breathable fabric with a relaxed modern fit. Pre-shrunk and garment-dyed for a lived-in feel from day one.",
         priceEgp: 749.75,
-        imageUrl: "/products/tshirt-navy.png",
+        imageUrl: seededCatalogImageUrl("tshirt-navy.png"),
         colorName: "Midnight Navy",
         colorHex: "#1a1a2e",
         sizes: {
@@ -60,7 +61,7 @@ export const DEMO_TSHIRTS: DemoTshirt[] = [
         name: "Heritage Organic Tee",
         description: "Clean lines and a timeless silhouette in organic cotton. Ribbed collar, double-stitched hems, and a slightly oversized fit that drapes beautifully.",
         priceEgp: 874.75,
-        imageUrl: "/products/tshirt-cream.png",
+        imageUrl: seededCatalogImageUrl("tshirt-cream.png"),
         colorName: "Vintage Cream",
         colorHex: "#f5f0e1",
         sizes: {
@@ -76,7 +77,7 @@ export const DEMO_TSHIRTS: DemoTshirt[] = [
         name: "Explorer Rugged Tee",
         description: "Built for adventure. Heavy-weight cotton with reinforced shoulders. Perfect for layering or wearing solo on the trail.",
         priceEgp: 824.75,
-        imageUrl: "/products/tshirt-green.png",
+        imageUrl: seededCatalogImageUrl("tshirt-green.png"),
         colorName: "Forest Olive",
         colorHex: "#3d4a2e",
         sizes: {
@@ -92,7 +93,7 @@ export const DEMO_TSHIRTS: DemoTshirt[] = [
         name: "Urban Stealth Tee",
         description: "The essential black tee, elevated. Made from ultra-soft ringspun cotton with a contemporary slim fit. Goes with everything.",
         priceEgp: 699.75,
-        imageUrl: "/products/tshirt-black.png",
+        imageUrl: seededCatalogImageUrl("tshirt-black.png"),
         colorName: "Jet Black",
         colorHex: "#1a1a1a",
         sizes: {
@@ -108,7 +109,7 @@ export const DEMO_TSHIRTS: DemoTshirt[] = [
         name: "Artisan Dyed Crew",
         description: "Rich garment-dyed burgundy on heavyweight cotton. Each piece develops a unique patina over time. Boxy relaxed fit.",
         priceEgp: 924.75,
-        imageUrl: "/products/tshirt-burgundy.png",
+        imageUrl: seededCatalogImageUrl("tshirt-burgundy.png"),
         colorName: "Deep Burgundy",
         colorHex: "#5c1a2a",
         sizes: {
@@ -124,7 +125,7 @@ export const DEMO_TSHIRTS: DemoTshirt[] = [
         name: "Metro Blend Tee",
         description: "Cotton-polyester blend for all-day comfort. Moisture-wicking, wrinkle-resistant, and perfect for commute-to-weekend transitions.",
         priceEgp: 799.75,
-        imageUrl: "/products/tshirt-gray.png",
+        imageUrl: seededCatalogImageUrl("tshirt-gray.png"),
         colorName: "Heather Charcoal",
         colorHex: "#4a4a4a",
         sizes: {

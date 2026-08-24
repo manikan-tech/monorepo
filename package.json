@@ -7,6 +7,7 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
+    "upload:seed-images": "node --env-file=apps/store/.env --import tsx apps/store/scripts/upload-seeded-product-images.ts",
     "start:body": "cd services-python/body-service && if [ -f .env ]; then set -a && . ./.env && set +a; fi && .venv/bin/uvicorn app.main:app --reload --port 8001",
     "start:ai": "cd services-python/recommendation-service && if [ -f .env ]; then set -a && . ./.env && set +a; fi && .venv/bin/uvicorn app.main:app --reload --port 8002",
     "start:vton": "cd services-python/tryon-service && if [ -f .env ]; then set -a && . ./.env && set +a; fi && .venv/bin/uvicorn main:app --reload --port 8003"
