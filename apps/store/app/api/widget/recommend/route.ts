@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeWidgetRequest, consumeQuota } from "../../../lib/widget-auth";
+import { assessFitRange, buildFitRangeResponse } from "../../../lib/fit-range";
+import { asksForProductDetails, buildProductDetailsContext } from "../../../lib/product-details";
 import { buildBodyFitChartCsv } from "../../../lib/size-chart";
 import { prisma } from "../../../lib/prisma";
 
@@ -70,23 +72,56 @@ export async function POST(request: NextRequest) {
     // to every other product/variant lookup in this codebase (404, not 403,
     // on a mismatch — never reveal another tenant's product id).
     let sizeChart: string | undefined;
+    let productDetailsContext: string | undefined;
+    let isProductDetailsQuestion = false;
     if (product_id) {
-        const owns = await prisma.product.findUnique({
+        const product = await prisma.product.findUnique({
             where: { id: product_id },
-            select: { retailerId: true },
+            select: {
+                retailerId: true,
+                name: true,
+                category: true,
+                brand: true,
+                fabric: true,
+                description: true,
+            },
         });
-        if (!owns || owns.retailerId !== retailer.id) {
+        if (!product || product.retailerId !== retailer.id) {
             return NextResponse.json(
                 { error: "Product not found" },
                 { status: 404, headers: CORS_HEADERS }
             );
         }
+
+        // Let the existing AI answer the product-detail question, but give it
+        // a trusted selected-product brief so each question can receive a
+        // context-specific answer instead of a repeated static summary.
+        if (asksForProductDetails(messages)) {
+            isProductDetailsQuestion = true;
+            productDetailsContext = buildProductDetailsContext(product);
+        }
+
         // Product exists and is this retailer's — it may still have no
         // ingested body-fit data yet (builder returns null then). That is
         // not an error: omitting size_chart routes the agent to its
         // ask-for-measurements branch instead of a fabricated match.
         const csv = await buildBodyFitChartCsv(product_id, retailer.id);
         if (csv) sizeChart = csv;
+    }
+
+    // The recommendation service remains responsible for normal matching and
+    // conversation. Before proxying, however, handle a deterministic product
+    // fact it cannot explain precisely: measurements outside this product's
+    // published chart. This prevents a generic "View items" fallback and
+    // gives the shopper the relevant size, limit, and difference.
+    if (sizeChart && !productDetailsContext) {
+        const fitRange = assessFitRange(betas, sizeChart);
+        if (fitRange) {
+            return NextResponse.json(
+                { success: true, ...buildFitRangeResponse(fitRange) },
+                { status: 200, headers: CORS_HEADERS }
+            );
+        }
     }
 
     // ── Proxy to the Recommendation Service ──
@@ -102,10 +137,16 @@ export async function POST(request: NextRequest) {
             },
             body: JSON.stringify({
                 session_id,
-                messages,
+                // Store appends this trusted system message after client chat
+                // history so it takes precedence over generic fit context for
+                // product-information questions. The Python workflow remains unchanged.
+                messages: productDetailsContext
+                    ? [...messages, { role: "system", content: productDetailsContext }]
+                    : messages,
                 betas,
                 product_id,
                 retailer_id: retailer.id,
+                product_detail_question: isProductDetailsQuestion,
                 intent,
                 selected_category,
                 available_categories,

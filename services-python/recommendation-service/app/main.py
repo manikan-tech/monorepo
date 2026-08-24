@@ -83,6 +83,9 @@ class ChatRecommendRequest(BaseModel):
     messages: List[Dict[str, Any]]
     betas: Optional[MeasurementInput] = None
     product_id: Optional[str] = None
+    # Set only by the authenticated Store proxy when the shopper explicitly
+    # asks for information about the selected product, rather than sizing.
+    product_detail_question: bool = False
     retailer_id: Optional[str] = None
     size_chart: Optional[str] = None
     intent: Optional[str] = "general"
@@ -135,6 +138,7 @@ async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
     initial_state: FitState = {
         "messages": body.messages,
         "product_id": body.product_id,
+        "product_detail_question": body.product_detail_question,
         "query": next(
             (
                 message["content"]
