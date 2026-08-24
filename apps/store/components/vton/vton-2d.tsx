@@ -276,8 +276,13 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
                     </div>
 
                     {/* Action trigger button */}
+                    {/* Firefox can restore a button's previous disabled state during a
+                        hard refresh, before React hydrates. This action's enabled
+                        state is derived from live file/catalog state, so it must not
+                        be restored by the browser. */}
                     <button
                         id="tryon-trigger"
+                        autoComplete="off"
                         onClick={triggerVirtualTryOn}
                         disabled={isTryOnDisabled}
                         className="w-full flex items-center justify-center gap-2.5 bg-forest-900 hover:bg-forest-950 text-white font-semibold py-4 px-6 rounded-2xl shadow-soft disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.99] transition-all duration-350"
