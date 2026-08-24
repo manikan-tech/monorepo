@@ -79,12 +79,8 @@ export async function POST(request: NextRequest) {
                 retailerId: true,
                 name: true,
                 category: true,
-                brand: true,
                 fabric: true,
                 description: true,
-                fitNotes: true,
-                garmentColorHex: true,
-                tshirtColorHex: true,
             },
         });
         if (!product || product.retailerId !== retailer.id) {
