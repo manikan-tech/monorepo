@@ -20,6 +20,7 @@ class FitState(typing_extensions.TypedDict):
     # Request and legacy-widget fields.
     messages: list[dict]
     product_id: Optional[str]
+    product_detail_question: bool
     query: str
     user_measurements: Optional[MeasurementInput]
     betas: Optional[MeasurementInput]
@@ -530,7 +531,12 @@ async def fit_reasoning_agent(state: FitState) -> FitState:
         state["reasoning_output"] = _rule_based_response(state)
         return state
 
-    if state.get("product_id") and not state.get("user_measurements") and not state.get("betas"):
+    if (
+        state.get("product_id")
+        and not state.get("product_detail_question")
+        and not state.get("user_measurements")
+        and not state.get("betas")
+    ):
         label, confidence = _find_stated_size_and_confidence(state["messages"])
         if label and confidence is None:
             state["reasoning_output"] = RecommendationOutput(action=ActionType.PROVIDE_RECOMMENDATION, message=f"You mentioned {label} - how confident are you in that size, from 0-100%?", provider="STATIC-ASK-CONFIDENCE")
@@ -594,6 +600,7 @@ recommendation_graph = workflow.compile()
 async def call_conversational_agent(state: FitState) -> FitState:
     """Compatibility shim for direct callers of the pre-graph agent function."""
     state.setdefault("query", _last_user_query(state.get("messages", [])))
+    state.setdefault("product_detail_question", False)
     state.setdefault("user_measurements", state.get("betas"))
     state.setdefault("retrieved_products", [])
     state.setdefault("size_math_result", None)

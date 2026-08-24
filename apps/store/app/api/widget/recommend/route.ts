@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
     // on a mismatch — never reveal another tenant's product id).
     let sizeChart: string | undefined;
     let productDetailsContext: string | undefined;
+    let isProductDetailsQuestion = false;
     if (product_id) {
         const product = await prisma.product.findUnique({
             where: { id: product_id },
@@ -96,6 +97,7 @@ export async function POST(request: NextRequest) {
         // a trusted selected-product brief so each question can receive a
         // context-specific answer instead of a repeated static summary.
         if (asksForProductDetails(messages)) {
+            isProductDetailsQuestion = true;
             productDetailsContext = buildProductDetailsContext(product);
         }
 
@@ -144,6 +146,7 @@ export async function POST(request: NextRequest) {
                 betas,
                 product_id,
                 retailer_id: retailer.id,
+                product_detail_question: isProductDetailsQuestion,
                 intent,
                 selected_category,
                 available_categories,

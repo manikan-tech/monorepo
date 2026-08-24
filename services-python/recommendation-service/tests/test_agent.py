@@ -1,8 +1,10 @@
 import json
+import asyncio
 import pytest
 
-from app.agent import compute_recommended_size
-from app.schemas import MeasurementInput
+from app import agent
+from app.agent import compute_recommended_size, fit_reasoning_agent
+from app.schemas import ActionType, MeasurementInput, RecommendationOutput
 
 
 def _sample_size_chart():
@@ -70,3 +72,41 @@ def test_size_chart_entries_missing_hip_still_work():
     result = compute_recommended_size(betas, chart)
 
     assert result.recommended_size == "M"
+
+
+def test_product_detail_question_bypasses_measurement_gate(monkeypatch):
+    """A product question must reach the AI even before measurements exist."""
+    async def fake_llm(_messages):
+        return RecommendationOutput(
+            action=ActionType.PROVIDE_RECOMMENDATION,
+            message="This trouser has a relaxed, tapered silhouette.",
+        ), "TEST"
+
+    monkeypatch.setattr(agent, "call_llm_with_fallback", fake_llm)
+    state = {
+        "messages": [
+            {"role": "user", "content": "tell me about this item"},
+            {"role": "system", "content": "TRUSTED CURRENT-PRODUCT CONTEXT"},
+        ],
+        "product_id": "product-1",
+        "product_detail_question": True,
+        "query": "tell me about this item",
+        "user_measurements": None,
+        "betas": None,
+        "size_chart": None,
+        "intent": "general",
+        "selected_category": None,
+        "available_categories": ["Pants"],
+        "catalog_products": None,
+        "retrieved_products": [],
+        "size_math_result": None,
+        "reasoning_output": None,
+        "final_response": None,
+        "trace_id": "test",
+        "structured_response": None,
+    }
+
+    result = asyncio.run(fit_reasoning_agent(state))
+
+    assert result["reasoning_output"].message == "This trouser has a relaxed, tapered silhouette."
+    assert result["reasoning_output"].provider == "TEST"
