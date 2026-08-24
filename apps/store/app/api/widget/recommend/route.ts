@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeWidgetRequest, consumeQuota } from "../../../lib/widget-auth";
+import { assessFitRange, buildFitRangeResponse } from "../../../lib/fit-range";
 import { buildBodyFitChartCsv } from "../../../lib/size-chart";
 import { prisma } from "../../../lib/prisma";
 
@@ -87,6 +88,21 @@ export async function POST(request: NextRequest) {
         // ask-for-measurements branch instead of a fabricated match.
         const csv = await buildBodyFitChartCsv(product_id, retailer.id);
         if (csv) sizeChart = csv;
+    }
+
+    // The recommendation service remains responsible for normal matching and
+    // conversation. Before proxying, however, handle a deterministic product
+    // fact it cannot explain precisely: measurements outside this product's
+    // published chart. This prevents a generic "View items" fallback and
+    // gives the shopper the relevant size, limit, and difference.
+    if (sizeChart) {
+        const fitRange = assessFitRange(betas, sizeChart);
+        if (fitRange) {
+            return NextResponse.json(
+                { success: true, ...buildFitRangeResponse(fitRange) },
+                { status: 200, headers: CORS_HEADERS }
+            );
+        }
     }
 
     // ── Proxy to the Recommendation Service ──

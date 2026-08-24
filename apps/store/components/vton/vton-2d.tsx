@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type ButtonHTMLAttributes, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import HumanUploader from "./human-uploader";
 import GarmentCatalog from "./garment-catalog";
@@ -10,6 +10,13 @@ import { Garment } from "./product-card";
 type Vton2DProps = {
     initialSelectedGarmentId?: string;
 };
+
+// Firefox honors this standard attribute on buttons, but React's button type
+// does not currently include it. Keeping it in a typed spread preserves the
+// server-rendered attribute that prevents stale disabled-state restoration.
+const FIREFOX_STATE_RESTORE_GUARD = {
+    autoComplete: "off",
+} as unknown as ButtonHTMLAttributes<HTMLButtonElement>;
 
 export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
     const [humanFile, setHumanFile] = useState<File | null>(null);
@@ -167,17 +174,23 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
             const imageObjectURL = URL.createObjectURL(imageBlob);
             setResultUrl(imageObjectURL);
             setResultSource("live");
-        } catch (err: any) {
+        } catch (err: unknown) {
             clearInterval(stepInterval);
+            const errorStatus = err instanceof Error
+                && "status" in err
+                && typeof (err as Error & { status?: unknown }).status === "number"
+                ? (err as Error & { status: number }).status
+                : undefined;
+            const errorMessage = err instanceof Error ? err.message : null;
 
-            if (err?.status && err.status < 500) {
+            if (errorStatus && errorStatus < 500) {
                 // Expected, user-fixable input problem (bad photo dimensions,
                 // unsupported category, etc.) -- already surfaced inline via
                 // apiError below. console.warn (not .error) so Next.js's dev
                 // overlay doesn't promote a normal validation response into a
                 // full-screen interstitial that hides that inline message.
                 console.warn("VTON 2D validation error:", err);
-                setApiError(err?.message || "Please check your inputs and try again.");
+                setApiError(errorMessage || "Please check your inputs and try again.");
             } else if (selectedGarment) {
                 console.error("VTON 2D Error:", err);
                 const cachedPreviewUrl = await getCachedPreviewResultUrl(selectedGarment);
@@ -186,7 +199,7 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
                 setApiError(null);
             } else {
                 console.error("VTON 2D Error:", err);
-                setApiError(err?.message || "Something went wrong during try-on synthesis. Please try again.");
+                setApiError(errorMessage || "Something went wrong during try-on synthesis. Please try again.");
             }
         } finally {
             setIsLoading(false);
@@ -282,7 +295,7 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
                         be restored by the browser. */}
                     <button
                         id="tryon-trigger"
-                        autoComplete="off"
+                        {...FIREFOX_STATE_RESTORE_GUARD}
                         onClick={triggerVirtualTryOn}
                         disabled={isTryOnDisabled}
                         className="w-full flex items-center justify-center gap-2.5 bg-forest-900 hover:bg-forest-950 text-white font-semibold py-4 px-6 rounded-2xl shadow-soft disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.99] transition-all duration-350"
