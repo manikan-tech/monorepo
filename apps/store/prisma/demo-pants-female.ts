@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { seededCatalogImageUrl } from "./catalog-assets";
 
 // ─── Manikan demo pants — female ────────────────────────────────────────
 // Mirrors demo-pants.ts exactly (same shape, same upsert pattern), for the
@@ -67,7 +68,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         description:
             "A structured barrel-leg trouser with curved princess seams through the hip and a button-tab, natural waist. Cotton-linen twill that holds its shape through the leg and tapers to a cropped hem.",
         priceEgp: 1549.75,
-        imageUrl: "/products/pants-female-olive.png",
+        imageUrl: seededCatalogImageUrl("pants-female-olive.png"),
         colorName: "Olive",
         colorHex: "#6b5729",
         fabric: "Cotton-linen blend",
@@ -79,7 +80,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         description:
             "A structured barrel-leg trouser with curved princess seams through the hip and a button-tab, natural waist. Cotton-linen twill that holds its shape through the leg and tapers to a cropped hem.",
         priceEgp: 1599.75,
-        imageUrl: "/products/pants-female-navy.png",
+        imageUrl: seededCatalogImageUrl("pants-female-navy.png"),
         colorName: "Midnight Navy",
         colorHex: "#25293a",
         fabric: "Cotton-linen blend",
@@ -91,7 +92,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         description:
             "A structured barrel-leg trouser with curved princess seams through the hip and a button-tab, natural waist. Cotton-linen twill that holds its shape through the leg and tapers to a cropped hem.",
         priceEgp: 1549.75,
-        imageUrl: "/products/pants-female-coral.png",
+        imageUrl: seededCatalogImageUrl("pants-female-coral.png"),
         colorName: "Coral",
         colorHex: "#c97158",
         fabric: "Cotton-linen blend",
@@ -103,7 +104,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         description:
             "A structured barrel-leg trouser with curved princess seams through the hip and a button-tab, natural waist. Cotton-linen twill that holds its shape through the leg and tapers to a cropped hem.",
         priceEgp: 1524.75,
-        imageUrl: "/products/pants-female-stone.png",
+        imageUrl: seededCatalogImageUrl("pants-female-stone.png"),
         colorName: "Stone",
         colorHex: "#9a8e7f",
         fabric: "Cotton-linen blend",
@@ -115,7 +116,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         description:
             "A structured barrel-leg trouser with curved princess seams through the hip and a button-tab, natural waist. Cotton-linen twill that holds its shape through the leg and tapers to a cropped hem.",
         priceEgp: 1599.75,
-        imageUrl: "/products/pants-female-black.png",
+        imageUrl: seededCatalogImageUrl("pants-female-black.png"),
         colorName: "Jet Black",
         colorHex: "#22221f",
         fabric: "Cotton-linen blend",
@@ -128,7 +129,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         description:
             "A softer, pull-on barrel trouser in a small-scale jacquard weave with a covered elastic waist. Relaxed through the hip and tapered to the ankle for an easy, unstructured line.",
         priceEgp: 1699.75,
-        imageUrl: "/products/pants-female-blush.png",
+        imageUrl: seededCatalogImageUrl("pants-female-blush.png"),
         colorName: "Blush",
         colorHex: "#c69a8e",
         fabric: "Jacquard weave",
@@ -140,7 +141,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         description:
             "A softer, pull-on barrel trouser in a small-scale jacquard weave with a covered elastic waist. Relaxed through the hip and tapered to the ankle for an easy, unstructured line.",
         priceEgp: 1699.75,
-        imageUrl: "/products/pants-female-rust.png",
+        imageUrl: seededCatalogImageUrl("pants-female-rust.png"),
         colorName: "Rust",
         colorHex: "#53261d",
         fabric: "Jacquard weave",
@@ -152,7 +153,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         description:
             "A softer, pull-on barrel trouser in a small-scale jacquard weave with a covered elastic waist. Relaxed through the hip and tapered to the ankle for an easy, unstructured line.",
         priceEgp: 1724.75,
-        imageUrl: "/products/pants-female-burgundy.png",
+        imageUrl: seededCatalogImageUrl("pants-female-burgundy.png"),
         colorName: "Burgundy",
         colorHex: "#501522",
         fabric: "Jacquard weave",
@@ -165,7 +166,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         description:
             "Mid-wash denim cut to a rounded barrel leg with a high, fitted waist and a brass button closure. A fashion-forward alternative to the straight leg, with the same everyday durability.",
         priceEgp: 1799.75,
-        imageUrl: "/products/pants-female-indigo.png",
+        imageUrl: seededCatalogImageUrl("pants-female-indigo.png"),
         colorName: "Washed Indigo",
         colorHex: "#233551",
         fabric: "Cotton denim",

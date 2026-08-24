@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { prisma } from "../../app/lib/prisma";
+import { seededCatalogImageUrl } from "../catalog-assets";
 
 // Replaces the demo men's/unisex pants catalog (pants-001..005), whose names
 // and descriptions (denim, wool suiting, cotton twill, ripstop cargo) never
@@ -18,7 +19,7 @@ const UPDATES = [
     name: "Indigo Heathered Knit Trouser",
     fabric: "Heathered knit",
     garmentColorHex: "#2f3345",
-    imageUrl: "/products/pants-indigo-heathered-knit.png",
+    imageUrl: seededCatalogImageUrl("pants-indigo-heathered-knit.png"),
     description:
       "Deep indigo trouser in a heathered, diagonally-textured knit — denim-adjacent in colour but soft-tailored rather than rigid. Tapered through the leg with a fitted waistband and a cropped break at the ankle.",
   },
@@ -27,7 +28,7 @@ const UPDATES = [
     name: "Charcoal Textured Knit Trouser",
     fabric: "Textured knit",
     garmentColorHex: "#434146",
-    imageUrl: "/products/pants-charcoal-textured-knit.png",
+    imageUrl: seededCatalogImageUrl("pants-charcoal-textured-knit.png"),
     description:
       "A charcoal trouser in a fine, brushed-texture knit that keeps the sharpness of tailoring without the stiffness of woven wool. Flat front, tapered knee, cropped hem.",
   },
@@ -36,7 +37,7 @@ const UPDATES = [
     name: "Khaki Bouclé Knit Trouser",
     fabric: "Bouclé knit",
     garmentColorHex: "#8c745e",
-    imageUrl: "/products/pants-khaki-boucle-knit.png",
+    imageUrl: seededCatalogImageUrl("pants-khaki-boucle-knit.png"),
     description:
       "A warm khaki trouser in a nubby bouclé knit with a fine herringbone weave underneath. Tailored through the hip with a tapered leg and a cropped, ankle-skimming break — texture does the work instead of a hard crease.",
   },
@@ -45,7 +46,7 @@ const UPDATES = [
     name: "Black Ribbed Knit Trouser",
     fabric: "Ribbed knit",
     garmentColorHex: "#292a29",
-    imageUrl: "/products/pants-black-ribbed-knit.png",
+    imageUrl: seededCatalogImageUrl("pants-black-ribbed-knit.png"),
     description:
       "Jet black trouser in a fine vertical-ribbed knit for a close, second-skin fit through the leg. Slim through the thigh and calf, cropped at the ankle — built to layer under or over anything.",
   },
@@ -54,7 +55,7 @@ const UPDATES = [
     name: "Sage Textured Knit Trouser",
     fabric: "Textured knit",
     garmentColorHex: "#757671",
-    imageUrl: "/products/pants-sage-textured-knit.png",
+    imageUrl: seededCatalogImageUrl("pants-sage-textured-knit.png"),
     description:
       "A muted sage-grey trouser in a densely textured knit that reads almost like flannel from a distance. Tapered leg, clean waistband, and a cropped hem for a modern, slightly cropped silhouette.",
   },
@@ -80,7 +81,7 @@ const NEW_PRODUCTS = [
     fabric: "Bouclé knit",
     garmentColorHex: "#e1e0de",
     priceEgp: 1549.75,
-    imageUrl: "/products/pants-ivory-boucle-knit.png",
+    imageUrl: seededCatalogImageUrl("pants-ivory-boucle-knit.png"),
     description:
       "An off-white trouser in a soft, nubby bouclé knit with a button-tab waist closure. Tapered leg and a cropped, ankle-length break — the lightest piece in the knit-trouser line, best worn away from anything that stains easily.",
   },
@@ -92,7 +93,7 @@ const NEW_PRODUCTS = [
     fabric: "Bouclé knit",
     garmentColorHex: "#4f332b",
     priceEgp: 1599.75,
-    imageUrl: "/products/pants-chocolate-boucle-knit.png",
+    imageUrl: seededCatalogImageUrl("pants-chocolate-boucle-knit.png"),
     description:
       "A rich chocolate-brown trouser in the same nubby bouclé knit as the line's lighter colourways, finished with a button-tab waist. Tapered leg, cropped hem, warm enough in tone to anchor a full autumn outfit.",
   },

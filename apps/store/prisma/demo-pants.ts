@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { seededCatalogImageUrl } from "./catalog-assets";
 
 // ─── Manikan demo pants ─────────────────────────────────────────────────
 // Try-on-enabled demo pants for the embeddable widget, mirroring the shape of
@@ -58,7 +59,7 @@ export const DEMO_PANTS: DemoPants[] = [
         description:
             "Mid-weight selvedge denim cut to a clean straight leg. Sits at the natural waist with a regular rise, and breaks just above the shoe. Sanforised so it holds its shape wash after wash.",
         priceEgp: 1649.75,
-        imageUrl: "/products/pants-indigo.png",
+        imageUrl: seededCatalogImageUrl("pants-indigo.png"),
         colorName: "Raw Indigo",
         colorHex: "#2e4374",
         fabric: "Denim",
@@ -70,7 +71,7 @@ export const DEMO_PANTS: DemoPants[] = [
         description:
             "A sharp, quietly formal trouser in brushed wool-blend suiting. Flat front, tapered through the knee, and finished with a clean unturned hem for an elongated line.",
         priceEgp: 1899.75,
-        imageUrl: "/products/pants-charcoal.png",
+        imageUrl: seededCatalogImageUrl("pants-charcoal.png"),
         colorName: "Charcoal Grey",
         colorHex: "#36393e",
         fabric: "Wool blend",
@@ -82,7 +83,7 @@ export const DEMO_PANTS: DemoPants[] = [
         description:
             "Garment-dyed cotton twill with just enough stretch to move in. A relaxed straight leg that works as easily with trainers as with boots — the pair you reach for without thinking.",
         priceEgp: 1124.75,
-        imageUrl: "/products/pants-sand.png",
+        imageUrl: seededCatalogImageUrl("pants-sand.png"),
         colorName: "Desert Sand",
         colorHex: "#c2a878",
         fabric: "Cotton twill",
@@ -94,7 +95,7 @@ export const DEMO_PANTS: DemoPants[] = [
         description:
             "A close-cut twill trouser with four-way stretch. Narrow through the thigh and calf without pulling, and a slightly shortened inseam designed to sit on the ankle.",
         priceEgp: 1299.75,
-        imageUrl: "/products/pants-black.png",
+        imageUrl: seededCatalogImageUrl("pants-black.png"),
         colorName: "Jet Black",
         colorHex: "#1c1c1e",
         fabric: "Stretch twill",
@@ -106,7 +107,7 @@ export const DEMO_PANTS: DemoPants[] = [
         description:
             "Heavy ripstop cotton with a roomy, straight cut through the leg. Reinforced seams and a slightly higher rise for a workwear silhouette that wears in rather than out.",
         priceEgp: 1449.75,
-        imageUrl: "/products/pants-olive.png",
+        imageUrl: seededCatalogImageUrl("pants-olive.png"),
         colorName: "Field Olive",
         colorHex: "#4a5240",
         fabric: "Ripstop cotton",

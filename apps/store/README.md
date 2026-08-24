@@ -16,6 +16,24 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Seeded catalog images for 2D virtual try-on
+
+The 2D VTON provider fetches garment images from the public internet, so seed
+products must use public HTTPS image URLs rather than local `/products/...`
+paths. The shared Supabase project stores these assets in its public `catalog`
+bucket.
+
+For a new Supabase environment, configure `SUPABASE_SERVICE_KEY` and run this
+from the repository root before seeding or testing 2D VTON:
+
+```bash
+npm run upload:seed-images
+```
+
+The command is idempotent: it uploads `public/products/*` to
+`catalog/seeded-products/` and repairs existing product records that still use
+local paths. Keep the project hostname in `VTON_ALLOWED_IMAGE_HOSTS`.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load Inter, a custom Google Font.
