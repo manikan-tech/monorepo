@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeWidgetRequest, consumeQuota } from "../../../lib/widget-auth";
 import { assessFitRange, buildFitRangeResponse } from "../../../lib/fit-range";
+import { asksForProductDetails, buildProductDetailsResponse } from "../../../lib/product-details";
 import { buildBodyFitChartCsv } from "../../../lib/size-chart";
 import { prisma } from "../../../lib/prisma";
 
@@ -72,16 +73,37 @@ export async function POST(request: NextRequest) {
     // on a mismatch — never reveal another tenant's product id).
     let sizeChart: string | undefined;
     if (product_id) {
-        const owns = await prisma.product.findUnique({
+        const product = await prisma.product.findUnique({
             where: { id: product_id },
-            select: { retailerId: true },
+            select: {
+                retailerId: true,
+                name: true,
+                category: true,
+                brand: true,
+                fabric: true,
+                description: true,
+                fitNotes: true,
+                garmentColorHex: true,
+                tshirtColorHex: true,
+            },
         });
-        if (!owns || owns.retailerId !== retailer.id) {
+        if (!product || product.retailerId !== retailer.id) {
             return NextResponse.json(
                 { error: "Product not found" },
                 { status: 404, headers: CORS_HEADERS }
             );
         }
+
+        // Product facts are already in Store's trusted database. Answer clear
+        // detail questions here so a prior sizing result cannot hide the
+        // selected item's description, material, or catalog colour metadata.
+        if (asksForProductDetails(messages)) {
+            return NextResponse.json(
+                { success: true, ...buildProductDetailsResponse(product) },
+                { status: 200, headers: CORS_HEADERS }
+            );
+        }
+
         // Product exists and is this retailer's — it may still have no
         // ingested body-fit data yet (builder returns null then). That is
         // not an error: omitting size_chart routes the agent to its
