@@ -64,7 +64,8 @@ source .venv/bin/activate
 # 2. Install (CPU-only torch — see requirements.txt)
 pip install -r requirements.txt
 
-# 3. Run (port 8001; matches the monorepo `npm run start:body` script)
+# 3. Load service secrets, then run (port 8001; matches `npm run start:body`)
+set -a && source .env && set +a
 uvicorn app.main:app --reload --port 8001
 ```
 
