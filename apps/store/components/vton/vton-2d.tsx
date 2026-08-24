@@ -263,7 +263,7 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
                 {/* Left Side: Upload Panel */}
                 <div className="flex flex-col gap-6">
                     <div className="flex-1">
-                        <HumanUploader selectedFile={humanFile} onSelectFile={handleSelectFile} />
+                        <HumanUploader onSelectFile={handleSelectFile} />
                     </div>
 
                     {/* Action trigger button */}

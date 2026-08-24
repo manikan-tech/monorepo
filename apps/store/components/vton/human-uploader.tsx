@@ -1,32 +1,82 @@
 "use client";
 
-import { useState, useRef, DragEvent, ChangeEvent } from "react";
+import { useEffect, useState, useRef, DragEvent, ChangeEvent } from "react";
 import Image from "next/image";
 
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const MIN_IMAGE_WIDTH = 400;
+const MIN_IMAGE_HEIGHT = 600;
+const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png"]);
+
 interface HumanUploaderProps {
-    selectedFile: File | null;
     onSelectFile: (file: File | null) => void;
 }
 
-export default function HumanUploader({ selectedFile, onSelectFile }: HumanUploaderProps) {
+export default function HumanUploader({ onSelectFile }: HumanUploaderProps) {
     const [isDragActive, setIsDragActive] = useState<boolean>(false);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const validationAttemptRef = useRef(0);
+
+    useEffect(() => {
+        return () => {
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+        };
+    }, [previewUrl]);
+
+    async function readImageDimensions(file: File): Promise<{ width: number; height: number }> {
+        const objectUrl = URL.createObjectURL(file);
+        try {
+            const image = new window.Image();
+            image.src = objectUrl;
+            await image.decode();
+            return { width: image.naturalWidth, height: image.naturalHeight };
+        } finally {
+            URL.revokeObjectURL(objectUrl);
+        }
+    }
+
+    function clearSelection() {
+        onSelectFile(null);
+        setPreviewUrl(null);
+    }
 
     // Parse and set file with validation
-    const handleFileProcess = (file: File) => {
+    const handleFileProcess = async (file: File) => {
+        const attempt = ++validationAttemptRef.current;
         setError(null);
+        clearSelection();
 
-        // Enforce file checks
-        if (!file.type.startsWith("image/")) {
+        // Match the formats the VTON worker decodes and sends to FASHN.ai.
+        if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
             setError("Please upload an image file (PNG, JPG, or JPEG).");
             return;
         }
 
         // Enforce maximum file size of 5MB
-        if (file.size > 5 * 1024 * 1024) {
+        if (file.size > MAX_IMAGE_SIZE_BYTES) {
             setError("Image size exceeds the 5MB limit. Please upload a smaller file.");
+            return;
+        }
+
+        let dimensions: { width: number; height: number };
+        try {
+            dimensions = await readImageDimensions(file);
+        } catch {
+            if (attempt === validationAttemptRef.current) {
+                setError("This image could not be read. Please upload a valid PNG, JPG, or JPEG file.");
+            }
+            return;
+        }
+
+        // A newer file may have been selected while this one was decoding.
+        if (attempt !== validationAttemptRef.current) return;
+
+        if (dimensions.width < MIN_IMAGE_WIDTH || dimensions.height < MIN_IMAGE_HEIGHT) {
+            setError(
+                `Photo is ${dimensions.width}×${dimensions.height}px. Upload a portrait image at least ${MIN_IMAGE_WIDTH}×${MIN_IMAGE_HEIGHT}px.`
+            );
             return;
         }
 
@@ -54,13 +104,16 @@ export default function HumanUploader({ selectedFile, onSelectFile }: HumanUploa
         setIsDragActive(false);
 
         if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            handleFileProcess(e.dataTransfer.files[0]);
+            void handleFileProcess(e.dataTransfer.files[0]);
         }
     };
 
     const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            handleFileProcess(e.target.files[0]);
+        const file = e.target.files?.[0];
+        // Allow the user to choose the same file again after fixing an error.
+        e.target.value = "";
+        if (file) {
+            void handleFileProcess(file);
         }
     };
 
@@ -69,11 +122,9 @@ export default function HumanUploader({ selectedFile, onSelectFile }: HumanUploa
     };
 
     const removeSelectedFile = () => {
-        onSelectFile(null);
-        if (previewUrl) {
-            URL.revokeObjectURL(previewUrl);
-            setPreviewUrl(null);
-        }
+        validationAttemptRef.current += 1;
+        setError(null);
+        clearSelection();
     };
 
     return (
@@ -101,7 +152,7 @@ export default function HumanUploader({ selectedFile, onSelectFile }: HumanUploa
                             type="file"
                             ref={fileInputRef}
                             onChange={handleFileInputChange}
-                            accept="image/*"
+                            accept="image/jpeg,image/png"
                             className="hidden"
                         />
 
@@ -127,7 +178,7 @@ export default function HumanUploader({ selectedFile, onSelectFile }: HumanUploa
                         <span className="text-sm font-bold text-forest-900">Drag and drop your photo here</span>
                         <span className="text-xs text-forest-400 mt-1">or click to browse local files</span>
                         <span className="text-[10px] text-forest-300 mt-3 font-semibold uppercase tracking-wider">
-                            Supports JPEG, JPG, PNG (Max 5MB)
+                            JPEG or PNG · portrait photo · at least 400×600px · max 5MB
                         </span>
                     </div>
                 ) : (
@@ -179,7 +230,7 @@ export default function HumanUploader({ selectedFile, onSelectFile }: HumanUploa
                                 type="file"
                                 ref={fileInputRef}
                                 onChange={handleFileInputChange}
-                                accept="image/*"
+                                accept="image/jpeg,image/png"
                                 className="hidden"
                             />
                         </div>
