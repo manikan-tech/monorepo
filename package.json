@@ -7,9 +7,9 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
-    "start:body": "cd services-python/body-service && . .venv/bin/activate && uvicorn app.main:app --reload --port 8001",
-    "start:ai": "cd services-python/recommendation-service && . .venv/bin/activate && uvicorn app.main:app --reload --port 8002",
-    "start:vton": "cd services-python/tryon-service && . .venv/bin/activate && uvicorn main:app --reload --port 8003"
+    "start:body": "cd services-python/body-service && if [ -f .env ]; then set -a && . ./.env && set +a; fi && .venv/bin/uvicorn app.main:app --reload --port 8001",
+    "start:ai": "cd services-python/recommendation-service && if [ -f .env ]; then set -a && . ./.env && set +a; fi && .venv/bin/uvicorn app.main:app --reload --port 8002",
+    "start:vton": "cd services-python/tryon-service && if [ -f .env ]; then set -a && . ./.env && set +a; fi && .venv/bin/uvicorn main:app --reload --port 8003"
   },
   "devDependencies": {
     "prettier": "^3.7.4",
