@@ -20,7 +20,15 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
     const [resultUrl, setResultUrl] = useState<string | null>(null);
     const [resultSource, setResultSource] = useState<"live" | "cached" | null>(null);
     const [apiError, setApiError] = useState<string | null>(null);
+    const [isHydrated, setIsHydrated] = useState(false);
     const resultSectionRef = useRef<HTMLDivElement>(null);
+
+    // Keep the server markup and the browser's first render identical. The
+    // catalog and selected-file state are browser-only, so the action remains
+    // disabled until React has completed hydration.
+    useEffect(() => {
+        setIsHydrated(true);
+    }, []);
 
     useEffect(() => {
         if (!humanFile) {
@@ -235,6 +243,7 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
         resultSource === "cached"
             ? "bg-amber-100 text-amber-800 border-amber-200"
             : "bg-emerald-100 text-emerald-800 border-emerald-200";
+    const isTryOnDisabled = !isHydrated || !humanFile || !selectedGarment || isLoading;
 
     return (
         <div className="flex flex-col gap-8 max-w-7xl mx-auto px-4 py-8 bg-forest-50/20 min-h-screen">
@@ -263,14 +272,19 @@ export default function Vton2D({ initialSelectedGarmentId }: Vton2DProps) {
                 {/* Left Side: Upload Panel */}
                 <div className="flex flex-col gap-6">
                     <div className="flex-1">
-                        <HumanUploader selectedFile={humanFile} onSelectFile={handleSelectFile} />
+                        <HumanUploader onSelectFile={handleSelectFile} />
                     </div>
 
                     {/* Action trigger button */}
+                    {/* Firefox can restore a button's previous disabled state during a
+                        hard refresh, before React hydrates. This action's enabled
+                        state is derived from live file/catalog state, so it must not
+                        be restored by the browser. */}
                     <button
                         id="tryon-trigger"
+                        autoComplete="off"
                         onClick={triggerVirtualTryOn}
-                        disabled={!humanFile || !selectedGarment || isLoading}
+                        disabled={isTryOnDisabled}
                         className="w-full flex items-center justify-center gap-2.5 bg-forest-900 hover:bg-forest-950 text-white font-semibold py-4 px-6 rounded-2xl shadow-soft disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.99] transition-all duration-350"
                     >
                         {isLoading ? (
