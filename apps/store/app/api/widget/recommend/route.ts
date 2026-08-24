@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeWidgetRequest, consumeQuota } from "../../../lib/widget-auth";
 import { assessFitRange, buildFitRangeResponse } from "../../../lib/fit-range";
-import { asksForProductDetails, buildProductDetailsResponse } from "../../../lib/product-details";
+import { asksForProductDetails, buildProductDetailsContext } from "../../../lib/product-details";
 import { buildBodyFitChartCsv } from "../../../lib/size-chart";
 import { prisma } from "../../../lib/prisma";
 
@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
     // to every other product/variant lookup in this codebase (404, not 403,
     // on a mismatch — never reveal another tenant's product id).
     let sizeChart: string | undefined;
+    let productDetailsContext: string | undefined;
     if (product_id) {
         const product = await prisma.product.findUnique({
             where: { id: product_id },
@@ -79,6 +80,7 @@ export async function POST(request: NextRequest) {
                 retailerId: true,
                 name: true,
                 category: true,
+                brand: true,
                 fabric: true,
                 description: true,
             },
@@ -90,14 +92,11 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Product facts are already in Store's trusted database. Answer clear
-        // detail questions here so a prior sizing result cannot hide the
-        // selected item's description, material, or catalog colour metadata.
+        // Let the existing AI answer the product-detail question, but give it
+        // a trusted selected-product brief so each question can receive a
+        // context-specific answer instead of a repeated static summary.
         if (asksForProductDetails(messages)) {
-            return NextResponse.json(
-                { success: true, ...buildProductDetailsResponse(product) },
-                { status: 200, headers: CORS_HEADERS }
-            );
+            productDetailsContext = buildProductDetailsContext(product);
         }
 
         // Product exists and is this retailer's — it may still have no
@@ -113,7 +112,7 @@ export async function POST(request: NextRequest) {
     // fact it cannot explain precisely: measurements outside this product's
     // published chart. This prevents a generic "View items" fallback and
     // gives the shopper the relevant size, limit, and difference.
-    if (sizeChart) {
+    if (sizeChart && !productDetailsContext) {
         const fitRange = assessFitRange(betas, sizeChart);
         if (fitRange) {
             return NextResponse.json(
@@ -136,7 +135,12 @@ export async function POST(request: NextRequest) {
             },
             body: JSON.stringify({
                 session_id,
-                messages,
+                // Store appends this trusted system message after client chat
+                // history so it takes precedence over generic fit context for
+                // product-information questions. The Python workflow remains unchanged.
+                messages: productDetailsContext
+                    ? [...messages, { role: "system", content: productDetailsContext }]
+                    : messages,
                 betas,
                 product_id,
                 retailer_id: retailer.id,

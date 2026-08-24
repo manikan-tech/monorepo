@@ -6,6 +6,7 @@ type ChatMessage = {
 type ProductDetails = {
   name: string;
   category: string;
+  brand: string;
   fabric: string;
   description: string | null;
 };
@@ -22,20 +23,6 @@ function lastUserMessage(messages: unknown[]): string | null {
   return null;
 }
 
-function sentence(value: string): string {
-  const trimmed = value.trim();
-  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
-}
-
-function concise(value: string, maximumLength = 280): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (normalized.length <= maximumLength) return sentence(normalized);
-
-  const shortened = normalized.slice(0, maximumLength);
-  const lastWord = shortened.lastIndexOf(" ");
-  return `${(lastWord > 0 ? shortened.slice(0, lastWord) : shortened).trimEnd()}…`;
-}
-
 /** Only intercept explicit product-information requests; fit and sizing stay with the existing flow. */
 export function asksForProductDetails(messages: unknown[]): boolean {
   const query = lastUserMessage(messages);
@@ -43,31 +30,24 @@ export function asksForProductDetails(messages: unknown[]): boolean {
 }
 
 /**
- * Makes a short, shopper-friendly introduction from approved catalog copy.
- * Fit instructions and implementation-only fields (such as colour hex codes)
- * are deliberately excluded from customer-facing messages.
+ * Trusted context inserted by Store after the conversation. The recommendation
+ * service can vary the answer by the shopper's question, but cannot invent
+ * catalog facts or expose internal metadata such as colour hex values.
  */
-export function buildProductDetailsResponse(product: ProductDetails) {
-  const description = product.description?.trim();
-  const intro = description
-    ? concise(description)
-    : `${product.name} is a piece from our ${product.category.toLowerCase()} collection.`;
-  const material = product.fabric.trim();
-  const mentionsMaterial = description?.toLowerCase().includes(material.toLowerCase());
-  const materialDetail = material && !mentionsMaterial
-    ? `Made with ${material}, it brings a considered finish to the look.`
-    : null;
-  const closing = "An easy choice when you want to feel comfortable and put together.";
+export function buildProductDetailsContext(product: ProductDetails): string {
+  const facts = [
+    `Name: ${product.name}`,
+    `Category: ${product.category}`,
+    product.brand ? `Brand: ${product.brand}` : null,
+    product.fabric ? `Material: ${product.fabric}` : null,
+    product.description?.trim() ? `Description: ${product.description.trim()}` : null,
+  ].filter((value): value is string => Boolean(value));
 
-  const message = [`Meet ${product.name} — ${intro}`, materialDetail, closing]
-    .filter((value): value is string => Boolean(value))
-    .join(" ");
-  return {
-    action: "provide_recommendation",
-    provider: "STORE-PRODUCT-DETAILS",
-    message,
-    explanation: message,
-    recommended_size: null,
-    confidence_score: null,
-  };
+  return [
+    "TRUSTED CURRENT-PRODUCT CONTEXT (from the Store database):",
+    ...facts,
+    "The shopper's latest message is about this product. Answer that specific question in a warm, natural shopping-assistant voice in 1-3 short sentences.",
+    "Use only the facts above; do not invent colour, texture, features, pricing, or availability. Do not expose IDs, hex colour values, internal fit instructions, or implementation details.",
+    "Do not repeat a previous fit or out-of-range result unless the shopper explicitly asks about size or fit.",
+  ].join("\n");
 }
