@@ -62,7 +62,7 @@ class SizeMathResult:
 OUT_OF_RANGE_THRESHOLD_CM = 15.0
 
 _SIZE_LABEL_PATTERN = re.compile(r'\b(XXS|XS|S|M|L|XL|XXL|XXXL)\b', re.IGNORECASE)
-_CONFIDENCE_PATTERN = re.compile(r'\b(\d{1,3})\s*%')
+_CONFIDENCE_PATTERN = re.compile(r'\b(\d{1,3})\s*%?\b')
 
 
 def _extract_size_label(text: str) -> Optional[str]:
