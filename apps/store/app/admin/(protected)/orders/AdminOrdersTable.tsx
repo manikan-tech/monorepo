@@ -172,6 +172,8 @@ export default function AdminOrdersTable({
                             ? "bg-orange-50 text-orange-700 border-orange-200"
                             : order.status === "SHIPPED"
                             ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                            : order.status === "CONFIRMED" || order.status === "PROCESSING"
+                            ? "bg-blue-50 text-blue-700 border-blue-200"
                             : "bg-yellow-50 text-yellow-700 border-yellow-200"
                         }`}
                       >

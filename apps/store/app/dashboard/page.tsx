@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getAuthFromCookies } from "../lib/auth";
 import { prisma } from "../lib/prisma";
 import { redirect } from "next/navigation";
@@ -8,9 +9,12 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
   const [totalProducts, widgetViews, tryonConversions, recentOrders, totalOrders, retailer] = await Promise.all([
     prisma.product.count({ where: { retailerId: user.sub } }),
-    prisma.measurementSession.count({ where: { retailerId: user.sub } }),
+    prisma.measurementSession.count({ where: { retailerId: user.sub, createdAt: { gte: thirtyDaysAgo } } }),
     prisma.measurementSession.count({ where: { retailerId: user.sub, isPurchased: true } }),
     prisma.order.findMany({
       where: { items: { some: { product: { retailerId: user.sub } } } },
@@ -66,9 +70,10 @@ export default async function DashboardPage() {
       valueColor: "text-forest-950",
     },
     {
-      label: "Widget Views (30d)",
+      label: "Widget Views",
       value: widgetViews,
       suffix: "",
+      subLabel: "Last 30 days",
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -82,9 +87,10 @@ export default async function DashboardPage() {
       valueColor: "text-forest-950",
     },
     {
-      label: "Try-on Conversions",
+      label: "Purchase Conversion",
       value: conversionRate,
       suffix: "%",
+      subLabel: "Sessions → purchased",
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -176,9 +182,16 @@ export default async function DashboardPage() {
               style={{ background: "linear-gradient(90deg, #C8966A, transparent)" }}
             />
             <div className="flex items-start justify-between mb-4">
-              <p className="text-xs font-semibold uppercase tracking-widest text-forest-700/60">
-                {stat.label}
-              </p>
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-semibold uppercase tracking-widest text-forest-700/60">
+                  {stat.label}
+                </p>
+                {"subLabel" in stat && stat.subLabel && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-forest-400/70 bg-forest-100/60 px-1.5 py-0.5 rounded-full w-fit">
+                    {stat.subLabel}
+                  </span>
+                )}
+              </div>
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${stat.iconBg} ${stat.iconColor}`}>
                 {stat.icon}
               </div>
@@ -201,9 +214,12 @@ export default async function DashboardPage() {
             <div className="w-1 h-6 rounded-full" style={{ background: "linear-gradient(180deg, #C8966A, #F0C080)" }} />
             <h3 className="text-lg font-display font-semibold text-forest-900">Recent Orders</h3>
           </div>
-          <span className="text-xs font-medium text-gold-600 bg-gold-50 border border-gold-200 px-3 py-1 rounded-full">
-            Last 5
-          </span>
+          <Link
+            href="/dashboard/orders"
+            className="text-xs font-medium text-gold-600 hover:text-gold-700 transition-colors"
+          >
+            View all →
+          </Link>
         </div>
 
         {recentOrders.length === 0 ? (
