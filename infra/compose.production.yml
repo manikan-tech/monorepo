@@ -1,9 +1,10 @@
 name: manikan
 
 # Phase 1 production topology:
-#   Internet -> Caddy -> Store -> Body
-# Only Caddy publishes host ports. `store` and `body` communicate over the
-# default Docker bridge network via service DNS; neither has a host port.
+#   Internet -> Caddy -> Store -> private workers (Body, Recommendation)
+# Only Caddy publishes host ports. `store`, `body`, and `recommendation`
+# communicate over the default Docker bridge network via service DNS; none has
+# a host port.
 services:
   proxy:
     image: caddy:2.10-alpine
@@ -87,6 +88,32 @@ services:
       timeout: 7s
       retries: 5
       start_period: 30s
+    logging: *json_logs
+
+  recommendation:
+    image: manikan-recommendation:phase1
+    build:
+      context: ../services-python/recommendation-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      store:
+        condition: service_healthy
+    env_file:
+      - ${RECOMMENDATION_ENV_FILE:?Set RECOMMENDATION_ENV_FILE to a private Recommendation environment file}
+    environment:
+      PORT: "8002"
+    expose:
+      - "8002"
+    # /health checks the configured LLM provider. Keep Docker health local so
+    # routine liveness checks do not call DeepSeek or another external service.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client,sys; c=http.client.HTTPConnection('127.0.0.1',8002,timeout=3); c.request('GET','/openapi.json'); r=c.getresponse(); sys.exit(0 if r.status==200 else 1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     logging: *json_logs
 
 volumes:
