@@ -52,7 +52,7 @@ export function generateDressedAvatar(payload) {
   return postForGlb('/api/tryon', payload)
 }
 
-async function postJson(path, payload, { timeoutMs = 30_000 } = {}) {
+async function postJson(path, payload, { timeoutMs = 30_000, apiKey } = {}) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -61,7 +61,7 @@ async function postJson(path, payload, { timeoutMs = 30_000 } = {}) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Manikan-Key': getRetailerKey() ?? '',
+        'X-Manikan-Key': apiKey ?? getRetailerKey() ?? '',
       },
       signal: controller.signal,
       body: JSON.stringify(payload),
@@ -75,8 +75,11 @@ async function postJson(path, payload, { timeoutMs = 30_000 } = {}) {
 }
 
 /** Request the Store's recommendation + 3D orchestration workflow. */
-export function processWidgetFit({ productId, measurements }) {
-  return postJson('/api/widget/process', { productId, measurements })
+export function processWidgetFit({ productId, measurements, recommendationKey }) {
+  if (!recommendationKey) {
+    return Promise.reject(new Error('Recommendation service is not configured for this retailer'))
+  }
+  return postJson('/api/widget/process', { productId, measurements }, { apiKey: recommendationKey })
 }
 
 /** Upload an optional shopper photo for a 2D virtual try-on preview. */

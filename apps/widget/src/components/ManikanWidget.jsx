@@ -26,7 +26,7 @@ function saveProfile(profile) {
   localStorage.setItem('manikan_profile', JSON.stringify(profile))
 }
 
-export default function ManikanWidget({ product, onClose }) {
+export default function ManikanWidget({ product, recommendationKey, onClose }) {
   const savedProfile = getSavedProfile()
   const isReturningUser = savedProfile?.has_avatar
 
@@ -194,7 +194,11 @@ export default function ManikanWidget({ product, onClose }) {
     const measurements = { heightCm: height, weightKg: weight, chestCm: chest, waistCm: waist, hipsCm: hips }
     try {
       console.info('[Manikan Widget] Sending measurements to Store orchestrator', { productId: product.id })
-      const result = await processWidgetFit({ productId: product.id, measurements })
+      const result = await processWidgetFit({
+        productId: product.id,
+        measurements,
+        recommendationKey,
+      })
       setFitResult(result)
       const serverSize = result?.recommendation?.recommendedSize
       const size = serverSize && product.sizes[serverSize] ? serverSize : localRecommendedSize

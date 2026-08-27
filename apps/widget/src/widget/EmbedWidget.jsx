@@ -15,6 +15,7 @@ import { fetchProduct } from '../lib/products'
 export default function EmbedWidget({
   productId,
   retailerKey,
+  recommendationKey,
   // Pre-resolved product, already in the /api/widget/products/[id] shape.
   // When supplied the network fetch is skipped entirely. This is what a
   // FIRST-PARTY host (our own storefront) passes: the page has already loaded
@@ -64,7 +65,7 @@ export default function EmbedWidget({
 
   if (open) {
     if (status === 'ready' && product) {
-      return <ManikanWidget product={product} onClose={close} />
+      return <ManikanWidget product={product} recommendationKey={recommendationKey} onClose={close} />
     }
     return (
       <div className="mw-overlay" onClick={close}>

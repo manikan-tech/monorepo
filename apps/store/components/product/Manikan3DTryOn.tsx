@@ -45,6 +45,11 @@ const INTERACTIVE_GUIDE_SEEN_KEY = "manikan_3d_interactive_tour_seen_v1";
 const RETAILER_KEY =
   process.env.NEXT_PUBLIC_MANIKAN_WIDGET_KEY || "pk_live_618be0c3849d6587048cc81bb490c4d10aaf2c72e9e04330";
 
+// This key deliberately remains separate from RETAILER_KEY: the widget's
+// measurement-processing endpoint is a Recommendation service operation,
+// with its own retailer entitlement and quota.
+const RECOMMENDATION_KEY = process.env.NEXT_PUBLIC_MANIKAN_RECOMMEND_KEY;
+
 type MountResult = { unmount: () => void } | null;
 type WidgetProduct = {
   id: string;
@@ -66,6 +71,7 @@ declare global {
         options: {
           productId: string;
           retailerKey?: string;
+          recommendationKey?: string;
           product?: WidgetProduct;
           autoOpen?: boolean;
           onClose?: () => void;
@@ -190,6 +196,7 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
       instanceRef.current = window.Manikan.mount(host, {
         productId: product.id,
         retailerKey: RETAILER_KEY,
+        recommendationKey: RECOMMENDATION_KEY,
         product: toWidgetProduct(product),
         autoOpen: true,
         onClose: teardown,
