@@ -15,7 +15,19 @@ function jsonError(requestId: string, status: number, error: string) {
 
 function isSameOriginBrowserRequest(request: NextRequest): boolean {
     const origin = request.headers.get("origin");
-    return origin === request.nextUrl.origin;
+    // Caddy terminates TLS before proxying to Store over Docker HTTP. Prefer
+    // its browser-facing forwarding headers so the HTTPS Origin is compared
+    // to the public authority, while retaining the direct-development
+    // request.nextUrl fallback when no reverse proxy is present.
+    const forwardedHost = request.headers.get("x-forwarded-host");
+    const forwardedProto = request.headers.get("x-forwarded-proto")
+        ?.split(",")[0]
+        ?.trim();
+    const publicOrigin = forwardedHost && forwardedProto
+        ? `${forwardedProto}://${forwardedHost}`
+        : request.nextUrl.origin;
+
+    return origin === publicOrigin;
 }
 
 /**
