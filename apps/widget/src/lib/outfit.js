@@ -43,10 +43,10 @@ function save(outfit) {
 }
 
 /** Put a garment on, replacing whatever was in that category slot. */
-export function wearGarment(category, { product_id, size, name }) {
+export function wearGarment(category, { product_id, size, name, color_hex, color_name }) {
   if (!category || !product_id || !size) return
   const outfit = getOutfit()
-  outfit[category] = { product_id, size, name }
+  outfit[category] = { product_id, size, name, color_hex, color_name }
   save(outfit)
 }
 

@@ -28,3 +28,14 @@ export async function fetchProduct(productId) {
 
   return response.json()
 }
+
+/** Fetch colour siblings for a product. Returns { currentColorHex, siblings }. */
+export async function fetchColorSiblings(productId) {
+  const response = await fetch(
+    `${STORE_API_URL}/api/widget/products/${encodeURIComponent(productId)}/colors`,
+    { headers: { 'X-Manikan-Key': getRetailerKey() ?? '' } }
+  )
+
+  if (!response.ok) return { currentColorHex: null, siblings: [] }
+  return response.json()
+}

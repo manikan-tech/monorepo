@@ -339,6 +339,7 @@ model Product {
   description     String?
   fitNotes        String?
   category        String
+  styleCode       String?
   gender          String
   brand           String
   fabric          String
@@ -364,6 +365,7 @@ model Product {
   orderItems    OrderItem[]
 
   @@unique([retailerId, productCode])
+  @@index([retailerId, styleCode])
 }
 
 // ─── Product Variant (extended) ─────────────────────────────────
