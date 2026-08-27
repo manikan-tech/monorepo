@@ -118,7 +118,10 @@ export async function POST(request: NextRequest) {
         upstreamFormData.append("product_id", product.id);
         upstreamFormData.append("session_id", customer.sub);
 
-        const upstream = await fetch(new URL("/api/vton/2d", request.url), {
+        // The public request arrives through Caddy as HTTPS, but this Store process
+        // only listens on plain HTTP internally. Keep this server-to-server hop on
+        // loopback so it neither re-enters the public proxy nor attempts TLS on :3000.
+        const upstream = await fetch(new URL("/api/vton/2d", "http://127.0.0.1:3000"), {
             method: "POST",
             headers: {
                 "X-Manikan-Key": serviceKey,
