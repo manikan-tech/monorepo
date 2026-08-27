@@ -142,9 +142,11 @@ export async function authorizeWidgetRequest(
     }
 
     // 2. FAIL-CLOSED: a real browser always sends Origin on a cross-origin POST.
-    //    A missing Origin means a non-browser (server-to-server) caller → reject.
-    const origin = request.headers.get("origin");
-    if (!origin) {
+    //    Same-origin GET requests (like fetching layer products when the widget
+    //    is embedded in our own store) omit Origin, but still send Referer.
+    //    A completely missing Origin AND Referer means a non-browser caller → reject.
+    const originHeader = request.headers.get("origin") || request.headers.get("referer");
+    if (!originHeader) {
         return { ok: false, response: forbidden(cors) };
     }
 
@@ -172,7 +174,7 @@ export async function authorizeWidgetRequest(
             .filter((o): o is string => typeof o === "string")
             .map(normalizeOrigin)
         : [];
-    if (!allowed.includes(normalizeOrigin(origin))) {
+    if (!allowed.includes(normalizeOrigin(originHeader))) {
         return { ok: false, response: forbidden(cors) };
     }
 

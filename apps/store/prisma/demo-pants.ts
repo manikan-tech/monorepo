@@ -39,6 +39,7 @@ interface DemoPants {
     imageUrl: string;
     colorName: string;
     colorHex: string;
+    styleCode: string;
     fabric: string;
     sizes: Record<string, DemoPantsSize>;
 }
@@ -62,6 +63,7 @@ export const DEMO_PANTS: DemoPants[] = [
         imageUrl: seededCatalogImageUrl("pants-indigo.png"),
         colorName: "Raw Indigo",
         colorHex: "#2e4374",
+        styleCode: "MNK-PNT-M01",
         fabric: "Denim",
         sizes: GRID_SIZES(80, 27),
     },
@@ -74,6 +76,7 @@ export const DEMO_PANTS: DemoPants[] = [
         imageUrl: seededCatalogImageUrl("pants-charcoal.png"),
         colorName: "Charcoal Grey",
         colorHex: "#36393e",
+        styleCode: "MNK-PNT-M01",
         fabric: "Wool blend",
         sizes: GRID_SIZES(81, 28),
     },
@@ -86,6 +89,7 @@ export const DEMO_PANTS: DemoPants[] = [
         imageUrl: seededCatalogImageUrl("pants-sand.png"),
         colorName: "Desert Sand",
         colorHex: "#c2a878",
+        styleCode: "MNK-PNT-M01",
         fabric: "Cotton twill",
         sizes: GRID_SIZES(79, 26),
     },
@@ -98,6 +102,7 @@ export const DEMO_PANTS: DemoPants[] = [
         imageUrl: seededCatalogImageUrl("pants-black.png"),
         colorName: "Jet Black",
         colorHex: "#1c1c1e",
+        styleCode: "MNK-PNT-M01",
         fabric: "Stretch twill",
         sizes: GRID_SIZES(77, 25),
     },
@@ -110,6 +115,7 @@ export const DEMO_PANTS: DemoPants[] = [
         imageUrl: seededCatalogImageUrl("pants-olive.png"),
         colorName: "Field Olive",
         colorHex: "#4a5240",
+        styleCode: "MNK-PNT-M01",
         fabric: "Ripstop cotton",
         sizes: GRID_SIZES(82, 29),
     },
@@ -129,6 +135,7 @@ export async function seedDemoPants(
             where: { id: p.id },
             update: {
                 garmentColorHex: p.colorHex,
+                styleCode: p.styleCode,
                 priceEgp: p.priceEgp,
                 imageUrl: p.imageUrl,
                 isActive: true,
@@ -144,6 +151,7 @@ export async function seedDemoPants(
                 gender: "unisex",
                 brand: "Manikan",
                 fabric: p.fabric,
+                styleCode: p.styleCode,
                 priceEgp: p.priceEgp,
                 imageUrl: p.imageUrl,
                 images: [p.imageUrl],

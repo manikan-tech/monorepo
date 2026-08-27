@@ -53,7 +53,29 @@ export async function GET(
             );
         }
 
-        return NextResponse.json({ product }, { status: 200 });
+        // ── Color siblings: other active products with the same styleCode.
+        const colorSiblings = await prisma.product.findMany({
+            where: {
+                retailerId: product.retailerId,
+                category: product.category,
+                isActive: true,
+                id: { not: product.id },
+                ...(product.styleCode
+                    ? { styleCode: product.styleCode }
+                    : { name: product.name }
+                ),
+            },
+            select: {
+                id: true,
+                slug: true,
+                styleCode: true,
+                garmentColorHex: true,
+                imageUrl: true,
+            },
+            orderBy: { createdAt: "asc" },
+        });
+
+        return NextResponse.json({ product, colorSiblings }, { status: 200 });
     } catch (error) {
         console.error("Failed to fetch product:", error);
         return NextResponse.json(
