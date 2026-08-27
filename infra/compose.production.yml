@@ -1,8 +1,8 @@
 name: manikan
 
 # Phase 1 production topology:
-#   Internet -> Caddy -> Store -> private workers (Body, Recommendation)
-# Only Caddy publishes host ports. `store`, `body`, and `recommendation`
+#   Internet -> Caddy -> Store -> private workers (Body, Recommendation, VTON)
+# Only Caddy publishes host ports. `store`, `body`, `recommendation`, and `vton`
 # communicate over the default Docker bridge network via service DNS; none has
 # a host port.
 services:
@@ -110,6 +110,32 @@ services:
     # routine liveness checks do not call DeepSeek or another external service.
     healthcheck:
       test: ["CMD", "python", "-c", "import http.client,sys; c=http.client.HTTPConnection('127.0.0.1',8002,timeout=3); c.request('GET','/openapi.json'); r=c.getresponse(); sys.exit(0 if r.status==200 else 1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *json_logs
+
+  vton:
+    image: manikan-vton:phase1
+    build:
+      context: ../services-python/tryon-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      store:
+        condition: service_healthy
+    env_file:
+      - ${VTON_ENV_FILE:?Set VTON_ENV_FILE to a private VTON environment file}
+    environment:
+      PORT: "8003"
+    expose:
+      - "8003"
+    # /health only verifies local process configuration; it does not invoke
+    # FASHN.ai or consume inference credits.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client,sys; c=http.client.HTTPConnection('127.0.0.1',8003,timeout=3); c.request('GET','/health'); r=c.getresponse(); sys.exit(0 if r.status==200 else 1)"]
       interval: 20s
       timeout: 5s
       retries: 5
