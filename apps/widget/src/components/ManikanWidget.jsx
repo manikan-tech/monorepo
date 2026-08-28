@@ -2,8 +2,10 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import MeasurementSlider from './MeasurementSlider'
 import TryOnViewer from './TryOnViewer'
 import InteractiveGuide from './InteractiveGuide'
+import OutfitLayerCard from './OutfitLayerCard'
 import { generateDressedAvatar, processWidgetFit, uploadVirtualTryOn } from '../lib/api'
 import { getLayerableGarment, wearGarment, removeGarment } from '../lib/outfit'
+import { fetchProduct, fetchColorSiblings } from '../lib/products'
 
 /* ─────────────────────────────────────────────────────────────────────────
    Manikan Widget — Multi-step SDK integration modal
@@ -26,9 +28,21 @@ function saveProfile(profile) {
   localStorage.setItem('manikan_profile', JSON.stringify(profile))
 }
 
-export default function ManikanWidget({ product, recommendationKey, onClose }) {
+export default function ManikanWidget({ product: initialProduct, recommendationKey, onClose }) {
   const savedProfile = getSavedProfile()
   const isReturningUser = savedProfile?.has_avatar
+
+  // Primary product state
+  const [product, setProduct] = useState(initialProduct)
+  const [primaryColorSiblings, setPrimaryColorSiblings] = useState([])
+
+  useEffect(() => {
+    let mounted = true
+    fetchColorSiblings(product.id).then(res => {
+      if (mounted) setPrimaryColorSiblings(res.siblings || [])
+    }).catch(err => console.error('[ManikanWidget] Failed to fetch primary colors:', err))
+    return () => { mounted = false }
+  }, [product.id])
 
   // Steps: 0=welcome, 1=measurements, 2=generating, 3=tryon
   const [step, setStep] = useState(isReturningUser ? 3 : 0)
@@ -87,6 +101,10 @@ export default function ManikanWidget({ product, recommendationKey, onClose }) {
   // Default ON: the shopper put that garment on deliberately, so silently
   // removing it when they open the next product is the surprising behaviour.
   const [keepWearing, setKeepWearing] = useState(true)
+  // User's current selection for the layered garment — starts from the
+  // session outfit and can be changed via OutfitLayerCard without touching
+  // any 3D pipeline code (same product_id + size goes into also_wear).
+  const [layerOverride, setLayerOverride] = useState(null)
 
   const sizeKeys = Object.keys(product.sizes)
   const currentSpecs = product.sizes[selectedSize]
@@ -112,15 +130,21 @@ export default function ManikanWidget({ product, recommendationKey, onClose }) {
   // setState is async, so a handler that flips the checkbox and immediately
   // regenerates would otherwise render with the PREVIOUS value -- which
   // inverted the toggle: unchecking still showed both, re-checking showed one.
-  const generateTryOn = useCallback(async (size, layerOn) => {
+  const generateTryOn = useCallback(async (size, layerOn, layerOverrideArg, activeProductArg) => {
     const useLayer = layerOn === undefined ? keepWearing : layerOn
+    const effProduct = activeProductArg || product
     setIsGenerating(true)
     setError(null)
 
     try {
-      const layerWith = useLayer && wornGarment ? wornGarment : null
+      // layerOverrideArg takes priority over the state-based override,
+      // which takes priority over the original wornGarment. This chain
+      // lets callers pass an explicit override (for state-sync timing)
+      // while the default still works for checkbox toggles.
+      const effectiveLayer = layerOverrideArg || layerOverride || wornGarment
+      const layerWith = useLayer && effectiveLayer ? effectiveLayer : null
       const url = await generateDressedAvatar({
-        product_id: product.id,
+        product_id: effProduct.id,
         size,
         sex,
         height_cm: height,
@@ -143,14 +167,17 @@ export default function ManikanWidget({ product, recommendationKey, onClose }) {
       // Record what is now actually on the body, so the NEXT product can
       // offer to layer with it. Both slots are updated, because a layered
       // render means the shopper really is wearing both.
-      wearGarment(product.category, {
-        product_id: product.id, size, name: product.name,
+      wearGarment(effProduct.category, {
+        product_id: effProduct.id, size, name: effProduct.name,
+        color_hex: effProduct.color_hex, color_name: effProduct.color_name,
       })
       if (layerWith) {
         wearGarment(layerWith.category, {
           product_id: layerWith.product_id,
           size: layerWith.size,
           name: layerWith.name,
+          color_hex: layerWith.color_hex,
+          color_name: layerWith.color_name,
         })
       } else if (wornGarment) {
         // Rendered on its own -> that other garment is off.
@@ -175,8 +202,8 @@ export default function ManikanWidget({ product, recommendationKey, onClose }) {
     } finally {
       setIsGenerating(false)
     }
-  }, [sex, height, weight, chest, waist, hips, product.id, product.category,
-      product.name, recommendedSize, keepWearing, wornGarment])
+  }, [sex, height, weight, chest, waist, hips, product, recommendedSize,
+      keepWearing, wornGarment, layerOverride])
 
   // Handle "Generate My Body Model" click
   const handleGenerateBody = async () => {
@@ -256,6 +283,26 @@ export default function ManikanWidget({ product, recommendationKey, onClose }) {
   const handleSizeChange = async (size) => {
     setSelectedSize(size)
     await generateTryOn(size)
+  }
+
+  // Handle primary color change
+  const handlePrimaryColorChange = async (sibling) => {
+    setIsGenerating(true)
+    setError(null)
+    try {
+      const fullProduct = await fetchProduct(sibling.id)
+      setProduct(fullProduct)
+      // Switch to a valid size if current size isn't available
+      const newSizeKeys = Object.keys(fullProduct.sizes)
+      const newSize = newSizeKeys.includes(selectedSize) ? selectedSize : newSizeKeys[0]
+      setSelectedSize(newSize)
+      // Trigger new 3D try-on immediately with the newly fetched product
+      await generateTryOn(newSize, keepWearing, layerOverride, fullProduct)
+    } catch (err) {
+      console.error('[ManikanWidget] Failed to switch primary product color:', err)
+      setError('Failed to switch color.')
+      setIsGenerating(false)
+    }
   }
 
   // Cleanup URLs on unmount
@@ -442,6 +489,25 @@ export default function ManikanWidget({ product, recommendationKey, onClose }) {
           {/* Step 3: Try-On Viewer + Size Selection */}
           {step === 3 && (
             <div className="mw-step-content mw-tryon-step animate-fade-in">
+              {/* ── Outfit layer banner: lives OUTSIDE the scrollable columns
+                   so it is always fully visible regardless of scroll position. */}
+              {wornGarment && (
+                <div className="mw-outfit-strip" id="tryon-layer-card">
+                  <OutfitLayerCard
+                    wornGarment={wornGarment}
+                    keepWearing={keepWearing}
+                    isGenerating={isGenerating}
+                    onToggle={(checked) => {
+                      setKeepWearing(checked)
+                      generateTryOn(selectedSize, checked)
+                    }}
+                    onLayerChange={(newLayer) => {
+                      setLayerOverride(newLayer)
+                      generateTryOn(selectedSize, true, newLayer)
+                    }}
+                  />
+                </div>
+              )}
               <div className="mw-tryon-layout">
                 {/* Left: 3D Viewer */}
                 <div className="mw-tryon-viewer" id="tryon-3d-viewer">
@@ -457,6 +523,7 @@ export default function ManikanWidget({ product, recommendationKey, onClose }) {
 
                 {/* Right: Size controls */}
                 <div className="mw-tryon-controls">
+
                   <div className="mw-tryon-product-info">
                     <img src={product.image} alt={product.name} className="mw-tryon-product-thumb" />
                     <div>
@@ -465,33 +532,38 @@ export default function ManikanWidget({ product, recommendationKey, onClose }) {
                     </div>
                   </div>
 
-                  {/* Layered outfit: what the shopper already has on, and an
-                      explicit way to take it off. Shown only when the other
-                      garment is a different category (a top with a bottom). */}
-                  {wornGarment && (
-                    <div className="mw-tryon-layer">
-                      <label className="mw-tryon-layer-row">
-                        <input
-                          type="checkbox"
-                          checked={keepWearing}
+                  {/* Primary Color Selection */}
+                  {primaryColorSiblings.length > 0 && (
+                    <div className="mw-tryon-size-section" style={{ marginBottom: 16 }} id="tryon-color-options">
+                      <h4 className="mw-tryon-label">Select Color</h4>
+                      <div className="mw-layer-card-colors">
+                        <button
+                          type="button"
                           disabled={isGenerating}
-                          onChange={(e) => {
-                            const next = e.target.checked
-                            setKeepWearing(next)
-                            // pass `next` explicitly -- setKeepWearing has not
-                            // applied yet at this point
-                            generateTryOn(selectedSize, next)
-                          }}
-                          id="tryon-keep-wearing"
-                        />
-                        <span>
-                          Also wearing your <strong>{wornGarment.name}</strong>
-                          {' '}({wornGarment.size})
-                        </span>
-                      </label>
-                      <p className="mw-tryon-layer-hint">
-                        Uncheck to see this item on its own.
-                      </p>
+                          className="mw-layer-card-swatch active"
+                          title="Current color"
+                        >
+                          <span
+                            className="mw-layer-card-swatch-fill"
+                            style={{ backgroundColor: product.color_hex || '#ccc' }}
+                          />
+                        </button>
+                        {primaryColorSiblings.map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            disabled={isGenerating}
+                            onClick={() => handlePrimaryColorChange(s)}
+                            className="mw-layer-card-swatch"
+                            title={s.name || 'Color variant'}
+                          >
+                            <span
+                              className="mw-layer-card-swatch-fill"
+                              style={{ backgroundColor: s.color_hex || '#ccc' }}
+                            />
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -521,6 +593,7 @@ export default function ManikanWidget({ product, recommendationKey, onClose }) {
                     )}
                   </div>
 
+
                   {fitResult?.recommendation && (
                     <section className="mw-fit-result" aria-live="polite">
                       <p className="mw-fit-result-kicker">AI Fit Result</p>
@@ -547,6 +620,7 @@ export default function ManikanWidget({ product, recommendationKey, onClose }) {
                     </button>
                     {vtonPreviewUrl && <img className="mw-vton-preview" src={vtonPreviewUrl} alt="Virtual try-on preview" />}
                   </section>
+
 
                   {/* Garment specs for selected size */}
                   <div className="mw-tryon-specs">
@@ -606,6 +680,8 @@ export default function ManikanWidget({ product, recommendationKey, onClose }) {
         widgetStep={step}
         isGenerating={isGenerating}
         restartToken={guideRestartToken}
+        hasLayer={!!wornGarment}
+        hasColors={primaryColorSiblings.length > 0}
       />
     </div>
   )

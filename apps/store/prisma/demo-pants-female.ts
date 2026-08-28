@@ -48,6 +48,7 @@ interface DemoPantsFemale {
     imageUrl: string;
     colorName: string;
     colorHex: string;
+    styleCode: string;
     fabric: string;
     sizes: Record<string, DemoPantsSize>;
 }
@@ -71,6 +72,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         imageUrl: seededCatalogImageUrl("pants-female-olive.png"),
         colorName: "Olive",
         colorHex: "#6b5729",
+        styleCode: "MNK-PNT-F01",
         fabric: "Cotton-linen blend",
         sizes: GRID_SIZES_FEMALE(76, 24),
     },
@@ -83,6 +85,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         imageUrl: seededCatalogImageUrl("pants-female-navy.png"),
         colorName: "Midnight Navy",
         colorHex: "#25293a",
+        styleCode: "MNK-PNT-F01",
         fabric: "Cotton-linen blend",
         sizes: GRID_SIZES_FEMALE(77, 25),
     },
@@ -95,6 +98,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         imageUrl: seededCatalogImageUrl("pants-female-coral.png"),
         colorName: "Coral",
         colorHex: "#c97158",
+        styleCode: "MNK-PNT-F01",
         fabric: "Cotton-linen blend",
         sizes: GRID_SIZES_FEMALE(75, 23),
     },
@@ -107,6 +111,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         imageUrl: seededCatalogImageUrl("pants-female-stone.png"),
         colorName: "Stone",
         colorHex: "#9a8e7f",
+        styleCode: "MNK-PNT-F01",
         fabric: "Cotton-linen blend",
         sizes: GRID_SIZES_FEMALE(76, 24),
     },
@@ -119,6 +124,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         imageUrl: seededCatalogImageUrl("pants-female-black.png"),
         colorName: "Jet Black",
         colorHex: "#22221f",
+        styleCode: "MNK-PNT-F01",
         fabric: "Cotton-linen blend",
         sizes: GRID_SIZES_FEMALE(77, 25),
     },
@@ -132,6 +138,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         imageUrl: seededCatalogImageUrl("pants-female-blush.png"),
         colorName: "Blush",
         colorHex: "#c69a8e",
+        styleCode: "MNK-PNT-F02",
         fabric: "Jacquard weave",
         sizes: GRID_SIZES_FEMALE(74, 23),
     },
@@ -144,6 +151,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         imageUrl: seededCatalogImageUrl("pants-female-rust.png"),
         colorName: "Rust",
         colorHex: "#53261d",
+        styleCode: "MNK-PNT-F02",
         fabric: "Jacquard weave",
         sizes: GRID_SIZES_FEMALE(75, 24),
     },
@@ -156,6 +164,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         imageUrl: seededCatalogImageUrl("pants-female-burgundy.png"),
         colorName: "Burgundy",
         colorHex: "#501522",
+        styleCode: "MNK-PNT-F02",
         fabric: "Jacquard weave",
         sizes: GRID_SIZES_FEMALE(74, 23),
     },
@@ -169,6 +178,7 @@ export const DEMO_PANTS_FEMALE: DemoPantsFemale[] = [
         imageUrl: seededCatalogImageUrl("pants-female-indigo.png"),
         colorName: "Washed Indigo",
         colorHex: "#233551",
+        styleCode: "MNK-PNT-F03",
         fabric: "Cotton denim",
         sizes: GRID_SIZES_FEMALE(78, 26),
     },
@@ -187,6 +197,7 @@ export async function seedDemoPantsFemale(
             where: { id: p.id },
             update: {
                 garmentColorHex: p.colorHex,
+                styleCode: p.styleCode,
                 priceEgp: p.priceEgp,
                 imageUrl: p.imageUrl,
                 isActive: true,
@@ -202,6 +213,7 @@ export async function seedDemoPantsFemale(
                 gender: "women",
                 brand: "Manikan",
                 fabric: p.fabric,
+                styleCode: p.styleCode,
                 priceEgp: p.priceEgp,
                 imageUrl: p.imageUrl,
                 images: [p.imageUrl],
