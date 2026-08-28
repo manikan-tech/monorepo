@@ -36,6 +36,7 @@ interface DemoTshirt {
     imageUrl: string;
     colorName: string;
     colorHex: string;
+    styleCode: string;
     sizes: Record<string, DemoTshirtSize>;
 }
 
@@ -48,6 +49,7 @@ export const DEMO_TSHIRTS: DemoTshirt[] = [
         imageUrl: seededCatalogImageUrl("tshirt-navy.png"),
         colorName: "Midnight Navy",
         colorHex: "#1a1a2e",
+        styleCode: "MNK-TEE-01",
         sizes: {
             S:   { chest: 46, length: 68, sleeve: 19, shoulder: 42 },
             M:   { chest: 50, length: 70, sleeve: 20, shoulder: 44 },
@@ -64,6 +66,7 @@ export const DEMO_TSHIRTS: DemoTshirt[] = [
         imageUrl: seededCatalogImageUrl("tshirt-cream.png"),
         colorName: "Vintage Cream",
         colorHex: "#f5f0e1",
+        styleCode: "MNK-TEE-01",
         sizes: {
             S:   { chest: 48, length: 69, sleeve: 20, shoulder: 43 },
             M:   { chest: 52, length: 71, sleeve: 21, shoulder: 45 },
@@ -80,6 +83,7 @@ export const DEMO_TSHIRTS: DemoTshirt[] = [
         imageUrl: seededCatalogImageUrl("tshirt-green.png"),
         colorName: "Forest Olive",
         colorHex: "#3d4a2e",
+        styleCode: "MNK-TEE-01",
         sizes: {
             S:   { chest: 47, length: 68, sleeve: 19, shoulder: 43 },
             M:   { chest: 51, length: 70, sleeve: 20, shoulder: 45 },
@@ -96,6 +100,7 @@ export const DEMO_TSHIRTS: DemoTshirt[] = [
         imageUrl: seededCatalogImageUrl("tshirt-black.png"),
         colorName: "Jet Black",
         colorHex: "#1a1a1a",
+        styleCode: "MNK-TEE-01",
         sizes: {
             S:   { chest: 45, length: 67, sleeve: 18, shoulder: 41 },
             M:   { chest: 49, length: 69, sleeve: 19, shoulder: 43 },
@@ -112,6 +117,7 @@ export const DEMO_TSHIRTS: DemoTshirt[] = [
         imageUrl: seededCatalogImageUrl("tshirt-burgundy.png"),
         colorName: "Deep Burgundy",
         colorHex: "#5c1a2a",
+        styleCode: "MNK-TEE-01",
         sizes: {
             S:   { chest: 48, length: 69, sleeve: 20, shoulder: 44 },
             M:   { chest: 52, length: 71, sleeve: 21, shoulder: 46 },
@@ -128,6 +134,7 @@ export const DEMO_TSHIRTS: DemoTshirt[] = [
         imageUrl: seededCatalogImageUrl("tshirt-gray.png"),
         colorName: "Heather Charcoal",
         colorHex: "#4a4a4a",
+        styleCode: "MNK-TEE-01",
         sizes: {
             S:   { chest: 46, length: 68, sleeve: 19, shoulder: 42 },
             M:   { chest: 50, length: 70, sleeve: 20, shoulder: 44 },
@@ -149,6 +156,7 @@ export async function seedDemoTshirts(
             where: { id: t.id },
             update: {
                 garmentColorHex: t.colorHex,
+                styleCode: t.styleCode,
                 priceEgp: t.priceEgp,
                 imageUrl: t.imageUrl,
                 isActive: true,
@@ -164,6 +172,7 @@ export async function seedDemoTshirts(
                 gender: "unisex",
                 brand: "Manikan",
                 fabric: "Cotton",
+                styleCode: t.styleCode,
                 priceEgp: t.priceEgp,
                 imageUrl: t.imageUrl,
                 images: [t.imageUrl],
