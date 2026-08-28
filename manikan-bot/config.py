@@ -20,3 +20,15 @@ FASTAPI_TIMEOUT: int = int(os.getenv("FASTAPI_TIMEOUT", "120"))
 
 # Internal auth key that the VTON service requires
 TRYON_SERVICE_KEY: str = os.getenv("TRYON_SERVICE_KEY", "")
+
+# Next.js store API for user validation and credit tracking
+STORE_API_URL: str = os.getenv("STORE_API_URL", "http://localhost:3000/api/bot/user")
+
+# Shared secret to authenticate bot → store API calls
+BOT_API_SECRET: str = os.getenv("BOT_API_SECRET", "")
+
+# Monthly quota (free generations per calendar month)
+BOT_MONTHLY_QUOTA: int = int(os.getenv("BOT_MONTHLY_QUOTA", "5"))
+
+# URL to send users to when they exhaust their credits
+CHECKOUT_URL: str = os.getenv("CHECKOUT_URL", "https://manikan.store/checkout/bot-credits")
