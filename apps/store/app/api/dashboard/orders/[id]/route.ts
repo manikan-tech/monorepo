@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { stripe } from "../../../../lib/stripe";
 import { prisma } from "../../../../lib/prisma";
 import { getAuthFromCookies } from "../../../../lib/auth";
 import { getAdminSession } from "../../../../lib/admin-auth";
@@ -8,19 +7,54 @@ import { getAdminSession } from "../../../../lib/admin-auth";
 export const runtime = "nodejs";
 
 // ─── Return window ────────────────────────────────────────────────────────────
-// Orders that were delivered more than RETURN_WINDOW_DAYS ago are no longer
-// eligible for a return.  Adjust the constant to match your business policy.
 const RETURN_WINDOW_DAYS = 30;
 
+// ─── Order Status State Machine (retailer-side transitions only) ──────────────
+//
+// This map defines the ONLY status transitions the retailer dashboard may
+// trigger via a simple { status: "..." } request body.
+//
+// Payment status is NOT a manual field — it is derived from the order lifecycle:
+//   · DELIVERED           → paymentStatus automatically becomes PAID
+//                           (Cash-on-Delivery: payment occurs at delivery)
+//   · RETURNED            → paymentStatus automatically becomes REFUNDED
+//                           (triggered only by the APPROVE_RETURN action)
+//   · CANCELLED           → paymentStatus stays PENDING (no payment exchanged)
+//   · All other statuses  → paymentStatus unchanged
+//
+// Customer-side transitions (PENDING → CANCELLED, DELIVERED → RETURN_PENDING)
+// are enforced in /api/orders/[id] and are NOT repeated here.
+//
+// APPROVE_RETURN and REJECT_RETURN are explicit named actions — not raw status
+// values — because they carry additional side-effects (restock, payment update).
+const RETAILER_VALID_TRANSITIONS: Readonly<Record<string, readonly string[]>> = {
+  PENDING:        ["CONFIRMED", "CANCELLED"],
+  CONFIRMED:      ["PROCESSING", "CANCELLED"],
+  PROCESSING:     ["SHIPPED", "CANCELLED"],
+  SHIPPED:        ["DELIVERED"],
+  DELIVERED:      [],           // Only customer can move this → RETURN_PENDING
+  RETURN_PENDING: [],           // Only APPROVE_RETURN / REJECT_RETURN actions allowed
+  RETURNED:       [],           // Terminal
+  CANCELLED:      [],           // Terminal
+} as const;
+
+// Payment status that should be set when transitioning to a given order status.
+// Only DELIVERED and RETURNED trigger a payment status change — all other
+// fulfillment status changes leave payment status untouched.
+const PAYMENT_STATUS_FOR_ORDER_STATUS: Readonly<Record<string, string>> = {
+  DELIVERED: "PAID",      // COD: money received at delivery
+  CANCELLED: "PENDING",   // No payment was made; reset to PENDING
+} as const;
+
 // ─── Typed error class ────────────────────────────────────────────────────────
-class ReturnRequestError extends Error {
+class OrderActionError extends Error {
   constructor(
     message: string,
-    readonly status: number,
+    readonly statusCode: number,
     readonly code: string,
   ) {
     super(message);
-    this.name = "ReturnRequestError";
+    this.name = "OrderActionError";
   }
 }
 
@@ -38,35 +72,66 @@ function isSerializationError(error: unknown): boolean {
   return false;
 }
 
-function errorResponse(error: ReturnRequestError) {
+function errorResponse(error: OrderActionError) {
   return NextResponse.json(
     { error: error.message, code: error.code },
-    { status: 200 },
+    { status: error.statusCode },
   );
 }
 
+// ─── Auth + ownership helper ──────────────────────────────────────────────────
+async function resolveOrderWithAuth(
+  orderId: string,
+  retailer: Awaited<ReturnType<typeof getAuthFromCookies>>,
+  adminSession: Awaited<ReturnType<typeof getAdminSession>>,
+) {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      items: {
+        include: { product: { select: { retailerId: true } } },
+      },
+    },
+  });
+
+  if (!order) {
+    return { order: null, forbidden: false };
+  }
+
+  if (retailer && !adminSession) {
+    const ownsOrder = order.items.every(
+      (item) => item.product.retailerId === retailer.sub,
+    );
+    if (!ownsOrder) {
+      return { order: null, forbidden: true };
+    }
+  }
+
+  return { order, forbidden: false };
+}
+
 // ─── PATCH /api/dashboard/orders/[id] ────────────────────────────────────────
-// Processes a full order return using a three-phase saga pattern:
 //
-//  Phase 1 (DB tx):  Row-lock the order, validate eligibility, and set
-//                    status = RETURN_PENDING so that concurrent requests see
-//                    a terminal-like state immediately.
+// Accepted body shapes:
 //
-//  Phase 2 (Stripe): Issue the refund OUTSIDE the database transaction so the
-//                    connection is not held open during the network round-trip.
-//                    The idempotency key makes this safe to retry.
+//   { status: "<new_status>" }     — Simple status transition (validated against
+//                                    RETAILER_VALID_TRANSITIONS). Payment status
+//                                    is automatically adjusted for DELIVERED and
+//                                    CANCELLED transitions.
 //
-//  Phase 3 (DB tx):  Restock each variant and flip the order to
-//                    RETURNED / REFUNDED, recording the Stripe refund ID.
+//   { action: "APPROVE_RETURN" }   — Approve a customer's return request.
+//                                    Restocks all items, sets order → RETURNED
+//                                    and payment → REFUNDED atomically.
 //
-// If Phase 2 succeeds but Phase 3 fails, the order sits in RETURN_PENDING with
-// the refund already paid out.  A reconciliation job (or the ops team) can detect
-// this state via: SELECT * FROM "Order" WHERE status = 'RETURN_PENDING'.
+//   { action: "REJECT_RETURN" }    — Reject a customer's return request.
+//                                    Restores order → DELIVERED.
+//                                    Payment stays PAID.
+//
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  // ── Auth ──────────────────────────────────────────────────────────────────
+  // ── Auth ────────────────────────────────────────────────────────────────────
   const [retailer, adminSession] = await Promise.all([
     getAuthFromCookies(),
     getAdminSession(),
@@ -79,8 +144,8 @@ export async function PATCH(
     );
   }
 
-  // ── Request body ──────────────────────────────────────────────────────────
-  let body: { status?: string };
+  // ── Request body ────────────────────────────────────────────────────────────
+  let body: { status?: string; action?: string };
   try {
     body = await request.json();
   } catch {
@@ -92,62 +157,178 @@ export async function PATCH(
 
   const { id: orderId } = await params;
 
-  if (body.status !== "RETURNED") {
-    // ─────────────────────────────────────────────────────────────────────────
-    // SIMPLE STATUS UPDATE (non-return)
-    // ─────────────────────────────────────────────────────────────────────────
-    const ALLOWED_STATUSES = ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "RETURN_PENDING", "RETURNED"];
-
-    try {
-      if (body.status && !ALLOWED_STATUSES.includes(body.status)) {
-        return NextResponse.json({ error: "Invalid status", code: "INVALID_STATUS" }, { status: 400 });
-      }
-
-      // Retailers can only update orders they own
-      const order = await prisma.order.findUnique({
-        where: { id: orderId },
-        include: { items: { include: { product: true } } }
-      });
-
-      if (!order) {
-        return NextResponse.json({ error: "Order not found", code: "NOT_FOUND" }, { status: 404 });
-      }
-
-      if (retailer && !adminSession) {
-        const ownsOrder = order.items.every(item => item.product.retailerId === retailer.sub);
-        if (!ownsOrder) {
-          return NextResponse.json({ error: "Not authorized", code: "FORBIDDEN" }, { status: 403 });
-        }
-      }
-
-      const updateData: any = {};
-      if (body.status) {
-        updateData.status = body.status;
-      }
-
-      const updatedOrder = await prisma.order.update({
-        where: { id: orderId },
-        data: updateData
-      });
-
-      return NextResponse.json({ order: updatedOrder });
-    } catch (error) {
-      console.error("[dashboard/orders] simple update failed", error);
-      return NextResponse.json({ error: "Failed to update order", code: "UPDATE_FAILED" }, { status: 500 });
-    }
+  // ── Route to correct handler ─────────────────────────────────────────────────
+  if (body.action === "APPROVE_RETURN") {
+    return handleApproveReturn(orderId, retailer, adminSession);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // PHASE 1 — Validate eligibility and claim the order atomically.
-  // ─────────────────────────────────────────────────────────────────────────
-  // Uses FOR UPDATE row-locking so that two concurrent return requests for the
-  // same order serialise here; the second will see status = RETURN_PENDING and
-  // be rejected before any Stripe call is made.
-  let stripePaymentIntentId: string;
+  if (body.action === "REJECT_RETURN") {
+    return handleRejectReturn(orderId, retailer, adminSession);
+  }
+
+  if (body.status) {
+    return handleStatusUpdate(orderId, body.status, retailer, adminSession);
+  }
+
+  return NextResponse.json(
+    { error: "Request body must contain 'status' or 'action'", code: "MISSING_FIELD" },
+    { status: 400 },
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HANDLER 1: Simple status transition
+//
+// Validates the transition, then updates order status.
+// For DELIVERED: also sets paymentStatus = PAID (COD model).
+// For CANCELLED: also sets paymentStatus = PENDING (no payment made).
+// All other transitions: paymentStatus is NOT changed.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleStatusUpdate(
+  orderId: string,
+  newStatus: string,
+  retailer: Awaited<ReturnType<typeof getAuthFromCookies>>,
+  adminSession: Awaited<ReturnType<typeof getAdminSession>>,
+): Promise<NextResponse> {
+  if (!(newStatus in RETAILER_VALID_TRANSITIONS)) {
+    return NextResponse.json(
+      { error: `'${newStatus}' is not a known order status.`, code: "UNKNOWN_STATUS" },
+      { status: 400 },
+    );
+  }
 
   try {
-    stripePaymentIntentId = await prisma.$transaction(
+    const { order, forbidden } = await resolveOrderWithAuth(orderId, retailer, adminSession);
+
+    if (forbidden) {
+      return NextResponse.json(
+        { error: "Not authorized to update this order", code: "FORBIDDEN" },
+        { status: 403 },
+      );
+    }
+
+    if (!order) {
+      return NextResponse.json(
+        { error: "Order not found", code: "NOT_FOUND" },
+        { status: 404 },
+      );
+    }
+
+    const allowedNext = RETAILER_VALID_TRANSITIONS[order.status] ?? [];
+
+    if (!allowedNext.includes(newStatus)) {
+      return NextResponse.json(
+        {
+          error: `Cannot transition order from '${order.status}' to '${newStatus}'. Valid next statuses: [${allowedNext.join(", ") || "none"}].`,
+          code: "INVALID_TRANSITION",
+        },
+        { status: 409 },
+      );
+    }
+
+    // Build the update payload. Payment status is automatically derived:
+    //   DELIVERED → PAID   (COD: money received at delivery)
+    //   CANCELLED → PENDING (nothing paid; reset)
+    //   All others → unchanged
+    const paymentStatusUpdate = PAYMENT_STATUS_FOR_ORDER_STATUS[newStatus];
+    const updateData: Record<string, string> = { status: newStatus };
+    if (paymentStatusUpdate) {
+      updateData.paymentStatus = paymentStatusUpdate;
+    }
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: updateData as any,
+    });
+
+    return NextResponse.json({ order: updatedOrder });
+  } catch (error) {
+    console.error("[dashboard/orders] status update failed", error);
+    return NextResponse.json(
+      { error: "Failed to update order status", code: "UPDATE_FAILED" },
+      { status: 500 },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HANDLER 2: REJECT_RETURN
+//
+// Rejects the customer's return request.
+// Order status reverts to DELIVERED.
+// Payment status remains PAID — no financial change.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleRejectReturn(
+  orderId: string,
+  retailer: Awaited<ReturnType<typeof getAuthFromCookies>>,
+  adminSession: Awaited<ReturnType<typeof getAdminSession>>,
+): Promise<NextResponse> {
+  try {
+    const { order, forbidden } = await resolveOrderWithAuth(orderId, retailer, adminSession);
+
+    if (forbidden) {
+      return NextResponse.json(
+        { error: "Not authorized to update this order", code: "FORBIDDEN" },
+        { status: 403 },
+      );
+    }
+
+    if (!order) {
+      return NextResponse.json(
+        { error: "Order not found", code: "NOT_FOUND" },
+        { status: 404 },
+      );
+    }
+
+    if (order.status !== "RETURN_PENDING") {
+      return NextResponse.json(
+        {
+          error: `Cannot reject a return for an order with status '${order.status}'. Only RETURN_PENDING orders can have their return rejected.`,
+          code: "INVALID_TRANSITION",
+        },
+        { status: 409 },
+      );
+    }
+
+    // Revert to DELIVERED. paymentStatus remains PAID — no financial change.
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: { status: "DELIVERED" },
+    });
+
+    return NextResponse.json({ order: updatedOrder });
+  } catch (error) {
+    console.error("[dashboard/orders] reject return failed", error);
+    return NextResponse.json(
+      { error: "Failed to reject return", code: "UPDATE_FAILED" },
+      { status: 500 },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HANDLER 3: APPROVE_RETURN
+//
+// Approves the customer's return request.
+// Atomically in one DB transaction:
+//   1. Validates the order is in RETURN_PENDING state
+//   2. Restocks every ordered variant
+//   3. Sets order status → RETURNED
+//   4. Sets payment status → REFUNDED
+//
+// No payment gateway (Stripe) is involved. This is a COD store — refunds are
+// handled physically / manually by the retailer outside the system.
+// This action records that the refund has been processed.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleApproveReturn(
+  orderId: string,
+  retailer: Awaited<ReturnType<typeof getAuthFromCookies>>,
+  adminSession: Awaited<ReturnType<typeof getAdminSession>>,
+): Promise<NextResponse> {
+  try {
+    const order = await prisma.$transaction(
       async (tx) => {
+        // Row-lock to prevent concurrent approve/reject on the same order.
         const locked = await tx.$queryRaw<{ id: string }[]>`
           SELECT "id"
           FROM "Order"
@@ -156,10 +337,10 @@ export async function PATCH(
         `;
 
         if (locked.length === 0) {
-          throw new ReturnRequestError("Order not found", 404, "ORDER_NOT_FOUND");
+          throw new OrderActionError("Order not found", 404, "ORDER_NOT_FOUND");
         }
 
-        const order = await tx.order.findUniqueOrThrow({
+        const orderRecord = await tx.order.findUniqueOrThrow({
           where: { id: orderId },
           include: {
             items: {
@@ -170,227 +351,64 @@ export async function PATCH(
           },
         });
 
-        // Authorization: admins may return any order; retailers only their own.
+        // Authorization: admins may approve any return; retailers only their own.
         if (
           retailer &&
           !adminSession &&
-          !order.items.every(
+          !orderRecord.items.every(
             (item) => item.product.retailerId === retailer.sub,
           )
         ) {
-          throw new ReturnRequestError(
-            "You are not authorized to return this order",
+          throw new OrderActionError(
+            "You are not authorized to approve this return",
             403,
             "FORBIDDEN",
           );
         }
 
-        // Status eligibility check — also blocks re-entrant requests once
-        // Phase 1 has already completed (RETURN_PENDING or RETURNED).
-        if (order.status === "RETURN_PENDING") {
-          throw new ReturnRequestError(
-            "A return is already being processed for this order",
-            409,
-            "RETURN_ALREADY_IN_PROGRESS",
-          );
-        }
-
-        if (order.status === "RETURNED") {
-          throw new ReturnRequestError(
-            "This order has already been returned",
+        if (orderRecord.status === "RETURNED") {
+          throw new OrderActionError(
+            "This order has already been returned and refunded",
             409,
             "ORDER_ALREADY_RETURNED",
           );
         }
 
-        if (order.status !== "DELIVERED" || order.paymentStatus !== "PAID") {
-          throw new ReturnRequestError(
-            "Only delivered orders with a paid payment status are eligible for return",
-            400,
-            "ORDER_NOT_ELIGIBLE_FOR_RETURN",
+        if (orderRecord.status !== "RETURN_PENDING") {
+          throw new OrderActionError(
+            `Cannot approve a return for an order with status '${orderRecord.status}'. Only RETURN_PENDING orders can be approved.`,
+            409,
+            "INVALID_TRANSITION",
           );
         }
 
         // Return window enforcement.
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - RETURN_WINDOW_DAYS);
-        if (order.updatedAt < cutoff) {
-          throw new ReturnRequestError(
+        if (orderRecord.updatedAt < cutoff) {
+          throw new OrderActionError(
             `Returns are only accepted within ${RETURN_WINDOW_DAYS} days of delivery`,
             400,
             "RETURN_WINDOW_EXPIRED",
           );
         }
 
-        if (!order.stripePaymentIntentId) {
-          throw new ReturnRequestError(
-            "This order has no refundable payment record",
-            400,
-            "PAYMENT_INTENT_MISSING",
-          );
-        }
-
-        // Claim the order: mark it as RETURN_PENDING so any concurrent request
-        // hitting Phase 1 above will see this state and be rejected immediately,
-        // before a second Stripe refund is attempted.
-        await tx.order.update({
-          where: { id: orderId },
-          data: { status: "RETURN_PENDING" },
-        });
-
-        return order.stripePaymentIntentId;
-      },
-      // Serializable prevents phantom reads across the validation checks.
-      // maxWait / timeout are intentionally short — Phase 1 never makes
-      // network calls, so it should complete in milliseconds.
-      { isolationLevel: "Serializable", maxWait: 5_000, timeout: 10_000 },
-    );
-  } catch (error) {
-    if (error instanceof ReturnRequestError) return errorResponse(error);
-
-    if (isSerializationError(error)) {
-      return NextResponse.json(
-        {
-          error:
-            "A concurrent request conflict was detected — please try again",
-          code: "SERIALIZATION_FAILURE",
-        },
-        { status: 409 },
-      );
-    }
-
-    console.error("[order-return] Phase 1 (eligibility check) failed", error);
-    return NextResponse.json(
-      {
-        error: "Unable to process the return at this time",
-        code: "RETURN_PROCESSING_FAILED",
-      },
-      { status: 500 },
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // PHASE 2 — Issue the Stripe refund OUTSIDE any database transaction.
-  // ─────────────────────────────────────────────────────────────────────────
-  // The database connection is fully released before this network call.
-  // The idempotency key ensures that retrying this exact request never
-  // double-charges the customer even if the process crashes and restarts.
-  let stripeRefundId: string;
-
-  try {
-    const refund = await stripe.refunds.create(
-      { payment_intent: stripePaymentIntentId },
-      { idempotencyKey: `order-return-refund:${orderId}` },
-    );
-
-    // "succeeded" — refund is immediate (card payments).
-    // "pending"   — refund is asynchronous (bank transfers, etc.); funds will
-    //               arrive via the refund.updated webhook.
-    // Both are valid outcomes.  Only "failed" or "canceled" are errors.
-    if (refund.status === "failed" || refund.status === "canceled") {
-      throw new ReturnRequestError(
-        "The payment gateway declined or cancelled the refund",
-        502,
-        "REFUND_NOT_COMPLETED",
-      );
-    }
-
-    stripeRefundId = refund.id;
-  } catch (error) {
-    if (error instanceof ReturnRequestError) {
-      // Roll Phase 1 back — restore the order to DELIVERED so the UI can retry.
-      await prisma.order
-        .update({
-          where: { id: orderId },
-          data: { status: "DELIVERED" },
-        })
-        .catch((rollbackError) => {
-          // Rollback failure is non-fatal for the current request but must
-          // be investigated.  The order sits in RETURN_PENDING; the ops team
-          // can reset it manually or via a reconciliation job.
-          console.error("[order-return] Phase 1 rollback failed", {
-            orderId,
-            rollbackError:
-              rollbackError instanceof Error
-                ? rollbackError.message
-                : "Unknown",
-          });
-        });
-
-      return errorResponse(error);
-    }
-
-    if (
-      error instanceof Error &&
-      (error.name.startsWith("Stripe") ||
-        error.constructor.name.startsWith("Stripe") ||
-        (error as any).rawType)
-    ) {
-      console.error("[order-return] Stripe refund request failed", {
-        orderId,
-        errorMessage: error.message,
-      });
-
-      // Best-effort rollback so the order is not stranded in RETURN_PENDING.
-      await prisma.order
-        .update({ where: { id: orderId }, data: { status: "DELIVERED" } })
-        .catch(() => {
-          console.error(
-            "[order-return] Phase 1 rollback after Stripe error failed",
-            { orderId },
-          );
-        });
-
-      return NextResponse.json(
-        {
-          error: "The payment gateway could not process the refund",
-          code: "REFUND_GATEWAY_ERROR",
-        },
-        { status: 502 },
-      );
-    }
-
-    console.error("[order-return] Phase 2 (Stripe refund) failed unexpectedly", {
-      orderId,
-      errorName: error instanceof Error ? error.name : "UnknownError",
-    });
-    return NextResponse.json(
-      {
-        error: "Unable to process the return at this time",
-        code: "RETURN_PROCESSING_FAILED",
-      },
-      { status: 500 },
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // PHASE 3 — Restock inventory and finalise the order record.
-  // ─────────────────────────────────────────────────────────────────────────
-  // If this transaction fails after a successful Phase 2, the customer has
-  // already been refunded.  The order stays in RETURN_PENDING with no
-  // refundReferenceId — a reconciliation job can detect and heal this.
-  try {
-    const order = await prisma.$transaction(
-      async (tx) => {
-        const orderWithItems = await tx.order.findUniqueOrThrow({
-          where: { id: orderId },
-          include: { items: true },
-        });
-
-        // Restock each variant that was part of the order.
-        for (const item of orderWithItems.items) {
+        // Restock every variant that was part of the order.
+        for (const item of orderRecord.items) {
           await tx.productVariant.update({
             where: { id: item.variantId },
             data: { stock: { increment: item.quantity } },
           });
         }
 
+        // Finalise: order → RETURNED, payment → REFUNDED.
+        // These two fields always change together for a return — they are
+        // updated in the same transaction to guarantee consistency.
         return tx.order.update({
           where: { id: orderId },
           data: {
             status: "RETURNED",
             paymentStatus: "REFUNDED",
-            refundReferenceId: stripeRefundId,
           },
         });
       },
@@ -399,17 +417,7 @@ export async function PATCH(
 
     return NextResponse.json({ order }, { status: 200 });
   } catch (error) {
-    // Phase 2 has already succeeded — the customer's money is returned.
-    // Log enough context for a manual or automated reconciliation to finalise.
-    console.error(
-      "[order-return] Phase 3 (finalisation) failed — order is stranded in RETURN_PENDING. " +
-      "Stripe refund has already been issued. Manual reconciliation required.",
-      {
-        orderId,
-        stripeRefundId,
-        errorName: error instanceof Error ? error.name : "UnknownError",
-      },
-    );
+    if (error instanceof OrderActionError) return errorResponse(error);
 
     if (isSerializationError(error)) {
       return NextResponse.json(
@@ -421,14 +429,9 @@ export async function PATCH(
       );
     }
 
+    console.error("[order-return] approve return failed", error);
     return NextResponse.json(
-      {
-        error:
-          "The refund was issued successfully but order records could not be updated. " +
-          "Please contact support with your order ID.",
-        code: "FINALISATION_FAILED",
-        stripeRefundId,
-      },
+      { error: "Failed to process the return", code: "RETURN_FAILED" },
       { status: 500 },
     );
   }

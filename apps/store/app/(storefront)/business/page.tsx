@@ -85,8 +85,8 @@ const PLANS = [
   },
   {
     name: "Growth",
-    price: "EGP 1,999",
-    period: "/month",
+    price: "Flexible",
+    period: "",
     description: "For growing retailers ready to scale.",
     features: [
       "Up to 500 products",

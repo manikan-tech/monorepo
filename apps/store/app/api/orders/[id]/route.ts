@@ -67,10 +67,10 @@ export async function PATCH(
         return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    // Only CANCELLED is allowed as an update from the customer side
-    if (body.status !== "CANCELLED") {
+    // CANCELLED and RETURN_PENDING are allowed from the customer side
+    if (body.status !== "CANCELLED" && body.status !== "RETURN_PENDING") {
         return NextResponse.json(
-            { error: "Only status 'CANCELLED' is permitted" },
+            { error: "Only 'CANCELLED' or 'RETURN_PENDING' statuses are permitted." },
             { status: 400 }
         );
     }
@@ -84,7 +84,7 @@ export async function PATCH(
         return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (order.status !== "PENDING") {
+    if (body.status === "CANCELLED" && order.status !== "PENDING") {
         return NextResponse.json(
             {
                 error: `Cannot cancel an order with status '${order.status}'. Only PENDING orders can be cancelled.`,
@@ -93,9 +93,18 @@ export async function PATCH(
         );
     }
 
+    if (body.status === "RETURN_PENDING" && order.status !== "DELIVERED") {
+        return NextResponse.json(
+            {
+                error: `Cannot return an order with status '${order.status}'. Only DELIVERED orders can be returned.`,
+            },
+            { status: 409 }
+        );
+    }
+
     const updated = await prisma.order.update({
         where: { id },
-        data: { status: "CANCELLED" },
+        data: { status: body.status },
     });
 
     return NextResponse.json({ order: updated }, { status: 200 });
