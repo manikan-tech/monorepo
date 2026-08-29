@@ -191,9 +191,11 @@ export default function DemoRequestForm() {
             className={`${inputCls} ${normalBorder}`}
           >
             <option value="">Select range…</option>
-            <option value="Under 100">Under 100</option>
-            <option value="100–1,000">100–1,000</option>
-            <option value="1,000+">1,000+</option>
+            <option value="Under 500">Under 500</option>
+            <option value="500–2,000">500–2,000</option>
+            <option value="2,000–10,000">2,000–10,000</option>
+            <option value="10,000–50,000">10,000–50,000</option>
+            <option value="50,000+">50,000+</option>
           </select>
         </div>
       </div>
