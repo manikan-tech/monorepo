@@ -2,16 +2,18 @@ import hmac
 import logging
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
 import time
 from collections import defaultdict, deque
 from typing import Optional, List, Dict, Any
+
 from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .agent import FitState, recommendation_graph, check_all_providers
 from .config import get_settings
-from .schemas import ActionType, MeasurementInput
+from .schemas import ActionType, MeasurementInput, SafeProfileContext, PendingState, ActiveSearch
 
 logger = logging.getLogger("manikan.recommendation")
 
@@ -36,13 +38,16 @@ _request_log: dict[str, deque] = defaultdict(deque)
 def _check_rate_limit(session_id: str) -> None:
     now = time.time()
     log = _request_log[session_id]
+
     while log and now - log[0] > _RATE_LIMIT_WINDOW_SECONDS:
         log.popleft()
+
     if len(log) >= _RATE_LIMIT_MAX_REQUESTS:
         raise HTTPException(
             status_code=429,
             detail="Too many requests - please slow down a moment and try again.",
         )
+
     log.append(now)
 
 
@@ -54,8 +59,10 @@ _ANOMALY_THRESHOLD = 200
 def _track_usage() -> None:
     now = time.time()
     _usage_log.append(now)
+
     while _usage_log and now - _usage_log[0] > _ANOMALY_WINDOW_SECONDS:
         _usage_log.popleft()
+
     if len(_usage_log) > _ANOMALY_THRESHOLD:
         logger.warning(
             f"Usage anomaly: {len(_usage_log)} requests in the last hour "
@@ -70,11 +77,21 @@ async def verify_internal_key(x_manikan_internal_key: str = Header(default="")) 
     and then forward the request using the securely injected internal shared secret.
     """
     settings = get_settings()
-    candidates = [key for key in (settings.recommend_service_key, settings.recommend_service_key_previous) if key]
+
+    candidates = [
+        key
+        for key in (
+            settings.recommend_service_key,
+            settings.recommend_service_key_previous,
+        )
+        if key
+    ]
+
     if not candidates or not any(
         hmac.compare_digest(x_manikan_internal_key, key) for key in candidates
     ):
         raise HTTPException(status_code=401, detail="Unauthorized")
+
     _track_usage()
 
 
@@ -83,18 +100,29 @@ class ChatRecommendRequest(BaseModel):
     messages: List[Dict[str, Any]]
     betas: Optional[MeasurementInput] = None
     product_id: Optional[str] = None
+    product_name: Optional[str] = None
+    profile_context: Optional[SafeProfileContext] = None
+    active_search: Optional[dict] = None
+
     # Set only by the authenticated Store proxy when the shopper explicitly
     # asks for information about the selected product, rather than sizing.
     product_detail_question: bool = False
+
     retailer_id: Optional[str] = None
     size_chart: Optional[str] = None
     intent: Optional[str] = "general"
     selected_category: Optional[str] = None
     available_categories: Optional[List[str]] = None
+    available_departments: Optional[List[str]] = None
+    available_brands: Optional[List[str]] = None
+    category_department_mapping: Optional[Dict[str, List[str]]] = None
+
     # Compact catalog (id, name, category, description) used for RAG
     # retrieval on open-ended style questions - not stored, not persisted,
     # used in-memory for this one request only.
     catalog_products: Optional[List[Dict[str, Any]]] = None
+    pending_state: Optional[PendingState] = None
+    shown_product_ids: Optional[List[str]] = None
 
 
 class ChatRecommendResponse(BaseModel):
@@ -110,12 +138,18 @@ class ChatRecommendResponse(BaseModel):
     matched_category: Optional[str] = None
     retrieved_product_ids: Optional[List[str]] = None
     error_code: Optional[str] = None
+    pending_state: Optional[PendingState] = None
+    active_search: Optional[dict] = None
+    resolved_intent: Optional[str] = None
 
 
 @app.get("/health", tags=["health"])
 async def health_check():
     provider_results = await check_all_providers()
-    active_provider = next((p["provider"] for p in provider_results if p["status"] == "ok"), None)
+    active_provider = next(
+        (p["provider"] for p in provider_results if p["status"] == "ok"),
+        None,
+    )
 
     return {
         "service": "manikan-recommendation-service",
@@ -133,26 +167,50 @@ async def health_check():
 )
 async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
     _check_rate_limit(body.session_id)
-    logger.debug(f"Received request: session={body.session_id} intent={body.intent}")
+
+    logger.debug(
+        f"Received request: session={body.session_id} intent={body.intent}"
+    )
+
+    profile = body.profile_context
 
     initial_state: FitState = {
         "messages": body.messages,
         "product_id": body.product_id,
+        "product_name": body.product_name,
         "product_detail_question": body.product_detail_question,
         "query": next(
             (
                 message["content"]
                 for message in reversed(body.messages)
-                if message.get("role") == "user" and isinstance(message.get("content"), str)
+                if message.get("role") == "user"
+                and isinstance(message.get("content"), str)
             ),
             "",
         ),
         "user_measurements": body.betas,
         "betas": body.betas,
         "size_chart": body.size_chart,
+        "customer_name": profile.first_name if profile else None,
+        "saved_measurements": (
+            profile.saved_measurements.model_dump()
+            if profile and profile.saved_measurements
+            else None
+        ),
+        "previous_product_size": (
+            profile.previous_product_size if profile else None
+        ),
+        "recent_fit_history": (
+            [item.model_dump() for item in profile.recent_fit_history]
+            if profile
+            else []
+        ),
         "intent": body.intent,
         "selected_category": body.selected_category,
         "available_categories": body.available_categories,
+        "available_departments": body.available_departments,
+        "available_brands": body.available_brands,
+        "category_department_mapping": body.category_department_mapping,
         "catalog_products": body.catalog_products,
         "retrieved_products": [],
         "size_math_result": None,
@@ -160,6 +218,11 @@ async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
         "final_response": None,
         "trace_id": body.session_id,
         "structured_response": None,
+        "pending_state": body.pending_state,
+        "force_sizing_intent": False,
+        "force_in_scope": False,
+        "shown_product_ids": body.shown_product_ids or [],
+        "active_search": ActiveSearch(**body.active_search) if body.active_search else None,
     }
 
     try:
@@ -181,12 +244,20 @@ async def recommend(body: ChatRecommendRequest) -> ChatRecommendResponse:
             explanation=res.explanation,
             matched_category=res.matched_category,
             retrieved_product_ids=res.retrieved_product_ids,
+            pending_state=res.pending_state,
+            active_search=res.active_search.model_dump() if res.active_search else None,
+            resolved_intent=res.resolved_intent,
         )
+
     except Exception as e:
         logger.error(f"Workflow execution failed: {e}", exc_info=True)
+
         fallback_action = (
-            ActionType.FETCH_PRODUCTS if body.intent == "search" else ActionType.PROVIDE_RECOMMENDATION
+            ActionType.FETCH_PRODUCTS
+            if body.intent == "search"
+            else ActionType.PROVIDE_RECOMMENDATION
         )
+
         return ChatRecommendResponse(
             session_id=body.session_id,
             success=False,

@@ -27,6 +27,7 @@ def retrieve_relevant_products(
     query: str,
     catalog_products: Optional[list[CatalogProduct]],
     top_k: int = 3,
+    exclude_ids: Optional[list[str]] = None,
 ) -> list[CatalogProduct]:
     """
     Returns the top_k catalog products whose description is most similar
@@ -55,6 +56,9 @@ def retrieve_relevant_products(
     ranked = sorted(
         zip(catalog_products, similarities), key=lambda pair: pair[1], reverse=True
     )
+    if exclude_ids:
+        exclude_set = set(exclude_ids)
+        ranked = [pair for pair in ranked if pair[0].get("id") not in exclude_set]
     # Drop near-zero matches - an unrelated query shouldn't force-return
     # irrelevant products just to fill top_k.
     return [product for product, score in ranked[:top_k] if score > 0.05]

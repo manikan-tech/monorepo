@@ -1,7 +1,10 @@
 import OpenAI from "openai";
 
-export const EMBEDDING_DIMENSIONS = 1536;
-const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
+export const EMBEDDING_DIMENSIONS = Number(process.env.EMBEDDING_DIMENSIONS ?? 1024);
+const DEFAULT_EMBEDDING_MODEL = "liquid/lfm-2.5-embedding-350m:free";
+
+const embeddingCache = new Map<string, number[]>();
+const MAX_CACHE_SIZE = 500;
 
 function getEmbeddingClient(apiKey: string, baseURL?: string): { client: OpenAI; model: string } {
   return {
@@ -11,35 +14,6 @@ function getEmbeddingClient(apiKey: string, baseURL?: string): { client: OpenAI;
     }),
     model: process.env.EMBEDDING_MODEL ?? DEFAULT_EMBEDDING_MODEL,
   };
-}
-
-function generateDeterministicMockVector(text: string): number[] {
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    hash = (hash << 5) - hash + text.charCodeAt(i);
-    hash |= 0;
-  }
-  const seed = Math.abs(hash);
-
-  // Mulberry32 generator
-  let a = seed;
-  const rand = () => {
-    let t = a += 0x6D2B79F5;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-
-  const vector: number[] = [];
-  let sumSq = 0;
-  for (let i = 0; i < EMBEDDING_DIMENSIONS; i++) {
-    const val = rand() * 2 - 1;
-    vector.push(val);
-    sumSq += val * val;
-  }
-
-  const magnitude = Math.sqrt(sumSq);
-  return vector.map((val) => val / (magnitude || 1));
 }
 
 export function vectorToPgLiteral(vector: readonly number[]): string {
@@ -55,52 +29,104 @@ export function vectorToPgLiteral(vector: readonly number[]): string {
 }
 
 export async function createEmbedding(text: string): Promise<number[]> {
-  const input = text.trim();
-  if (!input) {
-    throw new Error("Cannot create an embedding for empty text");
+  const result = await createEmbeddings([text]);
+  return result[0];
+}
+
+export async function createEmbeddings(texts: string[]): Promise<number[][]> {
+  const inputs = texts.map(t => t.trim()).filter(Boolean);
+  if (inputs.length === 0) {
+    throw new Error("Cannot create embeddings for empty text array");
   }
 
-  const baseURL = process.env.OPENAI_BASE_URL ?? process.env.EMBEDDING_BASE_URL;
-  const apiKey = process.env.OPENAI_API_KEY
+  const baseURL = process.env.OPENROUTER_BASE_URL
+    ?? process.env.OPENAI_BASE_URL
+    ?? process.env.EMBEDDING_BASE_URL
+    ?? "https://openrouter.ai/api/v1";
+    
+  const apiKey = process.env.OPENROUTER_API_KEY
+    ?? process.env.OPENAI_API_KEY
     ?? process.env.EMBEDDING_API_KEY
     ?? (baseURL ? process.env.DEEPSEEK_API_KEY : undefined);
 
   if (!apiKey) {
-    console.warn("⚠️ OPENAI_API_KEY or EMBEDDING_API_KEY is not defined. Generating a deterministic mock embedding vector.");
-    const mockVector = generateDeterministicMockVector(input);
-    vectorToPgLiteral(mockVector);
-    return mockVector;
+    throw new Error("OPENROUTER_API_KEY is not defined. Real embeddings cannot be generated and mock fallback is disabled.");
   }
 
   const { client, model } = getEmbeddingClient(apiKey, baseURL);
-  const request = {
-    model,
-    input,
-    encoding_format: "float",
-  } as const;
-  const response = await client.embeddings.create(
-    model.startsWith("text-embedding-3")
-      ? { ...request, dimensions: EMBEDDING_DIMENSIONS }
-      : request,
-  );
-  const embedding = response.data[0]?.embedding;
 
-  if (!embedding) {
-    throw new Error("Embedding provider returned no embedding data");
+  const results: number[][] = new Array(inputs.length);
+  const missingInputs: string[] = [];
+  const missingIndices: number[] = [];
+
+  for (let i = 0; i < inputs.length; i++) {
+    const text = inputs[i];
+    const cacheKey = `${model}:${text}`;
+    const cached = embeddingCache.get(cacheKey);
+    if (cached) {
+      results[i] = cached;
+    } else {
+      missingInputs.push(text);
+      missingIndices.push(i);
+    }
   }
 
-  vectorToPgLiteral(embedding);
-  return embedding;
+  if (missingInputs.length > 0) {
+    const request = {
+      model,
+      input: missingInputs,
+      encoding_format: "float",
+    } as const;
+
+    const response = await client.embeddings.create(
+      model.startsWith("text-embedding-3")
+        ? { ...request, dimensions: EMBEDDING_DIMENSIONS }
+        : request,
+    );
+
+    const newEmbeddings = response.data.map(d => d.embedding);
+
+    if (!newEmbeddings || newEmbeddings.length !== missingInputs.length) {
+      throw new Error(`Embedding provider returned incorrect number of results. Expected ${missingInputs.length}, got ${newEmbeddings?.length}`);
+    }
+
+    for (let i = 0; i < newEmbeddings.length; i++) {
+      const embedding = newEmbeddings[i];
+      vectorToPgLiteral(embedding); // Validate
+
+      const originalIndex = missingIndices[i];
+      results[originalIndex] = embedding;
+
+      const cacheKey = `${model}:${missingInputs[i]}`;
+      if (embeddingCache.size >= MAX_CACHE_SIZE) {
+        const firstKey = embeddingCache.keys().next().value;
+        if (firstKey !== undefined) {
+          embeddingCache.delete(firstKey);
+        }
+      }
+      embeddingCache.set(cacheKey, embedding);
+    }
+  }
+
+  return results;
 }
 
 export type EmbeddableProduct = {
   name: string;
   category: string;
+  gender: string;
+  brand: string;
   fabric: string | null;
   description: string | null;
   fitNotes: string | null;
 };
 
 export function buildProductEmbeddingText(product: EmbeddableProduct): string {
-  return `${product.name}. Category: ${product.category}. Fabric: ${product.fabric ?? ""}. Description: ${product.description ?? ""}. Fit Notes: ${product.fitNotes ?? ""}`;
+  return [
+    `${product.name} by ${product.brand}`,
+    `Category: ${product.category} (${product.gender})`,
+    product.fabric ? `Fabric: ${product.fabric}` : "",
+    product.description ? `Description: ${product.description}` : "",
+    product.fitNotes ? `Fit Notes: ${product.fitNotes}` : ""
+  ].filter(Boolean).join(". ");
 }

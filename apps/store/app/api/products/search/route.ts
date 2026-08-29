@@ -2,12 +2,23 @@ import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { createEmbedding, vectorToPgLiteral } from "../../../lib/embeddings";
 import { prisma } from "../../../lib/prisma";
+import { timingSafeEqual } from "crypto";
+
+function safeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
 
 export const runtime = "nodejs";
 
 type SearchPayload = {
   queryText?: unknown;
   category?: unknown;
+  gender?: unknown;
   limit?: unknown;
 };
 
@@ -34,30 +45,39 @@ type SizeChartRow = {
   inseamCm: number | null;
 };
 
-function parsePayload(value: SearchPayload): { queryText?: string; category?: string; limit: number } | null {
+function parsePayload(value: SearchPayload): { queryText?: string; category?: string; gender?: string; limit: number } | null {
   const queryText = typeof value.queryText === "string" ? value.queryText.trim() : undefined;
   const category = typeof value.category === "string" ? value.category.trim() : undefined;
+  const gender = typeof value.gender === "string" ? value.gender.trim() : undefined;
   const rawLimit = typeof value.limit === "number" ? value.limit : 10;
 
-  if ((value.queryText !== undefined && !queryText) || (value.category !== undefined && !category)) {
+  if ((value.queryText !== undefined && !queryText) || (value.category !== undefined && !category) || (value.gender !== undefined && !gender)) {
     return null;
   }
-  if (!queryText && !category) {
+  if (!queryText && !category && !gender) {
     return null;
   }
   if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > 50) {
     return null;
   }
 
-  return { queryText, category, limit: rawLimit };
+  return { queryText, category, gender, limit: rawLimit };
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    const internalKey = request.headers.get("x-manikan-internal-key") ?? "";
+    const requiredKey = process.env.RECOMMENDATION_SERVICE_KEY ?? "";
+
+    if (!requiredKey || !safeCompare(internalKey, requiredKey)) {
+      console.error("Unauthorized access attempt to /api/products/search");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const parsed = parsePayload((await request.json()) as SearchPayload);
     if (!parsed) {
       return NextResponse.json(
-        { error: "Provide non-empty queryText and/or category; limit must be an integer from 1 to 50." },
+        { error: "Provide non-empty queryText, category, or gender; limit must be an integer from 1 to 50." },
         { status: 400 },
       );
     }
@@ -65,24 +85,33 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const categoryFilter = parsed.category
       ? Prisma.sql`AND category ILIKE ${parsed.category}`
       : Prisma.empty;
+      
+    const genderFilter = parsed.gender
+      ? Prisma.sql`AND gender ILIKE ${parsed.gender}`
+      : Prisma.empty;
 
     if (!parsed.queryText) {
+      const whereClause: any = { isActive: true };
+      if (parsed.category) whereClause.category = { equals: parsed.category, mode: "insensitive" };
+      if (parsed.gender) whereClause.gender = { equals: parsed.gender, mode: "insensitive" };
+      
       const products = await prisma.product.findMany({
-        where: { isActive: true, category: { equals: parsed.category!, mode: "insensitive" } },
+        where: whereClause,
         take: parsed.limit,
         include: { variants: true },
       });
-      return NextResponse.json({ products, searchType: "category" });
+      return NextResponse.json({ products, searchType: "structured" });
     }
 
     const queryVector = vectorToPgLiteral(await createEmbedding(parsed.queryText));
     const products = await prisma.$queryRaw<SearchProductRow[]>(Prisma.sql`
-      SELECT id, "productCode", name, category, fabric, description, "fitNotes",
+      SELECT id, "productCode", name, category, fabric, description, "fitNotes", gender,
              1 - (embedding <=> ${queryVector}::vector) AS similarity
       FROM "Product"
       WHERE "isActive" = true
         AND embedding IS NOT NULL
         ${categoryFilter}
+        ${genderFilter}
       ORDER BY embedding <=> ${queryVector}::vector
       LIMIT ${parsed.limit}
     `);
