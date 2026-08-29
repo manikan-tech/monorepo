@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 interface ModalProps {
   isOpen: boolean;
@@ -11,6 +12,12 @@ interface ModalProps {
 }
 
 export default function Modal({ isOpen, onClose, title, children, footer }: ModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Prevent scrolling when modal is open
   useEffect(() => {
     if (isOpen) {
@@ -23,24 +30,25 @@ export default function Modal({ isOpen, onClose, title, children, footer }: Moda
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-forest-950/40 backdrop-blur-sm transition-opacity animate-fade-in"
+        className="fixed inset-0 bg-forest-950/40 backdrop-blur-sm transition-opacity animate-fade-in"
         onClick={onClose}
       />
       
       {/* Modal Container */}
-      <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-card overflow-hidden animate-fade-in-up border border-forest-900/5">
+      <div className="relative z-10 w-full max-w-md bg-white rounded-3xl shadow-card overflow-hidden animate-fade-in-up border border-forest-900/5">
         
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-forest-100">
           <h3 className="font-display text-lg font-semibold text-forest-950">{title}</h3>
           <button 
             onClick={onClose}
+            aria-label="Close modal"
             className="p-2 text-forest-700/60 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -69,6 +77,7 @@ export default function Modal({ isOpen, onClose, title, children, footer }: Moda
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

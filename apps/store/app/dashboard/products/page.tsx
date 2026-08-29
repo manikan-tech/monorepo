@@ -5,6 +5,8 @@ import { prisma } from "../../lib/prisma";
 import { redirect } from "next/navigation";
 import ProductDataGrid from "./ProductDataGrid";
 import CsvUploadButton from "./CsvUploadButton";
+import DeleteAllProductsButton from "./DeleteAllProductsButton";
+
 
 export default async function ProductsPage() {
   const user = await getAuthFromCookies();
@@ -31,6 +33,7 @@ export default async function ProductsPage() {
           <p className="text-forest-700/60 text-sm mt-1 max-w-2xl">Manage your catalog and view insights.</p>
         </div>
         <div className="flex gap-4">
+          <DeleteAllProductsButton />
           <CsvUploadButton />
           <Link
             href="/dashboard/products/new"

@@ -2,6 +2,7 @@
 
 import React, { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Modal from "../../../components/Modal";
 
 // measurementErrors (a real validation failure -- these rows need fixing)
 // and noMeasurementData (a product simply had no measurement columns at
@@ -37,6 +38,8 @@ function buildResultMessage(data: {
 
 export default function CsvUploadButton() {
   const [isUploading, setIsUploading] = useState(false);
+  const [modalTitle, setModalTitle] = useState("");
+  const [modalMessage, setModalMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -60,11 +63,13 @@ export default function CsvUploadButton() {
       }
 
       const data = await res.json();
-      alert(buildResultMessage(data));
+      setModalTitle("CSV Import Status");
+      setModalMessage(buildResultMessage(data));
       router.refresh();
     } catch (error: any) {
       console.error(error);
-      alert(error.message || "Something went wrong during upload");
+      setModalTitle("Upload Error");
+      setModalMessage(error.message || "Something went wrong during upload");
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {
@@ -93,6 +98,26 @@ export default function CsvUploadButton() {
       >
         {isUploading ? "Uploading..." : "Upload CSV"}
       </button>
+
+      <Modal
+        isOpen={!!modalMessage}
+        onClose={() => setModalMessage(null)}
+        title={modalTitle}
+        footer={
+          <div className="flex justify-end">
+            <button
+              onClick={() => setModalMessage(null)}
+              className="px-5 py-2 bg-forest-900 text-white rounded-xl text-sm font-medium hover:bg-forest-800 transition-colors"
+            >
+              OK
+            </button>
+          </div>
+        }
+      >
+        <div className="text-forest-700 text-sm whitespace-pre-line leading-relaxed">
+          {modalMessage}
+        </div>
+      </Modal>
     </>
   );
 }
