@@ -3,7 +3,7 @@ import MeasurementSlider from './MeasurementSlider'
 import TryOnViewer from './TryOnViewer'
 import InteractiveGuide from './InteractiveGuide'
 import OutfitLayerCard from './OutfitLayerCard'
-import { generateDressedAvatar, processWidgetFit } from '../lib/api'
+import { generateDressedAvatar, isQuotaExceeded, processWidgetFit } from '../lib/api'
 import { getLayerableGarment, wearGarment, removeGarment } from '../lib/outfit'
 import { fetchProduct, fetchColorSiblings } from '../lib/products'
 
@@ -87,6 +87,8 @@ export default function ManikanWidget({ product: initialProduct, onClose }) {
   const [tryOnUrl, setTryOnUrl] = useState(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState(null)
+  const [bodyQuotaExhausted, setBodyQuotaExhausted] = useState(false)
+  const [recommendationQuotaExhausted, setRecommendationQuotaExhausted] = useState(false)
   const [guideRestartToken, setGuideRestartToken] = useState(0)
   const previousUrlRef = useRef(null)
 
@@ -190,6 +192,9 @@ export default function ManikanWidget({ product: initialProduct, onClose }) {
             ? ` Try ${recommendedSize}.`
             : ''
           setError(`Size ${size} is too small for your measurements.${suggestion}`)
+        } else if (isQuotaExceeded(err)) {
+          setBodyQuotaExhausted(true)
+          setError("3D previews are temporarily unavailable because this retailer has reached this period's limit.")
         } else {
           console.error('Try-On Error:', err)
           setError('Failed to generate virtual try-on. Please try again.')
@@ -243,7 +248,12 @@ export default function ManikanWidget({ product: initialProduct, onClose }) {
       setStep(3)
     } catch (err) {
       console.error('[Manikan Widget] Store orchestrator failed', err)
-      setError(err.message || 'Could not calculate your fit. Please try again.')
+      if (isQuotaExceeded(err)) {
+        setRecommendationQuotaExhausted(true)
+        setError("Size recommendations are temporarily unavailable because this retailer has reached this period's limit.")
+      } else {
+        setError(err.message || 'Could not calculate your fit. Please try again.')
+      }
       setStep(1)
     } finally {
       setIsGenerating(false)
@@ -439,11 +449,11 @@ export default function ManikanWidget({ product: initialProduct, onClose }) {
                     icon={<svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 6c-2 2-3 5-3 8 0 2 1 4 3 6M16 6c2 2 3 5 3 8 0 2-1 4-3 6M8 6h8" /></svg>} />
                 </div>
 
-                <button onClick={handleGenerateBody} className="mw-primary-btn" id="generate-body">
+                <button onClick={handleGenerateBody} disabled={recommendationQuotaExhausted} className="mw-primary-btn" id="generate-body">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  Generate My Body Model
+                  {recommendationQuotaExhausted ? 'Size Assistant unavailable' : 'Generate My Body Model'}
                 </button>
               </div>
             </div>
@@ -509,7 +519,7 @@ export default function ManikanWidget({ product: initialProduct, onClose }) {
                       <div className="mw-layer-card-colors">
                         <button
                           type="button"
-                          disabled={isGenerating}
+                          disabled={isGenerating || bodyQuotaExhausted}
                           className="mw-layer-card-swatch active"
                           title="Current color"
                         >
@@ -522,7 +532,7 @@ export default function ManikanWidget({ product: initialProduct, onClose }) {
                           <button
                             key={s.id}
                             type="button"
-                            disabled={isGenerating}
+                            disabled={isGenerating || bodyQuotaExhausted}
                             onClick={() => handlePrimaryColorChange(s)}
                             className="mw-layer-card-swatch"
                             title={s.name || 'Color variant'}
@@ -544,7 +554,7 @@ export default function ManikanWidget({ product: initialProduct, onClose }) {
                         <button
                           key={size}
                           onClick={() => handleSizeChange(size)}
-                          disabled={isGenerating}
+                          disabled={isGenerating || bodyQuotaExhausted}
                           className={`mw-tryon-size-pill ${selectedSize === size ? 'active' : ''} ${size === recommendedSize ? 'recommended' : ''}`}
                           id={`tryon-size-${size}`}
                         >

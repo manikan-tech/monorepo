@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import type { HostedServiceAvailability } from "../../app/lib/hosted-service-availability";
 
 /* ─────────────────────────────────────────────────────────────────────────
    Recommendation widget launcher — recommendation-service
@@ -34,9 +35,11 @@ function teardownExistingWidget() {
 export default function ManikanRecommendWidget({
   productId,
   retailerKey,
+  availability,
 }: {
   productId: string;
   retailerKey?: string;
+  availability?: HostedServiceAvailability;
 }) {
   useEffect(() => {
     if (!retailerKey) return;
@@ -67,6 +70,14 @@ export default function ManikanRecommendWidget({
       teardownExistingWidget();
     };
   }, [productId, retailerKey]);
+
+  if (!retailerKey && availability?.RECOMMENDATION.state === "QUOTA_EXHAUSTED") {
+    return (
+      <p className="text-xs text-center text-forest-700/60" role="status">
+        The size assistant is temporarily unavailable because this retailer has reached this period&apos;s limit.
+      </p>
+    );
+  }
 
   return null;
 }

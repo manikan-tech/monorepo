@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { garmentFieldsFor, isProductTryOnEnabled } from "../../app/lib/tryon-status";
+import {
+  isHostedServiceAvailable,
+  type HostedServiceAvailability,
+} from "../../app/lib/hosted-service-availability";
 
 /* ─────────────────────────────────────────────────────────────────────────
    3D Try-On launcher — body-service (Pipeline 2)
@@ -76,6 +80,7 @@ type StoreProduct = {
   garmentColorHex?: string | null;
   variants?: StoreVariant[];
   hostedServiceKeys?: Partial<Record<"BODY_MODELING" | "RECOMMENDATION", string>>;
+  hostedServiceAvailability?: HostedServiceAvailability;
 };
 
 /** Store product -> the shape /api/widget/products/[id] would have returned.
@@ -209,7 +214,13 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
     garmentColorHex: product.garmentColorHex ?? null,
     variants: product.variants ?? [],
   });
-  const isAvailable = enabled && Boolean(product.hostedServiceKeys?.BODY_MODELING);
+  const serviceAvailable = isHostedServiceAvailable(product.hostedServiceAvailability, "BODY_MODELING");
+  const isAvailable = enabled && serviceAvailable && Boolean(product.hostedServiceKeys?.BODY_MODELING);
+  const unavailableMessage = !enabled
+    ? `3D preview needs ${garmentFieldsFor(product.category ?? "tshirt").length} garment measurements on every size, plus a garment colour.`
+    : product.hostedServiceAvailability?.BODY_MODELING.state === "QUOTA_EXHAUSTED"
+      ? "3D previews are temporarily unavailable because this retailer has reached this period's limit."
+      : "3D preview is not available for this retailer right now.";
 
   return (
     <>
@@ -255,9 +266,7 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
       )}
       {!isAvailable && status === "idle" && (
         <p className="mt-2 text-xs text-center text-forest-700/60">
-          {!enabled
-            ? `3D preview needs ${garmentFieldsFor(product.category ?? "tshirt").length} garment measurements on every size, plus a garment colour.`
-            : "3D preview is not available for this retailer right now."}
+          {unavailableMessage}
         </p>
       )}
     </>

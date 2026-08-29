@@ -12,6 +12,7 @@ import Manikan3DTryOn from "../../../../components/product/Manikan3DTryOn";
 import ManikanRecommendWidget from "../../../../components/product/ManikanRecommendWidget";
 import FitToolsOnboarding from "../../../../components/product/FitToolsOnboarding";
 import ColorSwatches from "../../../../components/product/ColorSwatches";
+import { isHostedServiceAvailable } from "../../../lib/hosted-service-availability";
 
 type Review = {
   id: string;
@@ -52,6 +53,9 @@ export default function ProductDetailPage() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isTryOnRouting, setIsTryOnRouting] = useState(false);
   const [manualGuideTrigger, setManualGuideTrigger] = useState(0);
+
+  const recommendationAvailable = isHostedServiceAvailable(product?.hostedServiceAvailability, "RECOMMENDATION");
+  const vtonAvailable = isHostedServiceAvailable(product?.hostedServiceAvailability, "VTON_2D");
 
   // Reviews
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -360,26 +364,25 @@ export default function ProductDetailPage() {
                       (window as any).ManikanWidget.openForSizing();
                     }
                   }}
-                  className="group relative flex items-center justify-center gap-3 py-3 px-6 rounded-2xl font-medium text-sm border-2 border-forest-900 text-white bg-forest-900 hover:bg-forest-800 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98] overflow-hidden cursor-pointer shadow-soft"
+                  disabled={!recommendationAvailable}
+                  className="group relative flex items-center justify-center gap-3 py-3 px-6 rounded-2xl font-medium text-sm border-2 border-forest-900 text-white bg-forest-900 hover:bg-forest-800 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98] overflow-hidden cursor-pointer shadow-soft disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="relative text-gold-400">
                     <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
                   </svg>
-                  <span className="relative">Size Assistant</span>
+                  <span className="relative">{recommendationAvailable ? "Size Assistant" : "Size Assistant unavailable"}</span>
                   <span className="relative text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-gold-500/20 text-gold-300 border border-gold-500/20">
                     AI
                   </span>
                 </button>
 
-                <Link
+                <button
                   id="product-2d-tryon"
-                  href={`/visualize?productId=${product.id}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    void handleVirtualTryOn();
-                  }}
+                  type="button"
+                  onClick={() => void handleVirtualTryOn()}
+                  disabled={!vtonAvailable || isTryOnRouting}
                   aria-busy={isTryOnRouting}
-                  className="group relative flex items-center justify-center gap-3 py-3 px-6 rounded-2xl font-medium text-sm border-2 border-gold-400 text-gold-700 bg-white/60 hover:bg-gold-50 hover:text-gold-800 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98] overflow-hidden"
+                  className="group relative flex items-center justify-center gap-3 py-3 px-6 rounded-2xl font-medium text-sm border-2 border-gold-400 text-gold-700 bg-white/60 hover:bg-gold-50 hover:text-gold-800 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98] overflow-hidden disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                 >
                   <span
                     aria-hidden
@@ -393,16 +396,23 @@ export default function ProductDetailPage() {
                       <circle cx="12" cy="13" r="4" />
                     </svg>
                   )}
-                  <span className="relative">{isTryOnRouting ? "Preparing preview…" : "2D Try-On"}</span>
+                  <span className="relative">{isTryOnRouting ? "Preparing preview…" : vtonAvailable ? "2D Try-On" : "2D Try-On unavailable"}</span>
                   <span className="relative text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-forest-900/10 text-forest-700 border border-forest-900/10">
                     Photo
                   </span>
-                </Link>
+                </button>
+
+                {!vtonAvailable && product.hostedServiceAvailability?.VTON_2D?.state === "QUOTA_EXHAUSTED" && (
+                  <p className="text-xs text-center text-forest-700/60" role="status">
+                    2D try-on is temporarily unavailable because this retailer has reached this period&apos;s limit.
+                  </p>
+                )}
 
                 <Manikan3DTryOn product={product} />
                 <ManikanRecommendWidget
                   productId={product.id}
                   retailerKey={product.hostedServiceKeys?.RECOMMENDATION}
+                  availability={product.hostedServiceAvailability}
                 />
               </div>
             </div>

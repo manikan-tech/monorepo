@@ -48,6 +48,7 @@
     let conversationHistory = [];
     let isInitialized = false;
     let userMeasurements = null;
+    let recommendationQuotaExhausted = false;
 
     const style = document.createElement('style');
     style.innerHTML = `
@@ -257,6 +258,7 @@
     async function sendMessage() {
         const input = document.getElementById('widgetInput');
         const sendBtn = document.getElementById('widgetSend');
+        if (recommendationQuotaExhausted) return;
         let text = input.value.trim();
         await waitForProductContext();
         readMeasurementsIfProvided();
@@ -311,7 +313,14 @@
 
             if (response.status === 429) {
                 hideThinking();
-                appendMessage("You're sending messages a bit fast - please wait a moment and try again.", 'bot');
+                const error = await response.json().catch(() => ({}));
+                if (error.code === "QUOTA_EXCEEDED") {
+                    recommendationQuotaExhausted = true;
+                    input.disabled = true;
+                    appendMessage("The size assistant is temporarily unavailable because this retailer has reached this period's limit.", 'bot');
+                } else {
+                    appendMessage("You're sending messages a bit fast - please wait a moment and try again.", 'bot');
+                }
                 return;
             }
 
@@ -400,7 +409,7 @@
                 appendMessage("Connection error. Please try again in a moment.", 'bot');
             }
         } finally {
-            sendBtn.disabled = false;
+            sendBtn.disabled = recommendationQuotaExhausted;
         }
     }
 

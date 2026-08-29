@@ -12,6 +12,18 @@ import { getRetailerKey } from './config'
 
 const STORE_API_URL = import.meta.env.VITE_STORE_API_URL || 'http://localhost:3000'
 
+export function isQuotaExceeded(error) {
+  return error && typeof error === 'object' && error.code === 'QUOTA_EXCEEDED'
+}
+
+function responseError(payload, status) {
+  const error = new Error(payload.error || payload.detail || `Server error: ${status}`)
+  error.code = payload.code
+  error.scope = payload.scope
+  error.status = status
+  return error
+}
+
 async function postForGlb(path, payload, { timeoutMs = 120_000 } = {}) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
@@ -32,7 +44,7 @@ async function postForGlb(path, payload, { timeoutMs = 120_000 } = {}) {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.error || errorData.detail || `Server error: ${response.status}`)
+      throw responseError(errorData, response.status)
     }
 
     const blob = await response.blob()
@@ -67,7 +79,7 @@ async function postJson(path, payload, { timeoutMs = 30_000 } = {}) {
       body: JSON.stringify(payload),
     })
     const data = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(data.error || `Server error: ${response.status}`)
+    if (!response.ok) throw responseError(data, response.status)
     return data
   } finally {
     clearTimeout(timeout)
@@ -96,7 +108,7 @@ export async function uploadVirtualTryOn(productId, photo, { timeoutMs = 120_000
     })
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.error || `Virtual try-on failed (${response.status})`)
+      throw responseError(errorData, response.status)
     }
     return URL.createObjectURL(await response.blob())
   } finally {

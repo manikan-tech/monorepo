@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
+import {
+    HOSTED_SERVICES,
+    type HostedServiceAvailability,
+} from "../../../lib/hosted-service-availability";
 
 export async function GET(
     request: NextRequest,
@@ -61,9 +65,14 @@ export async function GET(
                 where: {
                     retailerId: product.retailerId,
                     status: "ACTIVE",
-                    service: { in: ["BODY_MODELING", "RECOMMENDATION"] },
+                    service: { in: [...HOSTED_SERVICES] },
                 },
-                select: { service: true },
+                select: {
+                    service: true,
+                    currentPeriodUsage: true,
+                    currentPeriodReserved: true,
+                    plan: { select: { quota: true } },
+                },
             }),
             prisma.serviceApiKey.findMany({
                 where: {
@@ -74,10 +83,28 @@ export async function GET(
                 select: { service: true, apiKey: true },
             }),
         ]);
-        const activeServices = new Set(activeSubscriptions.map(({ service }) => service));
+
+        // The hosted Store is an owned sales channel, so it can determine the
+        // owning retailer's feature state before the shopper presses a costly
+        // button. Keep the product visible regardless: an exhausted service
+        // disables only that service, never the retailer's catalog.
+        const subscriptionsByService = new Map(
+            activeSubscriptions.map((subscription) => [subscription.service, subscription]),
+        );
+        const hostedServiceAvailability = Object.fromEntries(
+            HOSTED_SERVICES.map((service) => {
+                const subscription = subscriptionsByService.get(service);
+                if (!subscription?.plan) return [service, { state: "NOT_SUBSCRIBED" }];
+                const usedOrReserved = subscription.currentPeriodUsage + subscription.currentPeriodReserved;
+                return [
+                    service,
+                    { state: usedOrReserved >= subscription.plan.quota ? "QUOTA_EXHAUSTED" : "AVAILABLE" },
+                ];
+            }),
+        ) as HostedServiceAvailability;
         const hostedServiceKeys = Object.fromEntries(
             serviceKeys
-                .filter(({ service }) => activeServices.has(service))
+                .filter(({ service }) => hostedServiceAvailability[service as keyof HostedServiceAvailability]?.state === "AVAILABLE")
                 .map(({ service, apiKey }) => [service, apiKey]),
         );
 
@@ -104,7 +131,7 @@ export async function GET(
         });
 
         return NextResponse.json(
-            { product: { ...product, hostedServiceKeys }, colorSiblings },
+            { product: { ...product, hostedServiceKeys, hostedServiceAvailability }, colorSiblings },
             { status: 200 },
         );
     } catch (error) {
