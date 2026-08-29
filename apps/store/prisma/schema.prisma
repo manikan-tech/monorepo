@@ -348,7 +348,7 @@ model Product {
   images          String[]
   stock           Int                          @default(0)
   isActive        Boolean                      @default(true)
-  embedding       Unsupported("vector(1536)")?
+  embedding       Unsupported("vector(1024)")?
   garmentColorHex String? // garment colour (hex) for the 3D virtual try-on
   tshirtColorHex  String? // garment colour (hex) for the 3D virtual try-on
   createdAt       DateTime                     @default(now())
