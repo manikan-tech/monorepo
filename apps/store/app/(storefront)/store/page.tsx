@@ -37,8 +37,9 @@ function StorePageContent() {
   const [gender, setGender] = useState("");
   const [brand, setBrand] = useState("");
   const [sort, setSort] = useState("newest");
+  const [brands, setBrands] = useState<string[]>([]);
 
-  // Fetch categories on mount
+  // Fetch filter options on mount.
   useEffect(() => {
     fetch("/api/categories")
       .then((r) => r.json())
@@ -47,6 +48,13 @@ function StorePageContent() {
         const flatten = (cats: any[]): any[] =>
           cats.flatMap((c: any) => [{ id: c.id, name: c.name, slug: c.slug }, ...flatten(c.children ?? [])]);
         setCategories(flatten(data.categories ?? []));
+      })
+      .catch(() => { });
+
+    fetch("/api/brands")
+      .then((r) => r.json())
+      .then((data) => {
+        setBrands(data.brands || []);
       })
       .catch(() => { });
   }, []);
@@ -142,8 +150,9 @@ function StorePageContent() {
             className="px-4 py-2.5 rounded-xl border-2 border-forest-100 bg-cream-50 text-forest-900 text-sm font-medium focus:outline-none focus:border-gold-400 transition-colors cursor-pointer hover:bg-white"
           >
             <option value="">All Brands</option>
-            <option value="Nour Atelier">Nour Atelier</option>
-            <option value="Cairo Thread Co.">Cairo Thread Co.</option>
+            {brands.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
           </select>
 
           {(category || gender || brand || sort !== "newest" || search) && (
