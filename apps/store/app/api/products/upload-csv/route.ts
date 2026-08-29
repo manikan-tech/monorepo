@@ -13,11 +13,7 @@ function hasAnyMeasurement(v: Record<string, unknown>): boolean {
   return BODY_FIT_FIELDS.some((f) => v[f] !== undefined && v[f] !== null && v[f] !== "");
 }
 
-function generateMockEmbedding(dim = 1536) {
-  // Generate random mock embeddings since we don't have an OpenAI key available.
-  const arr = new Array(dim).fill(0).map(() => Math.random() * 2 - 1);
-  return arr;
-}
+
 
 export async function POST(request: NextRequest) {
   try {
@@ -203,16 +199,7 @@ export async function POST(request: NextRequest) {
         noMeasurementData.push(productData.productCode);
       }
 
-      // Generate embedding and save to pgvector
-      const embedding = generateMockEmbedding(1536);
-      const embeddingString = `[${embedding.join(',')}]`;
-      
-      // PostgreSQL requires literal string representation for vector type
-      await prisma.$executeRawUnsafe(
-         `UPDATE "Product" SET embedding = $1::vector WHERE id = $2`,
-         embeddingString,
-         product.id
-      );
+
 
       insertedCount++;
     }
