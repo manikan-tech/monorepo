@@ -1,0 +1,26 @@
+meta {
+  name: Delete Size Chart
+  type: http
+  seq: 14
+}
+
+delete {
+  url: {{baseUrl}}/api/retailer/size-charts/{{sizeChartId}}
+  body: none
+  auth: none
+}
+
+vars {
+  sizeChartId: clxxxxxxxxxxxxxxxxxxxxxxxx
+}
+
+docs {
+  ## DELETE /api/retailer/size-charts/:id
+
+  Deletes a size chart. Cannot delete a chart currently in use by active products.
+
+  ### Success (200)
+  ```json
+  { "message": "Size chart deleted" }
+  ```
+}

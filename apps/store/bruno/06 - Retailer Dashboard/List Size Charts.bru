@@ -1,0 +1,33 @@
+meta {
+  name: List Size Charts
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/retailer/size-charts
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/retailer/size-charts
+
+  Lists all size charts created by the authenticated retailer.
+  Size charts power the body-fit recommendation engine.
+
+  ### Success (200)
+  ```json
+  {
+    "sizeCharts": [
+      {
+        "id": "...",
+        "name": "Men's Shirts Spring 2025",
+        "category": "shirt",
+        "status": "ACTIVE",
+        "createdAt": "2025-03-01T00:00:00Z"
+      }
+    ]
+  }
+  ```
+}

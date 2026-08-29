@@ -1,0 +1,22 @@
+meta {
+  name: Admin Logout
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/admin/logout
+  body: none
+  auth: none
+}
+
+docs {
+  ## POST /api/admin/logout
+
+  Signs out the currently authenticated platform admin.
+
+  ### Success (200)
+  ```json
+  { "success": true }
+  ```
+}

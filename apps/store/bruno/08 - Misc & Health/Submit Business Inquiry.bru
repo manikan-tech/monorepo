@@ -1,0 +1,51 @@
+meta {
+  name: Submit Business Inquiry
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/business-inquiries
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "companyName": "TrendyWear Egypt",
+    "contactName": "Sara Khaled",
+    "email": "sara@trendywear.eg",
+    "phone": "+20 101 987 6543",
+    "message": "We have 500+ products and are interested in the VTON and AI sizing features for our e-commerce platform.",
+    "estimatedProductCount": 500,
+    "websiteUrl": "https://trendywear.eg"
+  }
+}
+
+docs {
+  ## POST /api/business-inquiries
+
+  Public endpoint — no authentication required.
+  Submits a B2B sales inquiry from the Manikan landing page.
+  The form data is stored and appears in the Admin Panel for follow-up.
+
+  ### Body
+  | Field                | Type    | Required | Description                   |
+  |----------------------|---------|----------|-------------------------------|
+  | companyName          | string  | ✅       | Retailer company name         |
+  | contactName          | string  | ✅       | Contact person's full name    |
+  | email                | string  | ✅       | Contact email address         |
+  | phone                | string  | ❌       | Phone number                  |
+  | message              | string  | ✅       | Inquiry description           |
+  | estimatedProductCount| integer | ❌       | Approximate SKU/product count |
+  | websiteUrl           | string  | ❌       | Retailer's current website    |
+
+  ### Success (201)
+  ```json
+  { "success": true, "message": "Your inquiry has been submitted. We'll be in touch soon!" }
+  ```
+}

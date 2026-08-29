@@ -1,0 +1,44 @@
+meta {
+  name: Set Retailer Subscription (Admin)
+  type: http
+  seq: 11
+}
+
+put {
+  url: {{baseUrl}}/api/admin/retailers/{{retailerId}}/subscriptions/RECOMMENDATION
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "planId": "clxxxxxxxxxxxxxxxxxxxxxxxx",
+    "status": "ACTIVE",
+    "currentPeriodUsage": 0
+  }
+}
+
+docs {
+  ## PUT /api/admin/retailers/:id/subscriptions/:service
+
+  Manually creates or updates a retailer's subscription to a service.
+  Used to grant complimentary plans, handle Stripe reconciliation issues,
+  or reset usage counters.
+
+  ### Path Params
+  | Param   | Type   | Description                                      |
+  |---------|--------|--------------------------------------------------|
+  | id      | string | Retailer Prisma ID                               |
+  | service | string | `RECOMMENDATION`, `VTON_2D`, `BODY_MODELING`    |
+
+  ### Body
+  | Field              | Type    | Description                              |
+  |--------------------|---------|------------------------------------------|
+  | planId             | string  | The Plan ID to assign                    |
+  | status             | string  | `"ACTIVE"`, `"EXPIRED"`, `"CANCELLED"`   |
+  | currentPeriodUsage | integer | Override usage counter (default: 0)      |
+}

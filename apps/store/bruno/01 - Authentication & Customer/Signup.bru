@@ -1,0 +1,46 @@
+meta {
+  name: Signup
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/auth/signup
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "newuser@example.com",
+    "password": "Password123!",
+    "firstName": "Ahmed",
+    "lastName": "Hassan",
+    "role": "customer"
+  }
+}
+
+docs {
+  ## POST /api/auth/signup
+
+  Registers a new Customer or Retailer account.
+  An OTP verification email is sent after signup.
+
+  ### Body
+  | Field     | Type   | Required | Description                        |
+  |-----------|--------|----------|------------------------------------|
+  | email     | string | ✅       | New user's email                   |
+  | password  | string | ✅       | Minimum 8 chars                    |
+  | firstName | string | ✅       | First name                         |
+  | lastName  | string | ✅       | Last name                          |
+  | role      | string | ✅       | `"customer"` or `"retailer"`       |
+
+  ### Success (201)
+  ```json
+  { "success": true, "message": "Verification email sent." }
+  ```
+}

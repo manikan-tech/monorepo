@@ -1,0 +1,37 @@
+meta {
+  name: Get Retailer Profile
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/retailer/me
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/retailer/me
+
+  Returns the authenticated retailer's profile including activation status,
+  widget settings, and subscription info.
+
+  ### Authentication
+  Requires a logged-in retailer **session cookie**.
+
+  ### Success (200)
+  ```json
+  {
+    "retailer": {
+      "id": "...",
+      "email": "shop@example.com",
+      "companyName": "Fashion House",
+      "isActivated": true,
+      "widgetSettings": {
+        "allowedOrigins": ["https://myshop.com"],
+        "primaryColor": "#2D5016"
+      }
+    }
+  }
+  ```
+}

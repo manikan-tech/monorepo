@@ -1,0 +1,51 @@
+meta {
+  name: Add Item to Cart
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/cart
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "variantId": "{{variantId}}",
+    "quantity": 1
+  }
+}
+
+docs {
+  ## POST /api/cart
+
+  Adds an item to the authenticated customer's cart.
+  **Upserts** — if the same `productId + variantId` pair already exists,
+  `quantity` is incremented rather than creating a duplicate.
+
+  ### Body
+  | Field     | Type    | Required | Description                         |
+  |-----------|---------|----------|-------------------------------------|
+  | productId | string  | ✅       | Prisma ID of the product            |
+  | variantId | string  | ✅       | Prisma ID of the specific variant   |
+  | quantity  | integer | ❌       | Units to add, defaults to `1`       |
+
+  ### Error Responses
+  | Status | Description                                               |
+  |--------|-----------------------------------------------------------|
+  | 401    | Customer not authenticated                                |
+  | 404    | Variant not found or doesn't belong to product            |
+  | 409    | Item out of stock or requested quantity exceeds stock     |
+  | 410    | Product is no longer active (discontinued)                |
+
+  ### Success (201)
+  ```json
+  { "cartItem": { "id": "...", "quantity": 1, ... } }
+  ```
+}

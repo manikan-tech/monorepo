@@ -1,0 +1,31 @@
+meta {
+  name: Update Retailer Allowed Origins (Admin)
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{baseUrl}}/api/admin/retailers/{{retailerId}}/origins
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "allowedOrigins": [
+      "https://fashion-house.com",
+      "https://staging.fashion-house.com"
+    ]
+  }
+}
+
+docs {
+  ## PUT /api/admin/retailers/:id/origins
+
+  Admin override for the retailer's widget CORS allowlist.
+  Used when a retailer cannot manage their own origins (e.g. pending activation).
+}

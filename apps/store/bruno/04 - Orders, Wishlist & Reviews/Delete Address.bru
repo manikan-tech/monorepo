@@ -1,0 +1,23 @@
+meta {
+  name: Delete Address
+  type: http
+  seq: 10
+}
+
+delete {
+  url: {{baseUrl}}/api/addresses/{{addressId}}
+  body: none
+  auth: none
+}
+
+docs {
+  ## DELETE /api/addresses/:id
+
+  Permanently deletes a saved address. 
+  Cannot delete an address referenced by a pending or active order.
+
+  ### Success (200)
+  ```json
+  { "message": "Address deleted" }
+  ```
+}

@@ -1,0 +1,33 @@
+meta {
+  name: Get Retailer Widget Config
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/retailer/widget
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/retailer/widget
+
+  Returns the full widget UI configuration for the authenticated retailer
+  (colours, language, feature flags, etc.), used by the dashboard widget
+  preview panel.
+
+  ### Success (200)
+  ```json
+  {
+    "widgetSettings": {
+      "primaryColor": "#2D5016",
+      "accentColor": "#C5A028",
+      "language": "en",
+      "showSizeRecommendation": true,
+      "showVton": true,
+      "allowedOrigins": ["https://myshop.com"]
+    }
+  }
+  ```
+}

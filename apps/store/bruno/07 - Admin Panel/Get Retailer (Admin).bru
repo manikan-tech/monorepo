@@ -1,0 +1,18 @@
+meta {
+  name: Get Retailer (Admin)
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/admin/retailers/{{retailerId}}
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/admin/retailers/:id
+
+  Returns detailed information for a single retailer, including all
+  subscriptions, service keys, and widget settings. Platform admin only.
+}

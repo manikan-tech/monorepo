@@ -1,0 +1,33 @@
+meta {
+  name: Health Check
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/health
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/health
+
+  Application-level health check. Verifies the Next.js API is running
+  and optionally pings the database and external Python services.
+
+  Useful for uptime monitoring and load balancer health probes.
+
+  ### Success (200)
+  ```json
+  {
+    "status": "ok",
+    "timestamp": "2026-08-29T12:00:00.000Z",
+    "services": {
+      "database": "ok",
+      "recommendationService": "ok",
+      "vtonService": "ok"
+    }
+  }
+  ```
+}

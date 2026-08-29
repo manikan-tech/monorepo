@@ -1,0 +1,37 @@
+meta {
+  name: Update Address
+  type: http
+  seq: 9
+}
+
+put {
+  url: {{baseUrl}}/api/addresses/{{addressId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "label": "Office",
+    "street": "456 Corniche El Nil",
+    "city": "Cairo",
+    "governorate": "Cairo",
+    "postalCode": "11511",
+    "isDefault": false
+  }
+}
+
+docs {
+  ## PUT /api/addresses/:id
+
+  Updates a saved delivery address. Customer must own the address.
+
+  ### Path Params
+  | Param | Type   | Description      |
+  |-------|--------|------------------|
+  | id    | string | Address Prisma ID |
+}

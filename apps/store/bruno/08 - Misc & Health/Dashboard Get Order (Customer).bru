@@ -1,0 +1,21 @@
+meta {
+  name: Dashboard Get Order (Customer)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/dashboard/orders/{{orderId}}
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/dashboard/orders/:id
+
+  Customer dashboard scoped order detail.
+  Like `GET /api/orders/:id` but mounted separately under `/dashboard/`
+  for use in the authenticated customer dashboard page.
+
+  Enforces customer-owns-order check.
+}

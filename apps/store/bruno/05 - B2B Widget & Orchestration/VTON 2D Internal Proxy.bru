@@ -1,0 +1,59 @@
+meta {
+  name: VTON 2D Internal Proxy
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/vton/2d
+  body: multipartForm
+  auth: none
+}
+
+headers {
+  X-Manikan-Key: {{apiKey}}
+  X-Request-Id: req_test_001
+}
+
+body:multipart-form {
+  human_image: @file(/path/to/person_photo.jpg)
+  product_id: {{productId}}
+  session_id: sess_abc123xyz789
+}
+
+docs {
+  ## POST /api/vton/2d
+
+  **Internal Service Proxy.** This endpoint is the protected hop between
+  the widget gateway (`/api/widget/vton`) and the Python VTON service.
+
+  > ⚠️ **NOT intended for direct browser/shopper calls.**
+  > The sole storefront entrypoint is `/api/vton/2d/proxy` or `/api/widget/vton`.
+  > This endpoint is gated by a **service-level key** (`VTON_2D` service key),
+  > not a widget public key.
+
+  ### Authentication
+  `X-Manikan-Key` must contain a service-level API key checked by `authorizeServiceRequest`.
+
+  ### Form Fields
+  | Field       | Type   | Required | Description                                   |
+  |-------------|--------|----------|-----------------------------------------------|
+  | human_image | File   | ✅       | Person photo (image/*, max 5MB)               |
+  | product_id  | string | ✅       | Product ID — garment image fetched from DB    |
+  | session_id  | string | ❌       | Optional session ID for caching/tracking      |
+
+  ### SSRF Prevention
+  The garment image URL is fetched from the database (not client-supplied).
+  The URL is validated against an `VTON_ALLOWED_IMAGE_HOSTS` allowlist to
+  prevent the Python service being used as an SSRF primitive.
+
+  ### Category Aliases
+  Product categories are normalized: `"tops"` → `"shirt"`, `"trousers"` → `"pants"`, etc.
+  Unsupported categories return `422 UNSUPPORTED_CATEGORY`.
+
+  ### Timeout
+  150 seconds (VTON may take up to 120s for diffusion model inference + polling).
+
+  ### Success (200)
+  Returns the try-on image binary with appropriate `Content-Type`.
+}

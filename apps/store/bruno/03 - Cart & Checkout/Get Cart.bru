@@ -1,0 +1,36 @@
+meta {
+  name: Get Cart
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/cart
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/cart
+
+  Returns all cart items for the currently authenticated customer,
+  including computed `subtotal` (with discounts applied).
+
+  Returns an empty cart (`cartItems: [], subtotal: 0`) for unauthenticated requests
+  rather than a `401` — safe default for storefront hydration.
+
+  ### Success (200)
+  ```json
+  {
+    "cartItems": [
+      {
+        "id": "...",
+        "quantity": 2,
+        "product": { "name": "Cotton Shirt", "priceEgp": 450, "discountPct": 10 },
+        "variant": { "sizeLabel": "M", "sku": "SHIRT-001-M", "stock": 8 }
+      }
+    ],
+    "subtotal": 810
+  }
+  ```
+}

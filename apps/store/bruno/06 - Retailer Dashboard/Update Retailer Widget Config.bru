@@ -1,0 +1,42 @@
+meta {
+  name: Update Retailer Widget Config
+  type: http
+  seq: 9
+}
+
+patch {
+  url: {{baseUrl}}/api/retailer/widget
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "primaryColor": "#2D5016",
+    "accentColor": "#C5A028",
+    "language": "ar",
+    "showSizeRecommendation": true,
+    "showVton": true
+  }
+}
+
+docs {
+  ## PATCH /api/retailer/widget
+
+  Updates the widget UI settings for the authenticated retailer.
+  Settings are merged into the existing `widgetSettings` JSON field
+  (keys not sent are preserved).
+
+  ### Updatable Fields
+  | Field                  | Type    | Description                      |
+  |------------------------|---------|----------------------------------|
+  | primaryColor           | string  | Hex color for widget primary     |
+  | accentColor            | string  | Hex color for widget accents     |
+  | language               | string  | `"en"` or `"ar"`                 |
+  | showSizeRecommendation | boolean | Show recommendation tab          |
+  | showVton               | boolean | Show virtual try-on tab          |
+}

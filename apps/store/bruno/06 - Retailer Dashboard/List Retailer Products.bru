@@ -1,0 +1,42 @@
+meta {
+  name: List Retailer Products
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/retailer/products?page=1&limit=20
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/retailer/products
+
+  Returns all products owned by the authenticated retailer, paginated.
+  Includes inactive products (unlike the public `/api/products` endpoint).
+
+  ### Query Parameters
+  | Param | Type    | Description                |
+  |-------|---------|----------------------------|
+  | page  | integer | Page number (default: 1)   |
+  | limit | integer | Per page (default: 20)     |
+
+  ### Success (200)
+  ```json
+  {
+    "products": [
+      {
+        "id": "...",
+        "name": "Classic Cotton Shirt",
+        "isActive": true,
+        "priceEgp": 450,
+        "stock": 48,
+        "variants": [...]
+      }
+    ],
+    "total": 35,
+    "page": 1
+  }
+  ```
+}

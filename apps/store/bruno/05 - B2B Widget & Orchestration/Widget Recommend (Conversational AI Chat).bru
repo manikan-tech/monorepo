@@ -1,0 +1,80 @@
+meta {
+  name: Widget Recommend (Conversational AI Chat)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/widget/recommend
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Manikan-Key: {{apiKey}}
+  Origin: http://localhost:3000
+}
+
+body:json {
+  {
+    "session_id": "sess_abc123xyz789",
+    "messages": [
+      { "role": "user", "content": "My measurements: height 178cm, weight 75kg, chest 96cm, waist 82cm, hips 98cm. What size should I get?" }
+    ],
+    "betas": {
+      "height_cm": 178,
+      "weight_kg": 75,
+      "chest_cm": 96,
+      "waist_cm": 82,
+      "hips_cm": 98
+    },
+    "product_id": "{{productId}}",
+    "product_name": "Classic Cotton Shirt",
+    "selected_category": "shirt",
+    "intent": "size_recommendation"
+  }
+}
+
+docs {
+  ## POST /api/widget/recommend
+
+  **Conversational AI Chat Proxy.** Powers the embeddable recommendation widget's
+  chat interface. Proxies to the LangGraph-orchestrated FastAPI recommendation service.
+
+  ### Key Server-Side Enrichments (never from client)
+  - **`size_chart`** — fetched from Prisma by `product_id` (prevents chart fabrication)
+  - **`retailer_id`** — resolved from the API key (prevents cross-tenant data leakage)
+  - **`profile_context`** — authenticated customer's saved measurements & fit history
+  - **`available_categories/brands`** — scoped to this retailer's active products only
+
+  ### Body (key fields)
+  | Field              | Type     | Required | Description                                               |
+  |--------------------|----------|----------|-----------------------------------------------------------|
+  | session_id         | string   | ✅       | Unique conversation session ID (UUIDv4 recommended)       |
+  | messages           | array    | ✅       | Chat history `[{ role, content }]`                        |
+  | betas              | object   | ❌       | User measurements `{ height_cm, weight_kg, chest_cm, ... }` |
+  | product_id         | string   | ❌       | Product the shopper is viewing (enables size chart fetch) |
+  | product_name       | string   | ❌       | Display name for context                                  |
+  | selected_category  | string   | ❌       | Category hint for the agent                               |
+  | intent             | string   | ❌       | `"size_recommendation"`, `"product_search"`, etc.         |
+  | shown_product_ids  | string[] | ❌       | IDs already shown (avoids repetition)                     |
+  | catalog_products   | array    | ❌       | Client-side product cache the agent may reference         |
+
+  ### Success (200)
+  ```json
+  {
+    "success": true,
+    "reply": "Based on your measurements, I recommend size **L**...",
+    "recommended_size": "L",
+    "confidence_score": 0.92,
+    "explanation": "Your chest (96cm) fits within the L range (94–100cm).",
+    "provider": "STATIC-CALC"
+  }
+  ```
+
+  ### Static Fit-Range Short-Circuit
+  If the last user message matches sizing phrases (e.g. "what size fits me",
+  "use my saved measurements"), the route may resolve deterministically via
+  local `assessFitRange()` WITHOUT calling the LLM — faster and cheaper.
+}

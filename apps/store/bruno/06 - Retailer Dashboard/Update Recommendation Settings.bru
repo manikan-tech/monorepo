@@ -1,0 +1,38 @@
+meta {
+  name: Update Recommendation Settings
+  type: http
+  seq: 16
+}
+
+patch {
+  url: {{baseUrl}}/api/retailer/recommendation-settings
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "preferredProvider": "STATIC-CALC",
+    "confidenceThreshold": 0.80,
+    "enableOutOfScopeGuardrail": true,
+    "fallbackMessage": "Please contact our support team for sizing assistance."
+  }
+}
+
+docs {
+  ## PATCH /api/retailer/recommendation-settings
+
+  Updates AI recommendation engine settings for the authenticated retailer.
+
+  ### Body Fields
+  | Field                     | Type    | Description                                              |
+  |---------------------------|---------|----------------------------------------------------------|
+  | preferredProvider         | string  | `"STATIC-CALC"`, `"DEEPSEEK"`, `"OPENAI"`, `"AUTO"`     |
+  | confidenceThreshold       | float   | Minimum confidence to return a size (0.0–1.0)            |
+  | enableOutOfScopeGuardrail | boolean | Block non-fashion queries before LLM call                |
+  | fallbackMessage           | string  | Message shown when confidence is below threshold         |
+}

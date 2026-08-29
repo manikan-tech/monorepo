@@ -1,0 +1,22 @@
+meta {
+  name: Get Business Inquiry (Admin)
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/admin/inquiries/{{inquiryId}}
+  body: none
+  auth: none
+}
+
+vars {
+  inquiryId: clxxxxxxxxxxxxxxxxxxxxxxxx
+}
+
+docs {
+  ## GET /api/admin/inquiries/:id
+
+  Fetches a single B2B business inquiry submitted via the public landing page.
+  Admin panel use only.
+}

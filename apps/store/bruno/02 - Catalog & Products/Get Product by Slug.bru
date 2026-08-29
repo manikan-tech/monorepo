@@ -1,0 +1,40 @@
+meta {
+  name: Get Product by Slug
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/products/{{productSlug}}
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/products/:slug
+
+  Fetches all details for a single product including its variants,
+  category info, retailer widget settings, and related images.
+
+  ### Path Params
+  | Param | Type   | Description                                     |
+  |-------|--------|-------------------------------------------------|
+  | slug  | string | Product URL slug (e.g. `demo-cotton-shirt-001`) |
+
+  ### Success (200)
+  ```json
+  {
+    "product": {
+      "id": "...",
+      "name": "Classic Cotton Shirt",
+      "slug": "classic-cotton-shirt-001",
+      "priceEgp": 450,
+      "discountPct": 10,
+      "imageUrl": "https://...",
+      "category": "shirt",
+      "brand": "Manikan Essentials",
+      "variants": [...]
+    }
+  }
+  ```
+}

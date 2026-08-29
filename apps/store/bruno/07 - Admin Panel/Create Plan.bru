@@ -1,0 +1,42 @@
+meta {
+  name: Create Plan
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/admin/plans
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Enterprise",
+    "service": "RECOMMENDATION",
+    "quota": 50000,
+    "priceEgp": 4999,
+    "stripePriceId": "price_stripe_xxxxxxxxxx",
+    "isActive": true
+  }
+}
+
+docs {
+  ## POST /api/admin/plans
+
+  Creates a new subscription plan. Requires platform admin session.
+
+  ### Body
+  | Field         | Type    | Required | Description                                         |
+  |---------------|---------|----------|-----------------------------------------------------|
+  | name          | string  | ✅       | Plan display name                                   |
+  | service       | string  | ✅       | `"RECOMMENDATION"`, `"VTON_2D"`, `"BODY_MODELING"` |
+  | quota         | integer | ✅       | Monthly API call quota                              |
+  | priceEgp      | float   | ✅       | Monthly price in EGP                               |
+  | stripePriceId | string  | ❌       | Stripe Price ID for webhook reconciliation          |
+  | isActive      | boolean | ❌       | Whether plan appears in the retailer portal         |
+}

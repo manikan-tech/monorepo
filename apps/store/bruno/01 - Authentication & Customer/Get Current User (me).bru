@@ -1,0 +1,36 @@
+meta {
+  name: Get Current User (me)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/auth/me
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/auth/me
+
+  Returns the currently authenticated user's profile by reading
+  the session cookie. Useful for frontend hydration on page load.
+
+  ### Success (200)
+  ```json
+  {
+    "user": {
+      "id": "uuid",
+      "email": "customer@example.com",
+      "firstName": "Ahmed",
+      "lastName": "Hassan",
+      "role": "customer"
+    }
+  }
+  ```
+
+  ### Unauthenticated (200)
+  ```json
+  { "user": null }
+  ```
+}

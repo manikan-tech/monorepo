@@ -1,0 +1,42 @@
+meta {
+  name: Admin Login
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/admin/login
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "admin@manikan.io",
+    "password": "AdminPassword123!"
+  }
+}
+
+docs {
+  ## POST /api/admin/login
+
+  Authenticates a **Platform Admin** (separate from customer/retailer login).
+  Platform admins are stored in the `PlatformAdmin` table and are explicitly
+  blocked from logging in via `/api/auth/login`.
+
+  ### Success (200)
+  ```json
+  {
+    "success": true,
+    "admin": { "id": "...", "email": "admin@manikan.io" }
+  }
+  ```
+
+  ### Note
+  Regular customers and retailers cannot use this endpoint — they receive a
+  `403` if their email is found in a non-admin table.
+}

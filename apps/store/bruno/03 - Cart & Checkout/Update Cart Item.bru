@@ -1,0 +1,38 @@
+meta {
+  name: Update Cart Item
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/cart/{{cartItemId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "quantity": 3
+  }
+}
+
+docs {
+  ## PUT /api/cart/:id
+
+  Updates the quantity of a specific cart item.
+  Setting `quantity` to `0` removes the item.
+
+  ### Path Params
+  | Param | Type   | Description              |
+  |-------|--------|--------------------------|
+  | id    | string | CartItem Prisma ID       |
+
+  ### Body
+  | Field    | Type    | Required | Description            |
+  |----------|---------|----------|------------------------|
+  | quantity | integer | ✅       | New quantity (≥ 0)     |
+}

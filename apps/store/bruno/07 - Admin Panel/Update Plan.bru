@@ -1,0 +1,36 @@
+meta {
+  name: Update Plan
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/api/admin/plans/{{planId}}
+  body: json
+  auth: none
+}
+
+vars {
+  planId: clxxxxxxxxxxxxxxxxxxxxxxxx
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "quota": 60000,
+    "priceEgp": 5499,
+    "isActive": true
+  }
+}
+
+docs {
+  ## PATCH /api/admin/plans/:id
+
+  Updates a subscription plan. Only provided fields are changed.
+
+  > Updating `quota` affects **current** quota counters retroactively for
+  > all active subscriptions on this plan.
+}

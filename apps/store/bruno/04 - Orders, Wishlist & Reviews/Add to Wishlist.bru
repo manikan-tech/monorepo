@@ -1,0 +1,33 @@
+meta {
+  name: Add to Wishlist
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/wishlist
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "productId": "{{productId}}"
+  }
+}
+
+docs {
+  ## POST /api/wishlist
+
+  Adds a product to the authenticated customer's wishlist.
+  Idempotent — silently ignores duplicate saves.
+
+  ### Body
+  | Field     | Type   | Required | Description              |
+  |-----------|--------|----------|--------------------------|
+  | productId | string | ✅       | Prisma Product ID        |
+}

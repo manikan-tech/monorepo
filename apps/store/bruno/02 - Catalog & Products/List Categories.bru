@@ -1,0 +1,28 @@
+meta {
+  name: List Categories
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/categories
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/categories
+
+  Lists all product categories (name + slug + product count).
+  Used by navigation menus and filter panels.
+
+  ### Success (200)
+  ```json
+  {
+    "categories": [
+      { "id": "...", "name": "Shirts", "slug": "shirt", "productCount": 18 },
+      { "id": "...", "name": "Pants",  "slug": "pants", "productCount": 11 }
+    ]
+  }
+  ```
+}

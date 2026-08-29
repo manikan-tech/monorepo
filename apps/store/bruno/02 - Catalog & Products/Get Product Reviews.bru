@@ -1,0 +1,34 @@
+meta {
+  name: Get Product Reviews
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/products/{{productSlug}}/reviews
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/products/:slug/reviews
+
+  Lists all approved customer reviews for a specific product.
+
+  ### Success (200)
+  ```json
+  {
+    "reviews": [
+      {
+        "id": "...",
+        "rating": 5,
+        "comment": "Great fit and quality!",
+        "createdAt": "2025-01-15T10:00:00Z",
+        "customer": { "firstName": "Ahmed", "avatarUrl": "https://..." }
+      }
+    ],
+    "averageRating": 4.7,
+    "totalReviews": 23
+  }
+  ```
+}

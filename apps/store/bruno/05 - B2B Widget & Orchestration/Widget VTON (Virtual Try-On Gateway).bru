@@ -1,0 +1,61 @@
+meta {
+  name: Widget VTON (Virtual Try-On Gateway)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/widget/vton
+  body: multipartForm
+  auth: none
+}
+
+headers {
+  X-Manikan-Key: {{apiKey}}
+  Origin: http://localhost:3000
+}
+
+body:multipart-form {
+  human_image: @file(/path/to/person_photo.jpg)
+  product_id: {{productId}}
+}
+
+docs {
+  ## POST /api/widget/vton
+
+  **Public-key Virtual Try-On Gateway.** The widget endpoint for the
+  2D Virtual Try-On service. Gated by `X-Manikan-Key` and requires
+  a `VTON_2D` service subscription.
+
+  ### Authentication
+  - `X-Manikan-Key` header with a retailer widget API key
+  - The key must have an active `VTON_2D` subscription
+
+  ### Form Fields
+  | Field       | Type | Required | Constraints                    |
+  |-------------|------|----------|--------------------------------|
+  | human_image | File | ✅       | JPEG/PNG, non-empty, max 5MB   |
+  | product_id  | str  | ✅       | Must belong to this retailer   |
+
+  ### Processing
+  This endpoint internally calls `/api/vton/2d` (the service-key-protected
+  internal proxy) with the VTON_2D service key and forwards the result.
+
+  ### Success (200)
+  Returns the **generated try-on image** as a binary stream:
+  ```
+  Content-Type: image/jpeg  (or image/png)
+  Cache-Control: no-store, max-age=0
+  ```
+
+  ### Error Responses
+  | Status | Description                                     |
+  |--------|-------------------------------------------------|
+  | 400    | Invalid image or missing product_id             |
+  | 401    | Missing API key                                 |
+  | 403    | Key not activated / Origin not in allowlist     |
+  | 404    | Product not found                               |
+  | 429    | VTON quota exhausted                            |
+  | 503    | VTON_2D_SERVICE_KEY not configured              |
+  | 502    | Upstream VTON service unreachable               |
+}

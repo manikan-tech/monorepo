@@ -1,0 +1,28 @@
+meta {
+  name: Products by Category Slug
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/categories/shirt/products?page=1&limit=12
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/categories/:slug/products
+
+  Fetches all active products in a specific category, paginated.
+
+  ### Path Params
+  | Param | Type   | Description                              |
+  |-------|--------|------------------------------------------|
+  | slug  | string | Category slug (e.g. `shirt`, `pants`)    |
+
+  ### Query Parameters
+  | Param | Type    | Description                          |
+  |-------|---------|--------------------------------------|
+  | page  | integer | Page number (default: 1)             |
+  | limit | integer | Items per page (default: 12)         |
+}

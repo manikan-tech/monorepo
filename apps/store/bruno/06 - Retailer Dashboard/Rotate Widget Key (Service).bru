@@ -1,0 +1,33 @@
+meta {
+  name: Rotate Widget Key (Service)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/retailer/widget-key/RECOMMENDATION
+  body: none
+  auth: none
+}
+
+docs {
+  ## POST /api/retailer/widget-key/:service
+
+  Rotates (regenerates) the public widget API key for a specific service.
+
+  > ⚠️ **Destructive:** The old key is immediately invalidated.  
+  > Any `<script>` embed or storefront code using the old key will start failing.
+  > Update your embed snippet after rotating.
+
+  ### Path Params — Valid Services
+  `RECOMMENDATION`, `VTON_2D`, `BODY_MODELING`
+
+  ### Authentication
+  Requires a logged-in, **activated** retailer session cookie.
+  Pending/suspended accounts receive `403`.
+
+  ### Success (200)
+  ```json
+  { "apiKey": "mk_pub_newkeyxxxxxxxxxx" }
+  ```
+}

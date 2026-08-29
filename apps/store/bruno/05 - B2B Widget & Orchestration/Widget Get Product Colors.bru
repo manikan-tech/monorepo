@@ -1,0 +1,33 @@
+meta {
+  name: Widget Get Product Colors
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/widget/products/{{productId}}/colors
+  body: none
+  auth: none
+}
+
+headers {
+  X-Manikan-Key: {{apiKey}}
+  Origin: http://localhost:3000
+}
+
+docs {
+  ## GET /api/widget/products/:id/colors
+
+  Returns available color variants for a product.
+  Used by VTON widget to let shoppers select a garment color before try-on.
+
+  ### Success (200)
+  ```json
+  {
+    "colors": [
+      { "hex": "#FFFFFF", "label": "White", "imageUrl": "https://...", "inStock": true },
+      { "hex": "#000000", "label": "Black", "imageUrl": "https://...", "inStock": true }
+    ]
+  }
+  ```
+}

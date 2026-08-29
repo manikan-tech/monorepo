@@ -1,0 +1,22 @@
+meta {
+  name: Remove Cart Item
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/cart/{{cartItemId}}
+  body: none
+  auth: none
+}
+
+docs {
+  ## DELETE /api/cart/:id
+
+  Removes a single item from the cart by its ID.
+
+  ### Success (200)
+  ```json
+  { "message": "Item removed from cart" }
+  ```
+}

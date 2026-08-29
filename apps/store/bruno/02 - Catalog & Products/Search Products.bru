@@ -1,0 +1,33 @@
+meta {
+  name: Search Products
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/products/search?q=cotton+shirt&limit=10
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/products/search
+
+  Full-text search across product names, descriptions, categories, brands, and tags.
+  Uses pgvector semantic similarity when available; falls back to Prisma full-text.
+
+  ### Query Parameters
+  | Param | Type    | Description                               |
+  |-------|---------|-------------------------------------------|
+  | q     | string  | ✅ Search query (min 2 chars)             |
+  | limit | integer | Max results returned, defaults to `10`    |
+
+  ### Success (200)
+  ```json
+  {
+    "results": [
+      { "id": "...", "name": "Cotton Shirt", "slug": "...", "priceEgp": 450, "imageUrl": "..." }
+    ]
+  }
+  ```
+}

@@ -1,0 +1,43 @@
+meta {
+  name: Payment Webhook (reference only)
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/webhooks/payment
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  stripe-signature: t=1234567890,v1=xxxxxxxxxxxxxxxxxxxxxxxx
+}
+
+body:text {
+  {
+    "id": "evt_test_xxxxxxxxxx",
+    "type": "payment_intent.succeeded",
+    "data": {
+      "object": {
+        "id": "pi_test_xxxxxxxxxx",
+        "metadata": {
+          "orderId": "clxxxxxxxxxxxxxxxxxxxxxxxx"
+        }
+      }
+    }
+  }
+}
+
+docs {
+  ## POST /api/webhooks/payment  ⚠️ Do NOT call manually
+
+  Stripe webhook for **order payment** events (separate from subscription billing).
+  Handles `payment_intent.succeeded` → marks order as `CONFIRMED`.
+  Also handles `payment_intent.payment_failed` → marks order as `PAYMENT_FAILED`.
+
+  Like the billing webhook, verifies the Stripe signature before any action.
+
+  > **Testing:** Use `stripe listen --forward-to localhost:3000/api/webhooks/payment`
+}

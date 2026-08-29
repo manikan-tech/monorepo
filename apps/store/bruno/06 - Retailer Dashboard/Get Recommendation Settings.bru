@@ -1,0 +1,30 @@
+meta {
+  name: Get Recommendation Settings
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/api/retailer/recommendation-settings
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/retailer/recommendation-settings
+
+  Fetches the AI recommendation engine configuration for the retailer.
+  Includes LLM provider preference, confidence thresholds, and guardrail toggles.
+
+  ### Success (200)
+  ```json
+  {
+    "settings": {
+      "preferredProvider": "STATIC-CALC",
+      "confidenceThreshold": 0.75,
+      "enableOutOfScopeGuardrail": true,
+      "fallbackMessage": "Please consult our sizing guide for more help."
+    }
+  }
+  ```
+}
