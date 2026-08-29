@@ -13,6 +13,13 @@ function hasAnyMeasurement(v: Record<string, unknown>): boolean {
   return BODY_FIT_FIELDS.some((f) => v[f] !== undefined && v[f] !== null && v[f] !== "");
 }
 
+function buildRetailerScopedSlug(retailerId: string, productCode: string, productName: string): string {
+  return `${retailerId}-${productCode}-${productName}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
+}
+
 
 
 export async function POST(request: NextRequest) {
@@ -133,7 +140,10 @@ export async function POST(request: NextRequest) {
         create: {
           retailer: { connect: { id: user.sub } },
           productCode: productData.productCode,
-          slug: `${productData.productCode}-${productData.name}`.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          // Product slugs are globally unique, while CSV imports are scoped
+          // by retailerId + productCode. Include the retailer scope here so
+          // two retailers can import the same catalog identifiers safely.
+          slug: buildRetailerScopedSlug(user.sub, productData.productCode, productData.name),
           name: productData.name,
           category: productData.category,
           categoryRef: { connect: { id: category.id } },
