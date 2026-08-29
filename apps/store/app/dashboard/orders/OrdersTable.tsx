@@ -221,6 +221,8 @@ export default function OrdersTable({
                           ? "bg-orange-50 text-orange-700 border-orange-200"
                           : order.status === "SHIPPED"
                           ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                          : order.status === "CONFIRMED" || order.status === "PROCESSING"
+                          ? "bg-blue-50 text-blue-700 border-blue-200"
                           : "bg-yellow-50 text-yellow-700 border-yellow-200"
                       }`}
                     >
@@ -249,7 +251,7 @@ export default function OrdersTable({
                   <td className="px-6 py-4 text-right">
                     {updatingId === order.id ? (
                       <span className="text-xs text-forest-400 animate-pulse">
-                        Processing refund...
+                        Updating...
                       </span>
                     ) : canReturn ? (
                       <button

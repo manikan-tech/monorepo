@@ -14,6 +14,22 @@ function IconUsers() {
     </svg>
   );
 }
+function IconDollar() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="1" x2="12" y2="23"></line>
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+    </svg>
+  );
+}
+function IconTrendingUp() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+      <polyline points="17 6 23 6 23 12"></polyline>
+    </svg>
+  );
+}
 function IconCheck() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -51,17 +67,24 @@ function InquiryStatusBadge({ status }: { status: string }) {
 }
 
 export default async function AdminOverviewPage() {
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
   const [
     totalRetailers,
     activeRetailers,
+    newRetailersThisMonth,
     totalSessions,
     totalInquiries,
     newInquiries,
     recentInquiries,
     topRetailers,
+    activeSubscriptions,
   ] = await Promise.all([
     prisma.retailer.count(),
     prisma.retailer.count({ where: { isActivated: true } }),
+    prisma.retailer.count({ where: { createdAt: { gte: startOfMonth } } }),
     prisma.measurementSession.count(),
     prisma.businessInquiry.count(),
     prisma.businessInquiry.count({ where: { status: "NEW" } }),
@@ -75,7 +98,13 @@ export default async function AdminOverviewPage() {
       orderBy: { _count: { retailerId: "desc" } },
       take: 5,
     }),
+    prisma.subscription.findMany({
+      where: { status: "ACTIVE" },
+      include: { plan: true },
+    }),
   ]);
+
+  const mrr = activeSubscriptions.reduce((acc, sub) => acc + (sub.plan?.priceEgpMonthly || 0), 0);
 
   // Enrich top-retailer IDs with store names
   const retailerIds = topRetailers.map((r) => r.retailerId);
@@ -126,15 +155,17 @@ export default async function AdminOverviewPage() {
           </p>
         </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <AdminStatCard label="Total Retailers" value={totalRetailers} icon={<IconUsers />} delay={100} accent="forest" />
-        <AdminStatCard label="Active Retailers" value={activeRetailers} icon={<IconCheck />} delay={180} accent="green" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <AdminStatCard label="MRR" value={mrr} suffix=" EGP" icon={<IconDollar />} delay={100} accent="gold" />
+        <AdminStatCard label="Total Retailers" value={totalRetailers} icon={<IconUsers />} delay={140} accent="forest" />
+        <AdminStatCard label="New Retailers" value={newRetailersThisMonth} badge="This Month" icon={<IconTrendingUp />} delay={180} accent="green" />
+        <AdminStatCard label="Active Retailers" value={activeRetailers} icon={<IconCheck />} delay={220} accent="green" />
         <AdminStatCard label="Widget Sessions" value={totalSessions} icon={<IconSession />} delay={260} accent="gold" />
         <AdminStatCard
           label="New Inquiries"
           value={newInquiries}
           icon={<IconMail />}
-          delay={340}
+          delay={300}
           accent={newInquiries > 0 ? "gold" : "forest"}
         />
       </div>

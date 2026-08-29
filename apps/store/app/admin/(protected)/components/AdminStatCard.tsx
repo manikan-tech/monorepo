@@ -7,6 +7,7 @@ interface AdminStatCardProps {
   icon: React.ReactNode;
   delay?: number;
   accent?: "gold" | "forest" | "green" | "red";
+  badge?: string;
 }
 
 const ACCENT_MAP = {
@@ -47,6 +48,7 @@ export default function AdminStatCard({
   icon,
   delay = 0,
   accent = "forest",
+  badge,
 }: AdminStatCardProps) {
   const styles = ACCENT_MAP[accent];
 
@@ -60,9 +62,16 @@ export default function AdminStatCard({
         style={{ background: "linear-gradient(90deg, #C8966A, transparent)" }}
       />
       <div className="flex items-start justify-between mb-4">
-        <p className="text-xs font-semibold uppercase tracking-widest text-forest-700/60">
-          {label}
-        </p>
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-semibold uppercase tracking-widest text-forest-700/60">
+            {label}
+          </p>
+          {badge && (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-forest-400/70 bg-forest-100/60 px-1.5 py-0.5 rounded-full w-fit">
+              {badge}
+            </span>
+          )}
+        </div>
         <div
           className={`w-9 h-9 rounded-xl flex items-center justify-center ${styles.iconBg} ${styles.iconColor}`}
         >
