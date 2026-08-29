@@ -66,7 +66,14 @@ export async function POST(request: NextRequest) {
         select: { id: true },
     });
 
-    const isVerified = !!verifiedOrder;
+    if (!verifiedOrder) {
+        return NextResponse.json(
+            { error: "You must have a delivered order for this product to write a review." },
+            { status: 403 }
+        );
+    }
+
+    const isVerified = true;
 
     // Upsert review (one review per customer per product)
     const review = await prisma.review.upsert({

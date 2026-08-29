@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import ProductDataGrid from "./ProductDataGrid";
 import CsvUploadButton from "./CsvUploadButton";
 
+
 export default async function ProductsPage() {
   const user = await getAuthFromCookies();
 
