@@ -351,7 +351,9 @@ async def receive_clothing_photo(update: Update, context: ContextTypes.DEFAULT_T
         if not garment_url.startswith("http"):
             garment_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{garment_url}"
 
-        logger.info("Garment URL: %s", garment_url)
+        # Telegram file URLs may embed the bot token. Keep operational logs
+        # useful without writing credentials to Docker or host log storage.
+        logger.info("Downloaded garment image from Telegram")
 
         # ── Forward to the VTON FastAPI service ──────────────────────────
         async with httpx.AsyncClient(timeout=FASTAPI_TIMEOUT) as client:

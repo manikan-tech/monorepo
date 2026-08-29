@@ -2,7 +2,8 @@ name: manikan
 
 # Phase 1 production topology:
 #   Internet -> Caddy -> Store -> private workers (Body, Recommendation, VTON)
-# Only Caddy publishes host ports. `store`, `body`, `recommendation`, and `vton`
+#   Telegram -> private Bot -> Store/VTON
+# Only Caddy publishes host ports. `store`, `body`, `recommendation`, `vton`, and `bot`
 # communicate over the default Docker bridge network via service DNS; none has
 # a host port.
 services:
@@ -140,6 +141,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    logging: *json_logs
+
+  bot:
+    image: manikan-bot:phase1
+    build:
+      context: ../manikan-bot
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      store:
+        condition: service_healthy
+      vton:
+        condition: service_healthy
+    env_file:
+      - ${BOT_ENV_FILE:?Set BOT_ENV_FILE to a private Telegram Bot environment file}
     logging: *json_logs
 
 volumes:
