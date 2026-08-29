@@ -151,7 +151,7 @@ export default function ServiceKeyPanel({
 
   const { apiKey, isActivated, allowedOrigins, subscription } = data;
   const maskedKey = apiKey ? `${apiKey.substring(0, 8)}••••••••${apiKey.substring(apiKey.length - 4)}` : "";
-  const snippet = `<script src="${scriptSrc}" data-retailer-key="${isRevealed ? apiKey : maskedKey}" data-product-id="PRODUCT_ID"></script>`;
+  const snippet = `<script src="${scriptSrc}" data-retailer-key="${isRevealed ? apiKey : maskedKey}" data-product-code="YOUR_PRODUCT_CODE"></script>`;
 
   return (
     <div className="bg-white rounded-2xl shadow-card border border-manikan-border p-8 h-full transition-all duration-300 hover:shadow-lg space-y-8 flex flex-col">
@@ -286,7 +286,7 @@ export default function ServiceKeyPanel({
         <label className="block text-sm font-medium text-forest-900 mb-2">Embed Snippet</label>
         <p className="text-sm text-manikan-text-secondary mb-3">
           Place this snippet on any product page where you want the widget to appear, replacing{" "}
-          <code>PRODUCT_ID</code> with that product&apos;s id from your catalog.
+          <code>YOUR_PRODUCT_CODE</code> with the product code from your catalog.
         </p>
         <div className="relative group">
           <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-xs font-mono overflow-x-auto">
@@ -294,7 +294,7 @@ export default function ServiceKeyPanel({
           </pre>
           <button
             type="button"
-            onClick={() => copyToClipboard(`<script src="${scriptSrc}" data-retailer-key="${apiKey}" data-product-id="PRODUCT_ID"></script>`, "Snippet")}
+            onClick={() => copyToClipboard(`<script src="${scriptSrc}" data-retailer-key="${apiKey}" data-product-code="YOUR_PRODUCT_CODE"></script>`, "Snippet")}
             className="absolute top-3 right-3 text-gray-400 hover:text-white p-1 rounded transition-colors opacity-0 group-hover:opacity-100"
             title="Copy snippet with full key"
           >

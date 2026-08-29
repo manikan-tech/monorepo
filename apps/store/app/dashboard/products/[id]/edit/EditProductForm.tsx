@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { updateProduct } from "../../../../actions/product";
+import ProductImageField from "../../ProductImageField";
 
 export default function EditProductForm({ product }: { product: any }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,10 +93,7 @@ export default function EditProductForm({ product }: { product: any }) {
           <input required type="number" step="0.01" name="priceEgp" defaultValue={product.priceEgp} className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400" />
         </div>
 
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-forest-900">Image URL *</label>
-          <input required type="url" name="imageUrl" defaultValue={product.imageUrl} placeholder="https://..." className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400" />
-        </div>
+        <ProductImageField defaultValue={product.imageUrl} />
 
         <div className="space-y-1 md:col-span-2 pt-6 border-t border-manikan-border mt-4">
           <div className="flex items-center justify-between mb-4">

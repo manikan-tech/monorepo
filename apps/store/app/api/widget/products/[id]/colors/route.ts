@@ -25,10 +25,14 @@ export async function GET(
     }
     const { retailer } = auth;
 
-    const { id } = await params;
+    const { id: productIdentifier } = await params;
 
-    const product = await prisma.product.findUnique({
-        where: { id },
+    const product = await prisma.product.findFirst({
+        where: {
+            retailerId: retailer.id,
+            isActive: true,
+            OR: [{ id: productIdentifier }, { productCode: productIdentifier }],
+        },
         select: {
             id: true,
             name: true,
@@ -39,7 +43,7 @@ export async function GET(
         },
     });
 
-    if (!product || product.retailerId !== retailer.id) {
+    if (!product) {
         return NextResponse.json(
             { error: "Product not found" },
             { status: 404, headers: CORS_HEADERS }

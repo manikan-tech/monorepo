@@ -2,6 +2,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const fallbackSupabaseHost = 'lhuudputwdjphaunimvn.supabase.co';
+let supabaseStorageHost = fallbackSupabaseHost;
+try {
+  supabaseStorageHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || `https://${fallbackSupabaseHost}`).hostname;
+} catch {
+  // Keep the known project host as a safe development fallback. Invalid
+  // deployment configuration must not broaden Next Image's remote allowlist.
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -13,7 +21,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'lhuudputwdjphaunimvn.supabase.co',
+        hostname: supabaseStorageHost,
         port: '',
         pathname: '/storage/v1/object/public/**',
       },

@@ -62,16 +62,20 @@ export async function OPTIONS() {
  * on its own.
  */
 async function resolveGarment(
-    productId: string,
+    productIdentifier: string,
     size: string,
     retailerId: string,
     origin: string
 ) {
-    const product = await prisma.product.findUnique({
-        where: { id: productId },
+    const product = await prisma.product.findFirst({
+        where: {
+            retailerId,
+            isActive: true,
+            OR: [{ id: productIdentifier }, { productCode: productIdentifier }],
+        },
         include: { variants: true },
     });
-    if (!product || !product.isActive || product.retailerId !== retailerId) {
+    if (!product) {
         return { ok: false as const, status: 404, error: "Product not found" };
     }
     const variant = product.variants.find((v) => v.sizeLabel === size);

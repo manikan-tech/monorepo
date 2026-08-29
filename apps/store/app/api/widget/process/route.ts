@@ -76,8 +76,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const product = await prisma.product.findUnique({
-    where: { id: body.productId },
+  const product = await prisma.product.findFirst({
+    where: {
+      retailerId: auth.retailer.id,
+      isActive: true,
+      OR: [{ id: body.productId }, { productCode: body.productId }],
+    },
     select: {
       id: true,
       retailerId: true,
@@ -103,7 +107,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   });
 
   // Do not disclose products owned by another retailer.
-  if (!product || !product.isActive || product.retailerId !== auth.retailer.id) {
+  if (!product) {
     return NextResponse.json({ error: "Product not found" }, { status: 404, headers: CORS_HEADERS });
   }
 

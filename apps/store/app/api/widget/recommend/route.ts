@@ -80,10 +80,16 @@ export async function POST(request: NextRequest) {
     let sizeChart: string | undefined;
     let productDetailsContext: string | undefined;
     let isProductDetailsQuestion = false;
+    let resolvedProductId: string | undefined;
     if (product_id) {
-        const product = await prisma.product.findUnique({
-            where: { id: product_id },
+        const product = await prisma.product.findFirst({
+            where: {
+                retailerId: retailer.id,
+                isActive: true,
+                OR: [{ id: product_id }, { productCode: product_id }],
+            },
             select: {
+                id: true,
                 retailerId: true,
                 name: true,
                 category: true,
@@ -92,12 +98,13 @@ export async function POST(request: NextRequest) {
                 description: true,
             },
         });
-        if (!product || product.retailerId !== retailer.id) {
+        if (!product) {
             return NextResponse.json(
                 { error: "Product not found" },
                 { status: 404, headers: CORS_HEADERS }
             );
         }
+        resolvedProductId = product.id;
 
         // Let the existing AI answer the product-detail question, but give it
         // a trusted selected-product brief so each question can receive a
@@ -111,7 +118,7 @@ export async function POST(request: NextRequest) {
         // ingested body-fit data yet (builder returns null then). That is
         // not an error: omitting size_chart routes the agent to its
         // ask-for-measurements branch instead of a fabricated match.
-        const csv = await buildBodyFitChartCsv(product_id, retailer.id);
+        const csv = await buildBodyFitChartCsv(product.id, retailer.id);
         if (csv) sizeChart = csv;
     }
 
@@ -158,7 +165,7 @@ export async function POST(request: NextRequest) {
                     ? [...messages, { role: "system", content: productDetailsContext }]
                     : messages,
                 betas,
-                product_id,
+                product_id: resolvedProductId,
                 retailer_id: retailer.id,
                 product_detail_question: isProductDetailsQuestion,
                 intent,

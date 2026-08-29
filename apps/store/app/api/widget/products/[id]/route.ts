@@ -41,16 +41,23 @@ export async function GET(
     }
     const { retailer } = auth;
 
-    const { id } = await params;
+    const { id: productIdentifier } = await params;
 
-    const product = await prisma.product.findUnique({
-        where: { id },
+    // Retailer sites know their own stable catalog identifier, not our
+    // database UUID. Accept the tenant-scoped productCode as the preferred
+    // external identifier while preserving UUID callers during migration.
+    const product = await prisma.product.findFirst({
+        where: {
+            retailerId: retailer.id,
+            isActive: true,
+            OR: [{ id: productIdentifier }, { productCode: productIdentifier }],
+        },
         include: { variants: true },
     });
 
     // Existence + tenant isolation. 404 (not 403) so we never reveal that
     // another tenant's product exists.
-    if (!product || !product.isActive || product.retailerId !== retailer.id) {
+    if (!product) {
         return NextResponse.json(
             { error: "Product not found" },
             { status: 404, headers: CORS_HEADERS }

@@ -40,7 +40,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const product = await prisma.product.findFirst({
-      where: { id: productId, retailerId: auth.retailer.id, isActive: true },
+      where: {
+        retailerId: auth.retailer.id,
+        isActive: true,
+        OR: [{ id: productId }, { productCode: productId }],
+      },
       select: { id: true },
     });
     if (!product) {

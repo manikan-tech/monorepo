@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { createProduct } from "../../../actions/product";
+import ProductImageField from "../ProductImageField";
 
 export default function AddProductPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -231,18 +232,7 @@ export default function AddProductPage() {
             </div>
           </div>
 
-          <div className="space-y-1 md:col-span-2">
-            <label className="text-sm font-medium text-forest-900" htmlFor="imageUrl">Product Image URL *</label>
-            <p className="text-xs text-manikan-text-secondary mb-2">For this version, please paste a direct link to the product image (e.g. https://example.com/shirt.jpg)</p>
-            <input
-              required
-              type="url"
-              id="imageUrl"
-              name="imageUrl"
-              placeholder="https://..."
-              className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent transition-shadow"
-            />
-          </div>
+          <ProductImageField />
         </div>
 
         <div className="mt-8 flex justify-end space-x-4 pt-6 border-t border-manikan-border">
