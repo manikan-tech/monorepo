@@ -402,15 +402,16 @@ model ProductVariant {
 // ─── Customer ───────────────────────────────────────────────────
 
 model Customer {
-  id        String   @id @default(cuid())
-  authId    String   @unique
-  email     String   @unique
-  firstName String
-  lastName  String
-  phone     String?
-  avatarUrl String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  authId         String   @unique
+  email          String   @unique
+  firstName      String
+  lastName       String
+  phone          String?
+  avatarUrl      String?
+  telegramChatId String?  @unique // linked Telegram chat_id
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   addresses Address[]
   cartItems CartItem[]
@@ -418,6 +419,7 @@ model Customer {
   orders    Order[]
   reviews   Review[]
   sessions  MeasurementSession[]
+  botUsages BotUsage[]
 }
 
 // ─── Address ────────────────────────────────────────────────────
@@ -582,4 +584,19 @@ model MeasurementSession {
   retailer Retailer  @relation(fields: [retailerId], references: [id], onDelete: Cascade)
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   product  Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+// ─── Bot Usage (Telegram bot metering) ──────────────────────────
+
+// One row per bot generation. The bot counts rows in the current
+// calendar month against the configured monthly quota.
+model BotUsage {
+  id         String   @id @default(cuid())
+  customerId String
+  action     String   @default("VTON_GENERATION") // future-proof for other actions
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
 }

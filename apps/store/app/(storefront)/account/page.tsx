@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCustomerFromCookies } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
 import { redirect } from "next/navigation";
+import TelegramIdCard from "../../../components/account/TelegramIdCard";
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -99,6 +100,9 @@ export default async function AccountPage() {
               Edit Profile
             </Link>
           </div>
+
+          {/* Telegram Bot ID */}
+          <TelegramIdCard customerId={customer.id} />
 
           {/* Quick Links */}
           <div className="bg-white rounded-3xl p-6 border border-forest-900/5 shadow-soft">
