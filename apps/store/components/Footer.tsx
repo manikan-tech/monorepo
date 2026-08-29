@@ -43,6 +43,14 @@ export default function Footer() {
             >
               Size Assistant
             </a>
+            <a
+              href="https://t.me/ManikanBot"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex"
+            >
+              Telegram Bot
+            </a>
             <Link href="/account" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">My Account</Link>
           </div>
 
@@ -52,7 +60,6 @@ export default function Footer() {
             <Link href="/business" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">B2B Integration</Link>
             <Link href="/contact" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Contact Sales</Link>
             <Link href="/login" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Retailer Login</Link>
-            <Link href="/admin/login" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Admin Portal</Link>
           </div>
 
           {/* Links Col 3 */}
