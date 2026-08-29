@@ -1156,94 +1156,104 @@ async def call_llm_with_fallback(
         )
 
     try:
-        response = await client.chat.completions.create(
-            model="deepseek-chat",
-            messages=payload,
-            response_format={"type": "json_object"},
-            temperature=0.0,
-        )
-
-        raw_content = (
-            response.choices[0].message.content
-            or ""
-        )
-
-        try:
-            parsed = json.loads(
-                _strip_json_fences(raw_content)
+        # An occasional successful HTTP response has no usable content. Retry
+        # that narrow transient condition once before callers select their
+        # existing deterministic/degraded fallback. This matches the
+        # classifier's retry policy and never retries normal completions.
+        for llm_attempt in range(2):
+            response = await client.chat.completions.create(
+                model="deepseek-chat",
+                messages=payload,
+                response_format={"type": "json_object"},
+                temperature=0.0,
             )
-        except json.JSONDecodeError:
-            parsed = {
-                "message": raw_content.strip(),
-                "action": fallback_action.value,
-            }
 
-        if isinstance(parsed, list):
-            if parsed and isinstance(parsed[0], dict):
-                parsed = parsed[0]
-            else:
+            raw_content = (
+                response.choices[0].message.content
+                or ""
+            )
+
+            try:
+                parsed = json.loads(
+                    _strip_json_fences(raw_content)
+                )
+            except json.JSONDecodeError:
                 parsed = {
                     "message": raw_content.strip(),
                     "action": fallback_action.value,
                 }
 
-        if not isinstance(parsed, dict):
-            parsed = {
-                "message": raw_content.strip(),
-                "action": fallback_action.value,
+            if isinstance(parsed, list):
+                if parsed and isinstance(parsed[0], dict):
+                    parsed = parsed[0]
+                else:
+                    parsed = {
+                        "message": raw_content.strip(),
+                        "action": fallback_action.value,
+                    }
+
+            if not isinstance(parsed, dict):
+                parsed = {
+                    "message": raw_content.strip(),
+                    "action": fallback_action.value,
+                }
+
+            if "message" not in parsed:
+                for alternate_key in (
+                    "reply",
+                    "text",
+                    "response",
+                    "content",
+                ):
+                    if alternate_key in parsed:
+                        parsed["message"] = parsed.pop(
+                            alternate_key
+                        )
+                        break
+
+            message = str(parsed.get("message") or "").strip()
+            if not message:
+                logger.warning(
+                    "workflow_event=llm_empty_message action=%s attempt=%d",
+                    fallback_action.value,
+                    llm_attempt,
+                )
+                if fallback_action == ActionType.FETCH_PRODUCTS:
+                    # Product-fetch context: a neutral caption is fine — the cards are the content.
+                    parsed["message"] = "Here are some options that may match what you're looking for."
+                elif llm_attempt == 0:
+                    await asyncio.sleep(0.4)
+                    continue
+                else:
+                    # Raise so each caller can apply its own contextually-correct fallback
+                    # (GREETING → "You're welcome!", CATALOG_META → deterministic catalog facts,
+                    # PROFILE → profile summary, general LLM → degraded technical message).
+                    # Injecting "I'm having trouble..." here would suppress all caller fallbacks.
+                    raise ValueError("llm_empty_message")
+
+            valid_actions = {
+                action.value
+                for action in ActionType
             }
 
-        if "message" not in parsed:
-            for alternate_key in (
-                "reply",
-                "text",
-                "response",
-                "content",
-            ):
-                if alternate_key in parsed:
-                    parsed["message"] = parsed.pop(
-                        alternate_key
-                    )
-                    break
+            if parsed.get("action") not in valid_actions:
+                parsed["action"] = fallback_action.value
 
-        if not parsed.get("message"):
-            logger.warning(
-                "workflow_event=llm_empty_message action=%s",
-                fallback_action.value,
-            )
-            if fallback_action == ActionType.FETCH_PRODUCTS:
-                # Product-fetch context: a neutral caption is fine — the cards are the content.
-                parsed["message"] = "Here are some options that may match what you're looking for."
-            else:
-                # Raise so each caller can apply its own contextually-correct fallback
-                # (GREETING → "You're welcome!", CATALOG_META → deterministic catalog facts,
-                # PROFILE → profile summary, general LLM → degraded technical message).
-                # Injecting "I'm having trouble..." here would suppress all caller fallbacks.
-                raise ValueError("llm_empty_message")
+            try:
+                result = RecommendationOutput.model_validate(
+                    parsed
+                )
+            except ValidationError:
+                result = RecommendationOutput(
+                    action=fallback_action,
+                    message=str(
+                        parsed.get("message") or raw_content
+                    ).strip(),
+                )
 
-        valid_actions = {
-            action.value
-            for action in ActionType
-        }
+            result.provider = "DEEPSEEK"
 
-        if parsed.get("action") not in valid_actions:
-            parsed["action"] = fallback_action.value
-
-        try:
-            result = RecommendationOutput.model_validate(
-                parsed
-            )
-        except ValidationError:
-            result = RecommendationOutput(
-                action=fallback_action,
-                message=str(
-                    parsed.get("message") or raw_content
-                ).strip(),
-            )
-
-        result.provider = "DEEPSEEK"
-
-        return result, "DEEPSEEK"
+            return result, "DEEPSEEK"
 
     except Exception as exc:
         logger.warning(

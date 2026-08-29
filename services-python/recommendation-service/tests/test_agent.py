@@ -1,10 +1,89 @@
 import json
 import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 import pytest
 
 from app import agent
 from app.agent import compute_recommended_size, fit_reasoning_agent
 from app.schemas import ActionType, MeasurementInput, RecommendationOutput
+
+
+def _deepseek_completion(content: str):
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+    )
+
+
+def _patch_deepseek_client(monkeypatch, responses: list[str]):
+    calls = []
+
+    async def create(**_kwargs):
+        calls.append(None)
+        return _deepseek_completion(responses.pop(0))
+
+    client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=create)
+        )
+    )
+    monkeypatch.setattr(
+        agent,
+        "get_settings",
+        lambda: SimpleNamespace(deepseek_api_key="test-key"),
+    )
+    monkeypatch.setattr(agent, "AsyncOpenAI", lambda **_kwargs: client)
+    return calls
+
+
+def test_llm_retries_once_after_empty_response(monkeypatch):
+    calls = _patch_deepseek_client(
+        monkeypatch,
+        ["", '{"message":"A relaxed cotton shirt.","action":"provide_recommendation"}'],
+    )
+    sleep = AsyncMock()
+    monkeypatch.setattr(agent.asyncio, "sleep", sleep)
+
+    result, provider = asyncio.run(
+        agent.call_llm_with_fallback([{"role": "user", "content": "Tell me about this shirt"}])
+    )
+
+    assert len(calls) == 2
+    sleep.assert_awaited_once_with(0.4)
+    assert result.message == "A relaxed cotton shirt."
+    assert provider == "DEEPSEEK"
+
+
+def test_llm_raises_after_two_empty_responses(monkeypatch):
+    calls = _patch_deepseek_client(monkeypatch, ["", ""])
+    sleep = AsyncMock()
+    monkeypatch.setattr(agent.asyncio, "sleep", sleep)
+
+    with pytest.raises(ValueError, match="llm_empty_message"):
+        asyncio.run(
+            agent.call_llm_with_fallback([{"role": "user", "content": "Help me choose"}])
+        )
+
+    assert len(calls) == 2
+    sleep.assert_awaited_once_with(0.4)
+
+
+def test_product_fetch_keeps_existing_empty_response_fallback(monkeypatch):
+    calls = _patch_deepseek_client(monkeypatch, [""])
+    sleep = AsyncMock()
+    monkeypatch.setattr(agent.asyncio, "sleep", sleep)
+
+    result, provider = asyncio.run(
+        agent.call_llm_with_fallback(
+            [{"role": "user", "content": "Show me shirts"}],
+            fallback_action=ActionType.FETCH_PRODUCTS,
+        )
+    )
+
+    assert len(calls) == 1
+    sleep.assert_not_awaited()
+    assert result.message == "Here are some options that may match what you're looking for."
+    assert provider == "DEEPSEEK"
 
 
 def _sample_size_chart():
