@@ -46,6 +46,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+INSTRUCTIONS = (
+    "*How to use:*\n"
+    "1️⃣ Send a photo of yourself\n"
+    "2️⃣ Pick the clothing category\n"
+    "3️⃣ Send a photo of the clothing item\n"
+    "4️⃣ Wait a moment and get your result!\n\n"
+    "Send /cancel at any time to start over.\n"
+    "Send /unlink to disconnect your Manikan account."
+)
+
 # ── Conversation states ──────────────────────────────────────────────────────
 WAITING_MANIKAN_ID, WAITING_PERSON, WAITING_CATEGORY, WAITING_CLOTHING = range(4)
 
@@ -163,6 +173,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text(
             f"Welcome back, {user_data['firstName']}! 👋\n"
             f"You have *{credits}* credits remaining this month.\n\n"
+            f"{INSTRUCTIONS}\n\n"
             "Send me your photo 📸",
             parse_mode="Markdown",
         )
@@ -234,6 +245,7 @@ async def receive_manikan_id(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text(
         f"Account linked! ✅ Welcome, {user_data['firstName']}! 🎉\n"
         f"You have *{credits}* credits remaining this month.\n\n"
+        f"{INSTRUCTIONS}\n\n"
         "Send me your photo 📸",
         parse_mode="Markdown",
     )
@@ -246,15 +258,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(
         "🤖 *Manikan Virtual Try-On Bot*\n\n"
         "I let you see how clothes look on you using AI!\n\n"
-        "*How to use:*\n"
-        "1️⃣ Send /start\n"
-        "2️⃣ Paste your Manikan ID (first time only)\n"
-        "3️⃣ Send a photo of yourself\n"
-        "4️⃣ Pick the clothing category\n"
-        "5️⃣ Send a photo of the clothing item\n"
-        "6️⃣ Wait a moment and get your result!\n\n"
-        "Send /cancel at any time to start over.\n"
-        "Send /unlink to disconnect your Manikan account.",
+        f"{INSTRUCTIONS}",
         parse_mode="Markdown",
     )
 
@@ -298,8 +302,9 @@ async def receive_person_photo(update: Update, context: ContextTypes.DEFAULT_TYP
     logger.info("Received person photo (file_id=%s)", photo.file_id)
 
     await update.message.reply_text(
-        "Got it! Now pick the clothing category 👇",
+        f"Got it! Now pick the clothing category 👇\n\n{INSTRUCTIONS}",
         reply_markup=CATEGORY_KEYBOARD,
+        parse_mode="Markdown",
     )
     return WAITING_CATEGORY
 
@@ -317,7 +322,7 @@ async def receive_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     await query.edit_message_text(
         f"Category: *{category.capitalize()}* ✅\n\n"
-        "Now send me the clothing item photo 👕",
+        f"Now send me the clothing item photo 👕\n\n{INSTRUCTIONS}",
         parse_mode="Markdown",
     )
     return WAITING_CLOTHING

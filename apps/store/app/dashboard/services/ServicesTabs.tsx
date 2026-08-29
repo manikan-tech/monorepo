@@ -8,6 +8,7 @@ export default function ServicesTabs() {
 
   const tabs = [
     { name: "Overview", href: "/dashboard/services" },
+    { name: "Plans", href: "/dashboard/services/plans" },
     { name: "Body Modeling", href: "/dashboard/services/body-modeling" },
     { name: "Recommendations", href: "/dashboard/services/recommendations" },
   ];

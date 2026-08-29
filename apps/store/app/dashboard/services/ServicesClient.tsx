@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import Link from "next/link";
 
 // Inline SVGs to replace lucide-react
 const Zap = ({ className }: { className?: string }) => (
@@ -72,51 +71,6 @@ export default function ServicesClient({
 }: {
   subscriptions: SubscriptionForService[];
 }) {
-  const router = useRouter();
-  const [busyService, setBusyService] = useState<ServiceId | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<Record<ServiceId, string>>(() => {
-    const initial = {} as Record<ServiceId, string>;
-    for (const { service, subscription, plans } of subscriptions) {
-      initial[service] = subscription?.plan?.id ?? plans[0]?.id ?? "";
-    }
-    return initial;
-  });
-  const [error, setError] = useState<{ service: ServiceId; message: string } | null>(null);
-
-  const handleCheckout = async (service: ServiceId) => {
-    const planId = selectedPlan[service];
-    if (!planId) return;
-
-    setBusyService(service);
-    setError(null);
-    try {
-      const res = await fetch("/api/retailer/billing/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to start checkout");
-      }
-
-      if (data.url) {
-        // Paid plan: Stripe redirects back to /dashboard/services when done.
-        window.location.href = data.url;
-        return;
-      }
-
-      // Free plan: activated immediately, nothing to redirect to.
-      router.refresh();
-    } catch (err) {
-      setError({
-        service,
-        message: err instanceof Error ? err.message : "Something went wrong.",
-      });
-    } finally {
-      setBusyService(null);
-    }
-  };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -128,9 +82,6 @@ export default function ServicesClient({
         const percentage = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
         const isWarning = percentage >= 80;
         const isDanger = percentage >= 100;
-        const isBusy = busyService === service;
-        const hasOtherTiers = plans.length > 1;
-        const chosenPlanIsCurrent = selectedPlan[service] === plan?.id;
 
         return (
           <div
@@ -190,44 +141,12 @@ export default function ServicesClient({
             )}
 
             <div className="mt-auto pt-2 space-y-3">
-              {hasOtherTiers && (
-                <select
-                  value={selectedPlan[service] ?? ""}
-                  onChange={(e) =>
-                    setSelectedPlan((prev) => ({ ...prev, [service]: e.target.value }))
-                  }
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                >
-                  {plans.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} — {p.priceEgpMonthly > 0 ? `${p.priceEgpMonthly} EGP/mo` : "Free"}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              <button
-                onClick={() => handleCheckout(service)}
-                disabled={isBusy || (chosenPlanIsCurrent && !!plan)}
-                className={`w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-60 ${
-                  plan
-                    ? "bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100"
-                    : "bg-gray-900 text-white hover:bg-gray-800"
-                }`}
+              <Link
+                href="/dashboard/services/plans"
+                className="w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100"
               >
-                {!plan && <Zap className="w-4 h-4" />}
-                {isBusy
-                  ? "Loading..."
-                  : plan
-                    ? chosenPlanIsCurrent
-                      ? "Current plan"
-                      : "Change plan"
-                    : "Subscribe"}
-              </button>
-
-              {error?.service === service && (
-                <p className="text-xs text-red-600 text-center">{error.message}</p>
-              )}
+                View & Upgrade Plans
+              </Link>
             </div>
           </div>
         );

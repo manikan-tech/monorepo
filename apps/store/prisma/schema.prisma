@@ -402,24 +402,26 @@ model ProductVariant {
 // ─── Customer ───────────────────────────────────────────────────
 
 model Customer {
-  id             String   @id @default(cuid())
-  authId         String   @unique
-  email          String   @unique
-  firstName      String
-  lastName       String
-  phone          String?
-  avatarUrl      String?
-  telegramChatId String?  @unique // linked Telegram chat_id
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  authId              String   @unique
+  email               String   @unique
+  firstName           String
+  lastName            String
+  phone               String?
+  avatarUrl           String?
+  telegramChatId      String?  @unique // linked Telegram chat_id
+  purchasedBotCredits Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  addresses Address[]
-  cartItems CartItem[]
-  wishlist  Wishlist[]
-  orders    Order[]
-  reviews   Review[]
-  sessions  MeasurementSession[]
-  botUsages BotUsage[]
+  addresses    Address[]
+  cartItems    CartItem[]
+  wishlist     Wishlist[]
+  orders       Order[]
+  reviews      Review[]
+  sessions     MeasurementSession[]
+  botUsages    BotUsage[]
+  botPurchases BotPurchase[]
 }
 
 // ─── Address ────────────────────────────────────────────────────
@@ -599,4 +601,33 @@ model BotUsage {
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId, createdAt])
+}
+
+// ─── Bot Plans (Dynamic pricing for Telegram bot) ───────────────
+
+model BotPlan {
+  id           String   @id @default(cuid())
+  name         String   // e.g. "Basic", "Pro"
+  credits      Int      // e.g. 50, 120
+  priceInCents Int      // e.g. 500 ($5.00)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  purchases    BotPurchase[]
+}
+
+model BotPurchase {
+  id              String   @id @default(cuid())
+  customerId      String
+  botPlanId       String
+  amountPaidCents Int
+  stripeSessionId String   @unique
+  createdAt       DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  plan     BotPlan  @relation(fields: [botPlanId], references: [id], onDelete: Restrict)
+
+  @@index([customerId])
+  @@index([botPlanId])
 }
