@@ -50,13 +50,13 @@ export async function POST(request: NextRequest) {
       if (!productsMap.has(pid)) {
         productsMap.set(pid, {
           productCode: String(pid),
-          name: row.product_name,
-          category: row.category,
-          gender: row.gender,
-          brand: row.brand,
-          fabric: row.fabric,
-          priceEgp: Number(row.price_egp),
-          imageUrl: row.image_url,
+          name: row.product_name || "",
+          category: row.category || "",
+          gender: row.gender || "",
+          brand: row.brand || "",
+          fabric: row.fabric || "",
+          priceEgp: Number(row.price_egp) || 0,
+          imageUrl: row.image_url || "",
           variants: [],
           stock: 0,
         });
@@ -68,8 +68,8 @@ export async function POST(request: NextRequest) {
       p.stock += stockForVariant;
       
       p.variants.push({
-        sku: `${pid}-${row.size_label}`,
-        sizeLabel: row.size_label,
+        sku: `${user.sub}-${pid}-${String(row.size_label)}`,
+        sizeLabel: String(row.size_label),
         stock: stockForVariant,
         // Raw parsed values, deliberately NOT coerced with `|| null` here --
         // that silently turned 0 and malformed values into null with no
@@ -131,12 +131,12 @@ export async function POST(request: NextRequest) {
           stock: productData.stock,
         },
         create: {
-          retailerId: user.sub,
+          retailer: { connect: { id: user.sub } },
           productCode: productData.productCode,
           slug: `${productData.productCode}-${productData.name}`.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
           name: productData.name,
           category: productData.category,
-          categoryId: category.id,
+          categoryRef: { connect: { id: category.id } },
           gender: productData.gender,
           brand: productData.brand,
           fabric: productData.fabric,
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
                stock: v.stock,
             },
             create: {
-               productId: product.id,
+               product: { connect: { id: product.id } },
                sku: v.sku,
                sizeLabel: v.sizeLabel,
                stock: v.stock,

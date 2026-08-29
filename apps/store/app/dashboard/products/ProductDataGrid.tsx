@@ -2,6 +2,8 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
+import Modal from "../../../components/Modal";
+
 type Product = {
   id: string;
   name: string;
@@ -22,6 +24,10 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
   const [filterStock, setFilterStock] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
+
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
@@ -193,20 +199,7 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
                     </Link>
                     <button 
                       className="text-sm px-3 py-1.5 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                      onClick={async () => {
-                        if (confirm('Are you sure you want to delete this product?')) {
-                          try {
-                            const res = await fetch(`/api/products/${product.id}`, { method: 'DELETE' });
-                            if (res.ok) {
-                              window.location.reload();
-                            } else {
-                              alert('Failed to delete product');
-                            }
-                          } catch (e) {
-                            console.error(e);
-                          }
-                        }
-                      }}
+                      onClick={() => setProductToDelete(product)}
                     >
                       Delete
                     </button>
@@ -250,6 +243,80 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
           </button>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!productToDelete}
+        onClose={() => !isDeleting && setProductToDelete(null)}
+        title="Delete Product"
+        footer={
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setProductToDelete(null)}
+              disabled={isDeleting}
+              className="px-4 py-2 text-sm font-medium text-forest-700 hover:text-forest-950 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                if (!productToDelete) return;
+                setIsDeleting(true);
+                try {
+                  const res = await fetch(`/api/retailer/products/${productToDelete.id}`, { method: 'DELETE' });
+                  const data = await res.json();
+                  if (res.ok) {
+                    setProductToDelete(null);
+                    window.location.reload();
+                  } else {
+                    setDeleteError(data.error || 'Failed to delete product');
+                    setProductToDelete(null);
+                  }
+                } catch (e: any) {
+                  setDeleteError(e.message || 'An error occurred while deleting the product.');
+                  setProductToDelete(null);
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
+              disabled={isDeleting}
+              className="px-5 py-2 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {isDeleting ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-[2px] border-white/30 border-t-white rounded-full animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </button>
+          </div>
+        }
+      >
+        <p className="text-forest-700 text-sm">
+          Are you sure you want to delete <span className="font-semibold text-forest-900">{productToDelete?.name}</span> ({productToDelete?.productCode})? This action cannot be undone.
+        </p>
+      </Modal>
+
+      {/* Delete Error Modal */}
+      <Modal
+        isOpen={!!deleteError}
+        onClose={() => setDeleteError(null)}
+        title="Cannot Delete Product"
+        footer={
+          <div className="flex justify-end">
+            <button
+              onClick={() => setDeleteError(null)}
+              className="px-5 py-2 bg-forest-900 text-white rounded-xl text-sm font-medium hover:bg-forest-800 transition-colors"
+            >
+              Got it
+            </button>
+          </div>
+        }
+      >
+        <p className="text-forest-700 text-sm">{deleteError}</p>
+      </Modal>
     </div>
   );
 }
