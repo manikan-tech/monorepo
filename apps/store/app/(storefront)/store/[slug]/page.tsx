@@ -10,6 +10,7 @@ import { useWishlist } from "../../../../components/WishlistContext";
 import Modal from "../../../../components/Modal";
 import Manikan3DTryOn from "../../../../components/product/Manikan3DTryOn";
 import FitToolsOnboarding from "../../../../components/product/FitToolsOnboarding";
+import ColorSwatches from "../../../../components/product/ColorSwatches";
 
 type Review = {
   id: string;
@@ -37,6 +38,7 @@ export default function ProductDetailPage() {
   const slug = params.slug as string;
 
   const [product, setProduct] = useState<any>(null);
+  const [colorSiblings, setColorSiblings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
@@ -64,6 +66,7 @@ export default function ProductDetailPage() {
         if (!res.ok) throw new Error("Product not found");
         const data = await res.json();
         setProduct(data.product);
+        setColorSiblings(data.colorSiblings ?? []);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -241,6 +244,12 @@ export default function ProductDetailPage() {
           </div>
 
           <div className="h-px w-full bg-forest-900/5 animate-fade-in-up" style={{ animationDelay: '150ms' }} />
+
+          {/* Color Swatches */}
+          <ColorSwatches
+            currentColorHex={product.garmentColorHex}
+            siblings={colorSiblings}
+          />
 
           {/* Size Selection */}
           <div className="animate-fade-in-up" style={{ animationDelay: '200ms' }}>

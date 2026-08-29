@@ -4,48 +4,7 @@ const STORAGE_KEY = 'manikan_3d_interactive_tour_seen_v1'
 const CARD_WIDTH = 340
 const VIEWPORT_GAP = 14
 
-const STEPS = [
-  {
-    targetId: 'start-measurements',
-    title: 'Start your 3D fit',
-    text: 'Click Get Started. We’ll guide you through the few details needed to build your body model.',
-    actionHint: 'Click the highlighted button',
-    advanceOnTargetClick: true,
-  },
-  {
-    targetId: 'body-type-control',
-    title: 'Choose your body type',
-    text: 'Select the option that best matches you. This gives the model the correct base proportions.',
-    actionHint: 'Choose an option, or keep the selected one',
-    advanceOnTargetClick: true,
-  },
-  {
-    targetId: 'body-measurements',
-    title: 'Add your measurements',
-    text: 'Adjust height, weight, chest, waist, and hips. Better measurements produce a more useful fit preview.',
-    actionHint: 'Drag the sliders, then continue',
-  },
-  {
-    targetId: 'generate-body',
-    title: 'Generate your body model',
-    text: 'Click here when the measurements look right. Manikan will build the model and dress it in the recommended size.',
-    actionHint: 'Click Generate My Body Model',
-    advanceOnTargetClick: true,
-  },
-  {
-    targetId: 'tryon-size-options',
-    title: 'Compare available sizes',
-    text: 'The green marker shows your recommendation. Click any size to regenerate the garment with that size’s real measurements.',
-    actionHint: 'Try a size, or keep the recommendation',
-    advanceOnTargetClick: true,
-  },
-  {
-    targetId: 'tryon-3d-viewer',
-    title: 'Inspect the fit from every angle',
-    text: 'Drag the body to rotate it and scroll to zoom. You can return to the size controls whenever you want to compare the fit.',
-    actionHint: 'Drag to rotate · Scroll to zoom',
-  },
-]
+
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
@@ -77,7 +36,76 @@ function ArrowIcon() {
   )
 }
 
-export default function InteractiveGuide({ widgetStep, isGenerating, restartToken = 0 }) {
+export default function InteractiveGuide({ widgetStep, isGenerating, restartToken = 0, hasLayer = false, hasColors = false }) {
+  const steps = useMemo(() => {
+    const arr = [
+      {
+        targetId: 'start-measurements',
+        title: 'Start your 3D fit',
+        text: 'Click Get Started. We’ll guide you through the few details needed to build your body model.',
+        actionHint: 'Click the highlighted button',
+        advanceOnTargetClick: true,
+      },
+      {
+        targetId: 'body-type-control',
+        title: 'Choose your body type',
+        text: 'Select the option that best matches you. This gives the model the correct base proportions.',
+        actionHint: 'Choose an option, or keep the selected one',
+        advanceOnTargetClick: true,
+      },
+      {
+        targetId: 'body-measurements',
+        title: 'Add your measurements',
+        text: 'Adjust height, weight, chest, waist, and hips. Better measurements produce a more useful fit preview.',
+        actionHint: 'Drag the sliders, then continue',
+      },
+      {
+        targetId: 'generate-body',
+        title: 'Generate your body model',
+        text: 'Click here when the measurements look right. Manikan will build the model and dress it in the recommended size.',
+        actionHint: 'Click Generate My Body Model',
+        advanceOnTargetClick: true,
+      },
+    ]
+
+    if (hasLayer) {
+      arr.push({
+        targetId: 'tryon-layer-card',
+        title: 'Style your outfit',
+        text: 'You brought another item with you. Toggle it to see how it layers with this product.',
+        actionHint: 'Toggle the layer, or continue',
+        advanceOnTargetClick: false,
+      })
+    }
+    
+    if (hasColors) {
+      arr.push({
+        targetId: 'tryon-color-options',
+        title: 'Explore colors',
+        text: 'See how different colors look on your body model.',
+        actionHint: 'Try a color, or continue',
+        advanceOnTargetClick: false,
+      })
+    }
+
+    arr.push({
+      targetId: 'tryon-size-options',
+      title: 'Compare available sizes',
+      text: 'The green marker shows your recommendation. Click any size to regenerate the garment with that size’s real measurements.',
+      actionHint: 'Try a size, or keep the recommendation',
+      advanceOnTargetClick: true,
+    })
+
+    arr.push({
+      targetId: 'tryon-3d-viewer',
+      title: 'Inspect the fit from every angle',
+      text: 'Drag the body to rotate it and scroll to zoom. You can return to the size controls whenever you want to compare the fit.',
+      actionHint: 'Drag to rotate · Scroll to zoom',
+    })
+
+    return arr
+  }, [hasLayer, hasColors])
+
   const anchorRef = useRef(null)
   const tooltipRef = useRef(null)
   const [open, setOpen] = useState(false)
@@ -85,7 +113,7 @@ export default function InteractiveGuide({ widgetStep, isGenerating, restartToke
   const [targetRect, setTargetRect] = useState(null)
   const [tooltipPosition, setTooltipPosition] = useState(null)
 
-  const activeStep = STEPS[stepIndex]
+  const activeStep = steps[stepIndex]
   const waitingForModel = open && (widgetStep === 2 || (widgetStep === 3 && isGenerating && stepIndex < 4))
 
   const startTour = () => {
@@ -141,7 +169,7 @@ export default function InteractiveGuide({ widgetStep, isGenerating, restartToke
   }
 
   const goNext = () => {
-    if (stepIndex >= STEPS.length - 1) {
+    if (stepIndex >= steps.length - 1) {
       closeTour()
       return
     }
@@ -161,7 +189,7 @@ export default function InteractiveGuide({ widgetStep, isGenerating, restartToke
       // Entering measurements and generating both replace the current screen;
       // widgetStep drives those transitions so the guide cannot advance twice.
       if (stepIndex === 0 || stepIndex === 3) return
-      window.setTimeout(() => setStepIndex(current => Math.min(STEPS.length - 1, current + 1)), 140)
+      window.setTimeout(() => setStepIndex(current => Math.min(steps.length - 1, current + 1)), 140)
     }
     target.addEventListener('click', handleTargetClick)
     return () => target.removeEventListener('click', handleTargetClick)
@@ -297,7 +325,7 @@ export default function InteractiveGuide({ widgetStep, isGenerating, restartToke
               <button type="button" onClick={closeTour} className="mw-guide-close" aria-label="Close 3D tutorial"><CloseIcon /></button>
             </div>
             <div className="mw-guide-progress" aria-hidden="true">
-              {STEPS.map((step, index) => <span key={step.targetId} className={index <= stepIndex ? 'is-active' : ''} />)}
+              {steps.map((step, index) => <span key={step.targetId} className={index <= stepIndex ? 'is-active' : ''} />)}
             </div>
             <h3>{activeStep.title}</h3>
             <p>{activeStep.text}</p>
@@ -312,12 +340,12 @@ export default function InteractiveGuide({ widgetStep, isGenerating, restartToke
               >
                 Back
               </button>
-              <span>{stepIndex + 1} / {STEPS.length}</span>
-              {activeStep.advanceOnTargetClick && stepIndex !== 1 && stepIndex !== 4 ? (
+              <span>{stepIndex + 1} / {steps.length}</span>
+              {activeStep.advanceOnTargetClick && !['body-type-control', 'tryon-size-options'].includes(activeStep.targetId) ? (
                 <span className="mw-guide-click-label">Click to continue</span>
               ) : (
                 <button type="button" onClick={goNext} className="mw-guide-next">
-                  {stepIndex === STEPS.length - 1 ? 'Finish' : 'Continue'} <ArrowIcon />
+                  {stepIndex === steps.length - 1 ? 'Finish' : 'Continue'} <ArrowIcon />
                 </button>
               )}
             </div>

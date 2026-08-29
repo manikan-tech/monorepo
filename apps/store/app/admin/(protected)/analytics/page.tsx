@@ -1,6 +1,4 @@
-import { getAdminSession } from "../../../lib/admin-auth";
 import { prisma } from "../../../lib/prisma";
-import { redirect } from "next/navigation";
 import AdminPageHeader from "../components/AdminPageHeader";
 import AdminStatCard from "../components/AdminStatCard";
 import UsageChart from "./UsageChart";
@@ -11,10 +9,6 @@ export const metadata = {
 };
 
 export default async function AdminAnalyticsPage() {
-  const session = await getAdminSession();
-  if (!session) {
-    redirect("/admin/login");
-  }
 
   // Last 30 days
   const thirtyDaysAgo = new Date();
@@ -99,6 +93,7 @@ export default async function AdminAnalyticsPage() {
         <AdminStatCard
           label="Total VTON Usage"
           value={chartData.reduce((acc, curr) => acc + curr.VTON_2D, 0).toLocaleString()}
+          badge="Last 30 days"
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -109,6 +104,7 @@ export default async function AdminAnalyticsPage() {
         <AdminStatCard
           label="Measurement Sessions"
           value={totalSessions.toLocaleString()}
+          badge="All time"
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 20h9" />
@@ -121,6 +117,7 @@ export default async function AdminAnalyticsPage() {
         <AdminStatCard
           label="Active Subscriptions"
           value={Object.values(subCounts).reduce((a, b) => a + b, 0).toLocaleString()}
+          badge="All time"
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -133,6 +130,7 @@ export default async function AdminAnalyticsPage() {
         <AdminStatCard
           label="Products Indexed"
           value={totalProducts.toLocaleString()}
+          badge="All time"
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />

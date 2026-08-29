@@ -112,7 +112,11 @@ async def download_url_to_temp(url: str, temp_dir: str, max_bytes: int) -> str:
         raise ValueError("Unable to download garment image URL.") from error
 
     content_type = response.headers.get("Content-Type", "").split(";", 1)[0].lower()
-    if not content_type.startswith("image/"):
+    # Allow image/* and application/octet-stream (some sources like Telegram
+    # serve valid images with a generic content type). The actual image data
+    # is fully validated by PIL's decode + dimension check downstream.
+    allowed = content_type.startswith("image/") or content_type == "application/octet-stream"
+    if not allowed:
         raise ValueError("garment_image_url did not return an image content type.")
 
     destination = Path(temp_dir) / f"{uuid.uuid4()}.jpg"

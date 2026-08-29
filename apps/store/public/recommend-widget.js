@@ -90,8 +90,8 @@
 
     const style = document.createElement('style');
     style.innerHTML = `
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-        .ai-widget-container { position: fixed; bottom: 30px; right: 30px; z-index: 10000; font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+        .ai-widget-container { position: fixed; bottom: 30px; right: 30px; z-index: 10000; font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif; display: flex; flex-direction: column; gap: 12px; align-items: flex-end; }
         .ai-widget-button { width: 64px; height: 64px; border-radius: 20px; background: #111; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: transform 0.15s ease; }
         .ai-widget-button:hover { transform: scale(1.05); }
         .ai-widget-box { display: none; width: 420px; height: 640px; background: #fff; border-radius: 28px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); position: absolute; bottom: 85px; right: 0; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.08); }
@@ -132,6 +132,9 @@
     const container = document.createElement('div');
     container.className = 'ai-widget-container';
     container.innerHTML = `
+        <a href="https://t.me/Manikan_2026_bot" target="_blank" class="ai-widget-button" title="Open Telegram Bot" style="text-decoration: none; background: #0088cc;">
+            <svg viewBox="0 0 24 24" width="30" height="30" fill="white"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.223-.548.223l.188-2.85 5.18-4.686c.223-.195-.054-.282-.346-.086l-6.4 4.025-2.76-.86c-.6-.185-.612-.6.125-.89l10.736-4.138c.498-.19.92.115.775.89z"/></svg>
+        </a>
         <button class="ai-widget-button" id="widgetToggle">AI</button>
         <div class="ai-widget-box" id="widgetBox">
             <div class="ai-widget-header">

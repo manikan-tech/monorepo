@@ -1,9 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { updateRetailerProfile } from "../../actions/retailer";
 
-export default function SettingsClient({ retailer, planName }: { retailer: any; planName: string }) {
+type ServiceSub = { service: string; label: string; planName: string | null };
+
+export default function SettingsClient({
+  retailer,
+  serviceSubscriptions,
+}: {
+  retailer: any;
+  serviceSubscriptions: ServiceSub[];
+}) {
   const [storeName, setStoreName] = useState(retailer.storeName);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState({ text: "", type: "" });
@@ -89,22 +98,32 @@ export default function SettingsClient({ retailer, planName }: { retailer: any; 
               />
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-forest-700 uppercase tracking-wider mb-1.5">
-                  Plan
-                </label>
-                <div className="w-full px-4 py-2.5 rounded-xl border border-forest-100 bg-forest-50/50 text-forest-900/60 text-sm capitalize">
-                  {planName}
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-forest-700 uppercase tracking-wider mb-1.5">
-                  Member Since
-                </label>
-                <div className="w-full px-4 py-2.5 rounded-xl border border-forest-100 bg-forest-50/50 text-forest-900/60 text-sm">
-                  {new Date(retailer.createdAt).toLocaleDateString("en", { month: "short", year: "numeric" })}
-                </div>
+            <div>
+              <label className="block text-xs font-medium text-forest-700 uppercase tracking-wider mb-1.5">
+                Active Plans
+              </label>
+              <div className="space-y-2">
+                {serviceSubscriptions.map((svc) => (
+                  <div
+                    key={svc.service}
+                    className="flex items-center justify-between px-3 py-2 rounded-xl border border-forest-100 bg-forest-50/50"
+                  >
+                    <span className="text-xs font-medium text-forest-700">{svc.label}</span>
+                    {svc.planName ? (
+                      <span className="text-xs font-semibold text-gold-700 bg-gold-50 border border-gold-200 px-2 py-0.5 rounded-full">
+                        {svc.planName}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-forest-400 italic">No plan</span>
+                    )}
+                  </div>
+                ))}
+                <Link
+                  href="/dashboard/services"
+                  className="block text-center text-xs text-gold-600 hover:text-gold-700 font-medium mt-2 transition-colors"
+                >
+                  Manage subscriptions →
+                </Link>
               </div>
             </div>
 
