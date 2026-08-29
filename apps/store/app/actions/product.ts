@@ -198,20 +198,35 @@ export async function updateProduct(formData: FormData) {
   redirect("/dashboard/products");
 }
 
-export async function deleteAllProducts() {
+export async function deleteAllProducts(): Promise<{ deleted: number; deactivated: number }> {
   const user = await getAuthFromCookies();
   if (!user) {
     throw new Error("Unauthorized");
   }
 
-  try {
-    await prisma.product.deleteMany({
-      where: { retailerId: user.sub },
+  // Find all products for this retailer and count their order items
+  const products = await prisma.product.findMany({
+    where: { retailerId: user.sub },
+    select: { id: true, _count: { select: { orderItems: true } } },
+  });
+
+  const safeToDelete = products.filter(p => p._count.orderItems === 0).map(p => p.id);
+  const hasOrders = products.filter(p => p._count.orderItems > 0).map(p => p.id);
+
+  // Hard-delete products with no order history
+  if (safeToDelete.length > 0) {
+    await prisma.product.deleteMany({ where: { id: { in: safeToDelete } } });
+  }
+
+  // Deactivate products that have orders (preserve financial records)
+  if (hasOrders.length > 0) {
+    await prisma.product.updateMany({
+      where: { id: { in: hasOrders } },
+      data: { isActive: false },
     });
-  } catch (error) {
-    console.error("Error deleting all products:", error);
-    throw new Error("Failed to delete all products.");
   }
 
   revalidatePath("/dashboard/products");
+  return { deleted: safeToDelete.length, deactivated: hasOrders.length };
 }
+

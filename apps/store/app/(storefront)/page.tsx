@@ -3,6 +3,8 @@ import Link from "next/link";
 import { prisma } from "../lib/prisma";
 import ProductCard from "../../components/ProductCard";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Manikan — AI Virtual Try-On for Fashion",
   description:
@@ -14,6 +16,7 @@ export default async function Home() {
   try {
     featuredProducts = await prisma.product.findMany({
       take: 4,
+      where: { isActive: true },
       orderBy: { createdAt: "desc" },
       include: { variants: true },
     });

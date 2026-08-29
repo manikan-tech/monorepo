@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Modal from "../../../components/Modal";
 
@@ -14,20 +14,29 @@ type Product = {
   priceEgp: number;
   stock: number;
   imageUrl: string;
+  isActive: boolean;
 };
 
-export default function ProductDataGrid({ products }: { products: Product[] }) {
+export default function ProductDataGrid({ products: initialProducts }: { products: Product[] }) {
+  const [products, setProducts] = useState<Product[]>(initialProducts);
+  
+  useEffect(() => {
+    setProducts(initialProducts);
+  }, [initialProducts]);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterGender, setFilterGender] = useState("");
   const [filterBrand, setFilterBrand] = useState("");
   const [filterStock, setFilterStock] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [productBlockedByOrders, setProductBlockedByOrders] = useState<Product | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
@@ -43,13 +52,14 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
     const matchesCategory = filterCategory ? p.category === filterCategory : true;
     const matchesGender = filterGender ? p.gender === filterGender : true;
     const matchesBrand = filterBrand ? p.brand === filterBrand : true;
-    
+    const matchesStatus = filterStatus === "active" ? p.isActive : filterStatus === "inactive" ? !p.isActive : true;
+
     let matchesStock = true;
     if (filterStock === "in-stock") matchesStock = p.stock >= 10;
     if (filterStock === "low-stock") matchesStock = p.stock > 0 && p.stock < 10;
     if (filterStock === "out-of-stock") matchesStock = p.stock === 0;
 
-    return matchesSearch && matchesCategory && matchesGender && matchesBrand && matchesStock;
+    return matchesSearch && matchesCategory && matchesGender && matchesBrand && matchesStock && matchesStatus;
   });
 
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE) || 1;
@@ -57,6 +67,29 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
+
+  const toggleActive = async (product: Product) => {
+    setTogglingId(product.id);
+    try {
+      const res = await fetch(`/api/retailer/products/${product.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !product.isActive }),
+      });
+      if (res.ok) {
+        setProducts(prev =>
+          prev.map(p => p.id === product.id ? { ...p, isActive: !p.isActive } : p)
+        );
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to update product status");
+      }
+    } catch {
+      alert("An error occurred while updating product status.");
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
   if (products.length === 0) {
     return (
@@ -68,7 +101,7 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
         </div>
         <h3 className="text-xl font-display font-semibold text-forest-900 mb-2">No products found</h3>
         <p className="text-manikan-text-secondary max-w-sm mx-auto">
-          You haven't added any products to your catalog yet. Click "Add New Product" to get started.
+          You haven&apos;t added any products to your catalog yet. Click &quot;Add New Product&quot; to get started.
         </p>
       </div>
     );
@@ -128,7 +161,17 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
           <option value="out-of-stock">Out of Stock (0)</option>
         </select>
 
-        {(search || filterCategory || filterGender || filterBrand || filterStock) && (
+        <select
+          value={filterStatus}
+          onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+          className="px-3 py-2 bg-white border border-manikan-border rounded-lg text-sm text-forest-900 focus:outline-none focus:border-forest-400"
+        >
+          <option value="">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+
+        {(search || filterCategory || filterGender || filterBrand || filterStock || filterStatus) && (
           <button
             onClick={() => {
               setSearch("");
@@ -136,6 +179,7 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
               setFilterGender("");
               setFilterBrand("");
               setFilterStock("");
+              setFilterStatus("");
               setCurrentPage(1);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-manikan-border rounded-lg text-sm font-medium text-forest-700 hover:text-forest-950 hover:bg-forest-50 transition-colors shadow-sm"
@@ -156,14 +200,15 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
               <th className="px-6 py-4">Category</th>
               <th className="px-6 py-4">Price</th>
               <th className="px-6 py-4">Stock</th>
+              <th className="px-6 py-4">Status</th>
               <th className="px-6 py-4 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-manikan-border">
             {paginatedProducts.map((product, idx) => (
-              <tr 
-                key={product.id} 
-                className="hover:bg-cream-50/30 transition-colors group animate-fade-up"
+              <tr
+                key={product.id}
+                className={`hover:bg-cream-50/30 transition-colors group animate-fade-up ${!product.isActive ? "opacity-60" : ""}`}
                 style={{ animationDelay: `${100 + idx * 50}ms`, animationFillMode: "both" }}
               >
                 <td className="px-6 py-4 flex items-center space-x-4">
@@ -189,15 +234,40 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
                     <span className="text-red-500 font-medium">Out of stock</span>
                   )}
                 </td>
+                <td className="px-6 py-4">
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                      product.isActive
+                        ? "bg-green-50 text-green-700 border-green-200"
+                        : "bg-gray-100 text-gray-500 border-gray-200"
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${product.isActive ? "bg-green-500" : "bg-gray-400"}`} />
+                    {product.isActive ? "Active" : "Inactive"}
+                  </span>
+                </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end gap-2">
-                    <Link 
+                    <Link
                       href={`/dashboard/products/${product.id}/edit`}
                       className="text-sm px-3 py-1.5 rounded bg-cream-50 text-forest-700 hover:bg-cream-100 transition-colors"
                     >
                       Edit
                     </Link>
-                    <button 
+                    <button
+                      onClick={() => toggleActive(product)}
+                      disabled={togglingId === product.id}
+                      className={`text-sm px-3 py-1.5 rounded transition-colors disabled:opacity-50 ${
+                        product.isActive
+                          ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                          : "bg-green-50 text-green-700 hover:bg-green-100"
+                      }`}
+                    >
+                      {togglingId === product.id ? (
+                        <span className="inline-block w-3.5 h-3.5 border-[2px] border-current/30 border-t-current rounded-full animate-spin" />
+                      ) : product.isActive ? "Deactivate" : "Reactivate"}
+                    </button>
+                    <button
                       className="text-sm px-3 py-1.5 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
                       onClick={() => setProductToDelete(product)}
                     >
@@ -209,7 +279,7 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
             ))}
             {paginatedProducts.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-manikan-text-secondary">
+                <td colSpan={7} className="px-6 py-12 text-center text-manikan-text-secondary">
                   No products match your search.
                 </td>
               </tr>
@@ -217,7 +287,7 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
           </tbody>
         </table>
       </div>
-      
+
       {/* Pagination Controls */}
       <div className="p-4 border-t border-manikan-border bg-cream-50/30 flex items-center justify-between text-sm text-manikan-text-secondary">
         <div>
@@ -263,17 +333,21 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
                 if (!productToDelete) return;
                 setIsDeleting(true);
                 try {
-                  const res = await fetch(`/api/retailer/products/${productToDelete.id}`, { method: 'DELETE' });
+                  const res = await fetch(`/api/retailer/products/${productToDelete.id}`, { method: "DELETE" });
                   const data = await res.json();
                   if (res.ok) {
+                    setProducts(prev => prev.filter(p => p.id !== productToDelete.id));
                     setProductToDelete(null);
-                    window.location.reload();
+                  } else if (res.status === 409) {
+                    // Product has order history — offer deactivation instead
+                    setProductBlockedByOrders(productToDelete);
+                    setProductToDelete(null);
                   } else {
-                    setDeleteError(data.error || 'Failed to delete product');
+                    setDeleteError(data.error || "Failed to delete product");
                     setProductToDelete(null);
                   }
                 } catch (e: any) {
-                  setDeleteError(e.message || 'An error occurred while deleting the product.');
+                  setDeleteError(e.message || "An error occurred while deleting the product.");
                   setProductToDelete(null);
                 } finally {
                   setIsDeleting(false);
@@ -299,11 +373,47 @@ export default function ProductDataGrid({ products }: { products: Product[] }) {
         </p>
       </Modal>
 
-      {/* Delete Error Modal */}
+      {/* Blocked-by-orders modal — offer Deactivate Instead */}
+      <Modal
+        isOpen={!!productBlockedByOrders}
+        onClose={() => setProductBlockedByOrders(null)}
+        title="Cannot Delete Product"
+        footer={
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setProductBlockedByOrders(null)}
+              className="px-4 py-2 text-sm font-medium text-forest-700 hover:text-forest-950 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                if (!productBlockedByOrders) return;
+                await toggleActive(productBlockedByOrders);
+                setProductBlockedByOrders(null);
+              }}
+              className="px-5 py-2 bg-amber-600 text-white rounded-xl text-sm font-medium hover:bg-amber-700 transition-colors"
+            >
+              Deactivate Instead
+            </button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-forest-700 text-sm">
+            <span className="font-semibold text-forest-900">{productBlockedByOrders?.name}</span> has order history and cannot be permanently deleted — deleting it would remove financial records.
+          </p>
+          <p className="text-forest-700 text-sm">
+            You can <span className="font-semibold">deactivate</span> it instead — it will be hidden from your storefront but all past order data will be preserved.
+          </p>
+        </div>
+      </Modal>
+
+      {/* Generic Delete Error Modal */}
       <Modal
         isOpen={!!deleteError}
         onClose={() => setDeleteError(null)}
-        title="Cannot Delete Product"
+        title="Error"
         footer={
           <div className="flex justify-end">
             <button

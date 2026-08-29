@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import Modal from "../../../../components/Modal";
 
 const STATUS_STEPS = [
   "PENDING",
@@ -19,6 +20,7 @@ const STATUS_COLORS: Record<string, string> = {
   SHIPPED: "bg-indigo-50 text-indigo-700 border-indigo-200",
   DELIVERED: "bg-green-50 text-green-700 border-green-200",
   CANCELLED: "bg-red-50 text-red-700 border-red-200",
+  RETURN_PENDING: "bg-orange-50 text-orange-700 border-orange-200",
   RETURNED: "bg-violet-50 text-violet-700 border-violet-200",
 };
 
@@ -53,6 +55,31 @@ export default function OrderDetailPage() {
   const orderId = params.id as string;
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
+
+  const handleRequestReturn = async () => {
+    setShowReturnModal(false);
+    setIsUpdating(true);
+    try {
+      const res = await fetch(`/api/orders/${order!.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "RETURN_PENDING" })
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        alert(error.error || "Failed to request return");
+      } else {
+        const data = await res.json();
+        setOrder(prev => prev ? { ...prev, status: data.order.status } : null);
+      }
+    } catch (err) {
+      alert("An unexpected error occurred.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   useEffect(() => {
     fetch(`/api/orders/${orderId}`)
@@ -87,7 +114,9 @@ export default function OrderDetailPage() {
 
   const stepIdx = STATUS_STEPS.indexOf(order.status);
   const isTerminal =
-    order.status === "CANCELLED" || order.status === "RETURNED";
+    order.status === "CANCELLED" || 
+    order.status === "RETURNED" || 
+    order.status === "RETURN_PENDING";
 
   return (
     <div className="max-w-[900px] mx-auto px-6 py-12 md:py-20 w-full">
@@ -121,6 +150,15 @@ export default function OrderDetailPage() {
             <span className="text-sm font-semibold px-4 py-2 rounded-full border bg-violet-50 text-violet-700 border-violet-200">
               Refunded
             </span>
+          )}
+          {order.status === "DELIVERED" && (
+            <button
+              onClick={() => setShowReturnModal(true)}
+              disabled={isUpdating}
+              className="mt-2 text-sm font-semibold px-4 py-2 rounded-full border bg-white text-forest-900 border-forest-200 hover:bg-forest-50 transition-colors disabled:opacity-50"
+            >
+              {isUpdating ? "Requesting..." : "Request Return"}
+            </button>
           )}
         </div>
       </div>
@@ -229,6 +267,32 @@ export default function OrderDetailPage() {
           )}
         </div>
       </div>
+
+      <Modal
+        isOpen={showReturnModal}
+        onClose={() => setShowReturnModal(false)}
+        title="Request Return"
+        footer={
+          <>
+            <button
+              onClick={() => setShowReturnModal(false)}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-forest-700 bg-forest-50 hover:bg-forest-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleRequestReturn}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-forest-900 hover:bg-forest-800 transition-colors shadow-soft"
+            >
+              Confirm
+            </button>
+          </>
+        }
+      >
+        <p className="text-forest-700">
+          Are you sure you want to request a return for this order? Our team will review your request.
+        </p>
+      </Modal>
     </div>
   );
 }
