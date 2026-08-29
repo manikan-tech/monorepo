@@ -4,7 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import {
   buildProductEmbeddingText,
-  createEmbedding,
+  createEmbeddings,
   vectorToPgLiteral,
   type EmbeddableProduct,
 } from "../app/lib/embeddings";
@@ -18,42 +18,87 @@ if (!connectionString) {
 
 const pool = new Pool({ connectionString });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
-const forceReindex = process.env.FORCE_REINDEX === "true";
-const rawLimit = Number.parseInt(process.env.LIMIT ?? "", 10);
-const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 10_000) : undefined;
+
+const BATCH_SIZE = 5;
+const DELAY_MS = 4000;
+
+async function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 async function getProductsToIndex(): Promise<ProductToIndex[]> {
-  const where = forceReindex ? Prisma.empty : Prisma.sql`WHERE embedding IS NULL`;
-  const limitClause = limit === undefined ? Prisma.empty : Prisma.sql`LIMIT ${limit}`;
-
   return prisma.$queryRaw<ProductToIndex[]>(Prisma.sql`
-    SELECT id, name, category, fabric, description, "fitNotes"
+    SELECT id, name, category, gender, brand, fabric, description, "fitNotes"
     FROM "Product"
-    ${where}
+    WHERE embedding IS NULL
     ORDER BY "updatedAt" ASC
-    ${limitClause}
   `);
+}
+
+async function processBatch(batch: ProductToIndex[]): Promise<void> {
+  const texts = batch.map(buildProductEmbeddingText);
+  let attempt = 0;
+  const maxAttempts = 3;
+
+  while (attempt < maxAttempts) {
+    try {
+      const embeddings = await createEmbeddings(texts);
+      if (embeddings.length !== batch.length) {
+         throw new Error(`Length mismatch: expected ${batch.length}, got ${embeddings.length}`);
+      }
+
+      // Update one by one or via case statements (one by one is fine for small batches)
+      for (let i = 0; i < batch.length; i++) {
+        const product = batch[i];
+        const vectorString = vectorToPgLiteral(embeddings[i]);
+
+        await prisma.$executeRaw`
+          UPDATE "Product"
+          SET embedding = ${vectorString}::vector
+          WHERE id = ${product.id}
+        `;
+      }
+      return;
+    } catch (error: any) {
+      const isRetryable = error.message?.includes("429") || error.message?.includes("50");
+      if (isRetryable && attempt < maxAttempts - 1) {
+        attempt++;
+        const backoff = Math.pow(2, attempt) * 1000;
+        console.warn(`Retryable error (attempt ${attempt}/${maxAttempts}). Waiting ${backoff}ms...`, error.message);
+        await sleep(backoff);
+      } else {
+        throw error;
+      }
+    }
+  }
 }
 
 async function main(): Promise<void> {
   const products = await getProductsToIndex();
   if (products.length === 0) {
-    console.log("No products require embeddings. Set FORCE_REINDEX=true to regenerate all embeddings.");
+    console.log("No products require embeddings. (0 NULL embeddings)");
     return;
   }
 
-  for (const [index, product] of products.entries()) {
-    const embedding = await createEmbedding(buildProductEmbeddingText(product));
-    const vectorString = vectorToPgLiteral(embedding);
+  console.log(`Found ${products.length} products to embed. Batch size: ${BATCH_SIZE}.`);
 
-    await prisma.$executeRaw`
-      UPDATE "Product"
-      SET embedding = ${vectorString}::vector
-      WHERE id = ${product.id}
-    `;
+  for (let i = 0; i < products.length; i += BATCH_SIZE) {
+    const batch = products.slice(i, i + BATCH_SIZE);
+    
+    console.log(`Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(products.length/BATCH_SIZE)} (${batch.length} items)...`);
+    
+    try {
+       await processBatch(batch);
+    } catch (error) {
+       console.error("Persistent failure processing batch. Stopping cleanly.", error);
+       break;
+    }
 
-    console.log(`Indexed ${index + 1}/${products.length}: ${product.id}`);
+    if (i + BATCH_SIZE < products.length) {
+       await sleep(DELAY_MS);
+    }
   }
+  console.log("Backfill complete or stopped.");
 }
 
 main()

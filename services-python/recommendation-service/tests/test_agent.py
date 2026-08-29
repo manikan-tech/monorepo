@@ -76,7 +76,7 @@ def test_size_chart_entries_missing_hip_still_work():
 
 def test_product_detail_question_bypasses_measurement_gate(monkeypatch):
     """A product question must reach the AI even before measurements exist."""
-    async def fake_llm(_messages):
+    async def fake_llm(_messages, fallback_action=None):
         return RecommendationOutput(
             action=ActionType.PROVIDE_RECOMMENDATION,
             message="This trouser has a relaxed, tapered silhouette.",

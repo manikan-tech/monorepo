@@ -1,211 +1,474 @@
-# Manikan AI Recommendation Service — Technical Documentation & Demo Flow
-
-## 0. Demo-Readiness Status (verified live, 2026-08-19)
-
-**End-to-end Zero Trust path confirmed working tonight**, via real `curl` requests against the actually-running FastAPI (`:8000`) and Next.js (`:3000`) servers — not a throwaway test instance:
-
-- `recommend-widget.js` → `/api/widget/recommend` (Next.js proxy) → `/recommend` (FastAPI) → LLM/RAG/sizing → response, full round trip, `200 OK`, no CORS or 403 errors.
-- All three demo-critical flows verified through the **real proxy** (not just direct-to-FastAPI): general greeting (no cards), category browsing (`fetch_products` + visual cards), and deterministic sizing (exact + near matches).
-
-**Two real bugs were found and fixed tonight while verifying this** — both config/data issues, no application logic beyond one function's data format was touched:
-
-1. **Internal proxy→backend key was never configured.** `services-python/recommendation-service/.env` had no `RECOMMEND_SERVICE_KEY` at all, so `verify_internal_key` (`main.py:66-78`) rejected every request, including legitimate ones from the Next.js proxy — independent of the widget-key issue described below. Fixed by adding `RECOMMEND_SERVICE_KEY` to that `.env`, matching `RECOMMENDATION_SERVICE_KEY` in `apps/store/.env`.
-2. **Public widget key (`NEXT_PUBLIC_WIDGET_API_KEY` in `apps/store/.env`) held the wrong value** — it was set to the *internal* proxy→backend secret instead of a real per-retailer `ServiceApiKey.apiKey` row. `widget-auth.ts`'s `authorizeWidgetRequest` does an exact DB lookup on this value, so it matched no row and every widget request 403'd. Fixed by fetching the real key live from `ServiceApiKey` (`service='RECOMMENDATION'`) via a Prisma script and updating `apps/store/.env`, then restarting Next.js (`NEXT_PUBLIC_*` vars are inlined at start/build time).
-
-**One more bug found and fixed, unrelated to the proxy work — worth knowing for the demo:** `apps/store/app/lib/size-chart.ts` was building the `size_chart` field as a **CSV string**, but `agent.py`'s `compute_recommended_size` does `json.loads(...)` on it — a format mismatch that silently made *every* real measurement lookup through the proxy return "doesn't come in a size that fits," regardless of actual fit, with no error surfaced. Confirmed by a direct A/B test (see §5) and a git-tracked pytest suite (`tests/test_agent.py`, 6 tests) that explicitly documents JSON as `compute_recommended_size`'s real contract — so `size-chart.ts` was fixed to emit JSON instead of touching the tested Python function. Re-verified live through the proxy after the fix: exact and near-match measurements both now return the correct size and confidence.
-
-**One known quirk to be aware of live, not a bug:** the TF-IDF RAG retrieval (§6) does no stemming — "show me your **blouses**" (plural) does not match catalog descriptions written as "**Blouse**" (singular), so `retrieved_product_ids` can legitimately come back empty even though `fetch_products` correctly fires and `matched_category` is correct. Confirmed live: `"show me your blouses"` → no cards; `"show me a silk blouse"` → 3 cards. **If doing a live style-query demo, phrase it in singular** (or however the actual catalog copy is worded) to be safe.
+# Manikan AI Recommendation Service — Technical Documentation
 
 ## 1. System Overview
 
-The **Manikan AI Recommendation Service** is an intelligent, stateless SaaS backend designed to power the 3D Try-On & Sizing widget on e-commerce storefronts. Built using FastAPI and a LangGraph state-machine, it blends natural language understanding with deterministic geometric size-matching.
+The **Manikan AI Recommendation Service** is a stateless SaaS backend powering the 3D Try-On & Sizing chat widget on e-commerce storefronts. It blends natural language understanding with deterministic geometric size-matching and catalog-aware product discovery.
 
 ### 1.1 Architecture & Pipeline
-1. **Frontend Integration:** A Next.js widget (`recommend-widget.js`) captures user intents and sizing queries.
-2. **Next.js Proxy (Zero Trust):** The Next.js API layer authenticates the widget API key, validates subscription tiers, deducts quota, and securely proxies the request to the FastAPI backend using a server-side shared internal key (`X-Manikan-Internal-Key`).
-3. **Stateless Conversational Agent (`agent.py`):**
-   - **Multi-tier LLM Fallback:** DeepSeek → Bedrock → Gemini → Local Ollama.
-   - **TF-IDF RAG Pipeline (`retrieval.py`):** In-memory cosine similarity search across the current active product catalog.
-   - **Deterministic Sizing:** Euclidean distance across user body measurements vs. product size charts — never left to the LLM.
+
+```
+Browser
+  └─ recommend-widget.js
+       └─ POST /api/widget/recommend  (Next.js proxy — the only entry point)
+            └─ authorizeWidgetRequest (key → retailer → origin → quota → rate limit)
+                 └─ builds size_chart server-side from ProductVariant rows
+                      └─ POST /recommend  (FastAPI)
+                           └─ verify_internal_key (hmac.compare_digest)
+                                └─ LangGraph 5-node pipeline
+                                     ├─ analyze_turn          (classify + state)
+                                     ├─ retrieve_rag_context  (catalog retrieval)
+                                     ├─ compute_size_math     (deterministic sizing)
+                                     ├─ fit_reasoning_agent   (LLM + deterministic handlers)
+                                     └─ format_response       (assemble ChatRecommendResponse)
+```
+
+**Key architectural decisions:**
+
+- This service has **no direct database connection**. All catalog, profile, and size-chart data arrives from the Next.js proxy in the request body. No ORM, no Postgres, no vector store.
+- The `size_chart` is always built server-side by the proxy — the client cannot supply or fabricate it.
+- All LLM calls are to a single configured provider (DeepSeek). There is no fallback chain to other providers.
+
+---
 
 ## 2. Security Model (Zero Trust)
-The backend service delegates all API key lifecycle and quota management to the Next.js gateway. The Python FastAPI service exposes its endpoints exclusively to the Next.js Proxy, enforced via `verify_internal_key` (`main.py:66-78`), which compares the `X-Manikan-Internal-Key` header against `RECOMMEND_SERVICE_KEY` (and a previous-key value, for rotation) using `hmac.compare_digest`. Direct client-to-backend connections are blocked, protecting the system from client-side credential extraction.
+
+The Python FastAPI service exposes its endpoint exclusively to the Next.js proxy, enforced by `verify_internal_key` (`main.py`), which compares the `X-Manikan-Internal-Key` header against `RECOMMEND_SERVICE_KEY` using `hmac.compare_digest` (constant-time). A previous-key slot (`RECOMMEND_SERVICE_KEY_PREVIOUS`) is also accepted, enabling zero-downtime key rotation.
+
+Direct client-to-backend connections are blocked. There is no second authenticated path.
+
+The proxy (`widget-auth.ts`, `authorizeWidgetRequest`) enforces the full security gate before the Python service is ever reached:
+
+1. `X-Manikan-Key` header present
+2. `Origin` header present and in the retailer's allowlist (fail-closed — missing Origin is rejected)
+3. Key resolves to an active `ServiceApiKey` scoped to `RECOMMENDATION`
+4. Subscription active with remaining quota
+5. Per-retailer rate limit
+
+Any failure returns a generic 401/403/429; the specific check that failed is never disclosed.
 
 ---
 
-## 3. LLM Fallback Chain — Order & Rationale
+## 3. Request Validation
 
-`call_llm_with_fallback` (`app/agent.py:142-211`) tries providers strictly in this order, falling through to the next on **any** exception:
+### 3.1 Pydantic Request Schema (`ChatRecommendRequest`, `main.py`)
 
-| Order | Provider | Client | Why here in the chain |
-|---|---|---|---|
-| 1 | **DeepSeek** | `AsyncOpenAI` pointed at `api.deepseek.com` | Primary provider. OpenAI-compatible API with native `response_format={"type": "json_object"}` support, so structured output is cheap and reliable to get without extra prompt-engineering. Only attempted if `deepseek_api_key` is configured. |
-| 2 | **Bedrock** (`Bedrock.py`) | raw `httpx` POST to a course-provided gateway | Second-choice hosted provider (also backed by a `deepseek.v3.2` model, but through a different metered gateway/quota than #1). Used as the first fallback because it's still a full-capability hosted model, just without native JSON-mode — hence the manual JSON-schema-in-prompt instruction and a one-shot re-ask-for-valid-JSON retry (`Bedrock.py:85-98`). |
-| 3 | **Gemini** | `ChatGoogleGenerativeAI` (LangChain), looped over `settings.gemini_keys` (up to 2 configured keys) | Third-choice cloud provider, tried across multiple keys before giving up, for extra headroom against per-key rate limits. |
-| 4 | **Ollama** (local) | `ChatOllama` (LangChain), `localhost:11434` | Last resort. Needs no API key and no internet — it's the only tier that still works during a total external-network outage, which is precisely why it sits last (worst quality/availability trade in normal conditions) but first in resilience during an outage of *everything else*. A 10s `asyncio.wait_for` timeout keeps a stalled local server from hanging the request indefinitely. |
+All fields are validated by Pydantic on arrival. The authoritative fields:
 
-If all four fail, `call_llm_with_fallback` raises `RuntimeError(...)`, which is caught by the `/recommend` handler's `try/except` (`main.py:147-178`) and turned into the honest `success:false` / `EMERGENCY-FALLBACK` response described in §8.
+| Field | Type | Notes |
+|---|---|---|
+| `session_id` | `str` | Used for per-process rate limiting |
+| `messages` | `list[dict]` | Full chat history; last user message extracted as `query` |
+| `betas` | `MeasurementInput` or null | 5 floats: `height_cm, weight_kg, chest_cm, waist_cm, hips_cm` |
+| `product_id` | `str` or null | Product the shopper is viewing |
+| `product_name` | `str` or null | Display name for the current product |
+| `profile_context` | `SafeProfileContext` or null | Name, saved measurements, fit history |
+| `active_search` | `dict` or null | Validated into `ActiveSearch` by the route handler |
+| `product_detail_question` | `bool` | Set by proxy when the shopper asks about the product, not sizing |
+| `size_chart` | `str` or null | JSON array — always built server-side, never accepted raw from the client |
+| `available_categories` | `list[str]` or null | Exact category strings from the retailer's catalog |
+| `available_departments` | `list[str]` or null | Departments/genders available in the catalog |
+| `available_brands` | `list[str]` or null | Brands available in the catalog |
+| `category_department_mapping` | `dict[str, list[str]]` or null | Maps each category to its valid departments |
+| `catalog_products` | `list[dict]` or null | Compact catalog for in-memory RAG (id, name, category, description) |
+| `pending_state` | `PendingState` or null | Tracks the current multi-turn task |
+| `shown_product_ids` | `list[str]` or null | IDs already presented; used to avoid repeat cards |
 
-`check_all_providers()` (`agent.py:214-252`) runs the same tier list as a health probe (used by `GET /health`) without going through the fallback-on-failure logic — it reports **every** provider's live status independently, rather than stopping at the first success.
+### 3.2 Measurement Input Validation (`MeasurementInput`, `schemas.py`)
+
+```python
+class MeasurementInput(BaseModel):
+    height_cm: float
+    weight_kg: float
+    chest_cm: float
+    waist_cm: float
+    hips_cm: float
+```
+
+All five fields are required. Height and weight are present in the contract but currently contribute nothing to the Euclidean size calculation — only `chest_cm`, `waist_cm`, and optionally `hips_cm` (when present in the size chart) are used.
+
+### 3.3 Profile Context Validation (`SafeProfileContext`, `schemas.py`)
+
+The proxy passes a read-only view of the shopper's persisted profile. The service reads but never writes profile data.
+
+```python
+class SafeProfileContext(BaseModel):
+    first_name: Optional[str]
+    saved_measurements: Optional[MeasurementInput]
+    previous_product_size: Optional[str]
+    recent_fit_history: list[ProfileHistoryItem]
+```
+
+### 3.4 Active Search Validation (`ActiveSearch`, `schemas.py`)
+
+```python
+class ActiveSearch(BaseModel):
+    query: str
+    department: Optional[str]
+    selected_category: Optional[str]
+    requested_material: Optional[str]
+    min_price: Optional[float]
+    max_price: Optional[float]
+    style_occasion: Optional[str]
+```
+
+`active_search` persists structured search state across turns. Its `department` field is the authoritative constraint for eligibility checks in `retrieve_rag_context`.
+
+### 3.5 Pending State Validation (`PendingState`, `schemas.py`)
+
+```python
+class PendingState(BaseModel):
+    type: PendingType  # CONFIRM_MEASUREMENTS | REQUEST_CONFIDENCE | AWAITING_DEPARTMENT | AWAITING_CATEGORY
+    product_id: Optional[str]
+    product_name: Optional[str]
+    recommended_size: Optional[str]
+    size_provenance: Optional[str]
+```
+
+`PendingType` is an enum — any value outside the four declared members is rejected by Pydantic.
+
+### 3.6 Per-Session Rate Limiting
+
+`_check_rate_limit(session_id)` enforces 10 requests per 60-second window per session, tracked in a per-process in-memory deque. Excess requests raise `HTTP 429`. Additionally, a global anomaly deque logs a warning when any hour exceeds 200 requests across all sessions.
 
 ---
 
-## 4. `call_conversational_agent` — Deterministic Calculation vs. LLM
+## 4. LLM Provider
 
-`call_conversational_agent` (`app/agent.py:304-432`) branches into one of three modes, checked in this priority order:
+`call_llm_with_fallback` (`agent.py`) uses **DeepSeek** as the sole LLM provider:
 
-1. **On a product page, waiting on measurements** (`product_id` + `size_chart` present, `betas` not yet given) — `agent.py:315-348`. Purely deterministic Python: it scans the conversation for a self-reported size label (e.g. "I'm XL") and a stated confidence %, and returns one of four canned `STATIC-*` responses. No LLM call at all.
-2. **On a product page, measurements given** (`betas` + `size_chart` both present) — `agent.py:351-374`. Calls `compute_recommended_size()`, a pure Euclidean-distance calculation (§5 detail below) against the product's real size chart. Again, no LLM call.
-3. **Everything else (general/open-ended chat)** — `agent.py:376-431`. No `size_chart` exists in this branch, so there is nothing to compute against. This is delegated to the LLM fallback chain (§3), grounded by RAG-retrieved catalog context (§6).
+| Provider | Client | Config |
+|---|---|---|
+| DeepSeek `deepseek-chat` | `AsyncOpenAI` pointed at `api.deepseek.com` | `DEEPSEEK_API_KEY` |
 
-**Why this separation exists:** sizing is the product's core trust proposition — a wrong size is a returned order and a lost customer, so it must be deterministic, auditable, and never subject to hallucination. An LLM is never asked to "guess" a size or invent a confidence score. Open-ended discovery ("what would suit me for a wedding?"), by contrast, has no ground truth to compute — it's inherently a natural-language synthesis task, which is exactly what an LLM is suited for, provided it's grounded in real catalog data (RAG) rather than left to invent products. The dividing line in code is simply *whether a real `size_chart` is in scope*: if yes, compute; if no, converse.
+If `DEEPSEEK_API_KEY` is absent, `call_llm_with_fallback` raises `RuntimeError` immediately. There is no multi-provider fallback chain; the single endpoint must succeed or the turn falls through to the deterministic emergency response.
+
+`response_format={"type": "json_object"}` is set on every call, requesting a structured JSON reply. The returned JSON is parsed and validated against `RecommendationOutput` via Pydantic. An invalid action value is replaced with the caller's `fallback_action`. A missing `message` field raises `ValueError("llm_empty_message")` so each call-site can apply its own contextually-correct fallback rather than a generic error.
+
+`check_all_providers()` (used by `GET /health`) probes DeepSeek and returns its live status.
 
 ---
 
-## 5. Deterministic Sizing — `compute_recommended_size` (Euclidean Distance)
+## 5. Graph Architecture — 5-Node LangGraph Pipeline
 
-`agent.py:86-126`. For each size row in the product's `size_chart` (parsed JSON), it computes:
+The service compiles a `StateGraph(FitState)` with five nodes and conditional routing:
 
 ```
-distance = sqrt((chest_cm_row - chest_cm_user)^2 + (waist_cm_row - waist_cm_user)^2 [+ (hip_cm_row - hips_cm_user)^2 if hip data exists])
+START
+  │
+  ▼
+analyze_turn
+  │
+  ├─ final_response already set? ──────────────────────────────────► format_response
+  │
+  ├─ resolved_intent == SIZING ────────────────────────────────────► compute_size_math
+  │                                                                        │
+  │                                                                        ▼
+  │                                                                  format_response
+  │
+  ├─ requires_catalog == True ─────────────────────────────────────► retrieve_rag_context
+  │                                                                        │
+  │                                                                        ▼
+  │                                                                  fit_reasoning_agent
+  │                                                                        │
+  │                                                                        ▼
+  └─ (default) ────────────────────────────────────────────────────► fit_reasoning_agent
+                                                                           │
+                                                                           ▼
+                                                                     format_response
+                                                                           │
+                                                                           ▼
+                                                                         END
 ```
 
-The row with the smallest distance wins. If that best distance exceeds `OUT_OF_RANGE_THRESHOLD_CM = 15.0` (`agent.py:45`), the result is treated as **out of range** — no size is recommended, and the agent responds honestly that nothing fits well (`agent.py:365-373`) rather than forcing a bad match. Otherwise, `confidence = 1 - (distance / 15.0)`, i.e. confidence decays linearly from 100% at a perfect (0cm) match down to 0% at the 15cm cutoff.
+### 5.1 `analyze_turn`
 
-Confidence handling for **self-reported** size labels (as opposed to computed ones) is covered separately in §7.
+The first node. Resolves the last user message as `query`, handles any active `pending_state`, runs the LLM-based semantic intent classifier (`_classify_intent_with_llm`), and populates the `FitState` with:
+- `resolved_intent` (a `SemanticIntent` enum value)
+- `requires_catalog` (whether `retrieve_rag_context` should run)
+- `_parsed_classification` (raw classifier output — declared in `FitState` so LangGraph propagates it)
+- Constraint fields: `requested_material`, `requested_price_range`, `requested_brand`, `active_search`
 
----
+Deterministic short-circuit: if `pending_state` resolves the turn fully (e.g., the user confirms or corrects a size), `final_response` is set and the remaining nodes are skipped via the `format_response` conditional edge.
 
-## 6. RAG — `retrieval.py` (TF-IDF + Cosine Similarity, not Embeddings)
+### 5.2 `retrieve_rag_context`
 
-`retrieve_relevant_products` (`retrieval.py:26-60`) vectorizes the query plus every candidate product's `"{name} {category} {description}"` string with scikit-learn's `TfidfVectorizer`, then ranks products by cosine similarity to the query vector, returning up to `top_k=3` results and dropping anything scoring ≤ 0.05 (so an unrelated query returns nothing rather than forcing weak matches).
+Runs only when `requires_catalog == True` (PRODUCT_DISCOVERY and CONTINUATION intents by default; CATALOG_META always forces it False).
 
-**Why TF-IDF instead of embeddings**, per the module's own header comment (`retrieval.py:1-12`):
-- **No external dependency at request time.** An embeddings approach would need either a network call to an embedding API or a local model load — both are things this project experienced repeated outages with on the same night this was built (see the fallback chain in §3). TF-IDF via scikit-learn runs entirely in-process, in memory, with no network call and no model download.
-- **Speed.** Fitting a `TfidfVectorizer` over a small per-request catalog and computing cosine similarity is effectively instant — no embedding-API latency in the hot path.
-- **Statelessness fits the service's design.** The service holds no catalog index between requests — `catalog_products` arrives fresh on every call (see `ChatRecommendRequest.catalog_products`, `main.py:91-94`, sent server-side by the Next.js proxy). Since there's no persistent index to maintain, there's no benefit from a heavier embeddings+vector-DB pipeline that would only pay off with a large, stable, pre-indexed corpus.
+Retrieves products through two complementary paths:
+1. **Store API search** (`/api/products/search`): HTTP call to the Next.js store, results filtered through `_is_eligible` before storing.
+2. **Local TF-IDF** (`_retrieve_local_candidates`): in-memory cosine similarity over `catalog_products`; supplements store API results when fewer than `desired_page_size` (4) were found.
 
-This is deliberately scoped to **free-text product descriptions only** — the one genuinely unstructured piece of catalog data. Size charts and categories are structured data and are handled by exact-match/deterministic logic instead (§4, §5) — RAG is never used where a precise answer is computable.
+Both paths are subject to **eligibility filtering** (see §7). A structural fallback — returning constrained-catalog products directly when TF-IDF scores every product below threshold — handles plural/stemming mismatches without hardcoding synonyms.
 
-**Known limitation — no stemming.** Plain `TfidfVectorizer` tokenizes on exact word forms, so a plural query term won't match a singular catalog term (or vice versa). Verified live: `"show me your blouses"` against catalog descriptions written as `"...Blouse by Nour Atelier..."` returns **zero** matches (similarity below the 0.05 cutoff) even though `fetch_products`/`matched_category` still fire correctly from the LLM's own category detection — `retrieved_product_ids` is simply empty that turn. `"show me a silk blouse"` (singular) against the same catalog returns 3 correct matches. Worth knowing before a live demo of the style-query flow.
+### 5.3 `compute_size_math`
 
----
+Runs only when `resolved_intent == SIZING`. Calls `compute_recommended_size` (pure deterministic function) and stores the result in `size_math_result`. No LLM call.
 
-## 7. Confidence-Threshold Logic — Product Page vs. General Chat
+### 5.4 `fit_reasoning_agent`
 
-Two entirely different confidence policies exist depending on context, and they are **not** unified — this is intentional:
+Handles all remaining intents. Deterministic intents are dispatched without any LLM call:
 
-- **Product page (a real `size_chart` is in scope), user states a size label instead of measurements** (`agent.py:315-341`): the agent asks the user how confident they are (0–100%). If they answer **≥ 80%**, the self-reported label is trusted as-is (`STATIC-LABEL-TRUSTED`, `agent.py:318-326`) — no measurement calculation is performed, since the user already knows their size for that brand/fit. Below 80%, the agent refuses to guess and instead pushes them into providing real measurements (`STATIC-LABEL-UNTRUSTED`, `agent.py:327-333`), where §5's deterministic calculation takes over.
-- **General chat (no `size_chart` in scope) — always redirect, no exception** (`build_general_instruction`, rule 4, `agent.py:276-285`): if the user states anything about size/fit here — a label, raw measurements, or a question — the agent is instructed to **never** ask about confidence, accept a label, or attempt any calculation. There is no product-specific chart to validate against in general chat, so any number here is disconnected from an actual measurable claim. The agent unconditionally redirects: "pick an item and click **View Item**." This is a hard rule with no confidence exception, unlike the product-page branch — the two contexts are not interchangeable because only one of them has real ground-truth data to check a claim against.
+| Intent | Handler | Response type |
+|---|---|---|
+| GREETING | `_answer_self_awareness_question` | STATIC-GREETING |
+| SELF_AWARENESS | `_answer_self_awareness_question` | STATIC-SELF-AWARENESS |
+| PROFILE | `_answer_profile_question` | STATIC-PROFILE |
+| CATALOG_META | `_catalog_meta_response` | STATIC-CATALOG-META |
+| CATALOG_UNAVAILABLE | Inline static response | STATIC-UNAVAILABLE |
+| OUT_OF_SCOPE | Inline static response | STATIC-OUT-OF-SCOPE |
+| CLARIFICATION | Inline static response | STATIC-CLARIFICATION |
+| CURRENT_PRODUCT | `_answer_current_product_fact` or `_resolve_chart_answer` | STATIC-CURRENT-PRODUCT |
 
----
+PRODUCT_DISCOVERY and CONTINUATION call `call_llm_with_fallback` with the retrieved product context.
 
-## 8. Visual Product Cards — `retrieved_product_ids` and `action=fetch_products`
+### 5.5 `format_response`
 
-`agent.py:419-429`: after the LLM responds, `retrieved_product_ids` is attached to the output **only if both** conditions hold:
-1. RAG (§6) actually retrieved at least one product for this turn, **and**
-2. the LLM's own decided `action` is `fetch_products` — i.e. the LLM itself decided this turn is actively presenting items right now.
-
-If the LLM instead asks a clarifying question (`provide_recommendation`) even though RAG found a loose textual match, `retrieved_product_ids` is **not** attached — cards must never appear disconnected from what the reply text is actually saying (this exact bug is called out explicitly in the code comment). The widget renders the cards itself from its own already-cached product data (image, price, link) keyed by these ids — the LLM's text is only ever a short intro, never the source of product details shown (`agent.py:419-422`).
-
-A defensive guard runs just before this (`agent.py:403-417`): if the LLM's `matched_category` isn't an exact (case-insensitive) match against `available_categories`, it's dropped and the action is downgraded from `fetch_products` back to `provide_recommendation` with a clarifying message — preventing a hallucinated category from ever reaching the widget's product filter.
-
-The same all-providers-failed path (`main.py:167-178`, `EMERGENCY-FALLBACK`) never sets `retrieved_product_ids` either, since it bypasses the agent graph entirely and returns a static apology with `success:false`.
-
----
-
-## 9. LangGraph — Confirmed Usage, Currently a Single-Node Graph
-
-LangGraph **is** actually used, not just imported for show: `agent.py:435-439` builds a real `StateGraph(FitState)`, registers one node (`"agent"` → `call_conversational_agent`), sets it as the entry point, and wires it directly to `END`. `main.py:148` invokes it via `recommendation_graph.ainvoke(initial_state)`, and `FitState` (`agent.py:21-30`) is a proper `TypedDict` schema shared across the graph.
-
-**Why it's a single node and not a multi-step chain:** the current business logic (§4) doesn't need graph-level orchestration — there's no multi-step planning, no loop, and no conditional edges between distinct stages. All of the actual branching (deterministic-vs-LLM dispatch, RAG retrieval, category guardrails) happens as plain Python control flow *inside* that one node function, because each incoming request maps to exactly one outgoing response with no intermediate state to persist between graph steps. A single-node graph is the right size for that shape of problem — splitting it into separate "retrieve" / "classify" / "respond" nodes today would add indirection without changing behavior. LangGraph's value here is the typed state contract (`FitState`) and having the wiring already in place so a genuinely multi-step flow (e.g., a separate retrieval node with its own retry/critique logic) could be added later without restructuring the entry point or the FastAPI route.
+Assembles the final `RecommendationOutput` into `state["structured_response"]`, which `main.py` reads to build `ChatRecommendResponse`.
 
 ---
 
-## 10. LangChain — Confirmed Partial Usage (Gemini & Ollama Only)
+## 6. Semantic Intent Classification
 
-LangChain integrations are used for exactly two of the four providers:
-- **Gemini**: `ChatGoogleGenerativeAI` (`agent.py:129-135`, imported `agent.py:9`)
-- **Ollama**: `ChatOllama` (`agent.py:202-206`, imported `agent.py:10`)
+`_classify_intent_with_llm` (`agent.py`) calls DeepSeek with a structured classifier prompt and returns a JSON object with these fields (among others):
 
-Both go through `.with_structured_output(RecommendationOutput)`, letting LangChain handle schema-validated parsing into the Pydantic model automatically.
+| Field | Values | Purpose |
+|---|---|---|
+| `resolved_intent` | `SemanticIntent` enum | The primary routing decision |
+| `requires_catalog` | bool | Whether `retrieve_rag_context` should run (overridden for CATALOG_META) |
+| `catalog_meta_subject` | BRANDS / CATEGORIES / DEPARTMENTS / CATEGORIES_FOR_DEPARTMENT / null | Disambiguates CATALOG_META responses |
+| `requested_department` | string or null | Canonicalized to men/women via `_DEPT_ALIAS_MAP` |
+| `canonical_department` | string or null | Preferred over `requested_department` when both are present |
+| `requested_category` | string or null | Matched case-insensitively against `available_categories` |
+| `requested_brand` | string or null | Brand constraint for eligibility filtering |
 
-**DeepSeek and Bedrock deliberately bypass LangChain** and use direct clients instead:
-- **DeepSeek** uses the raw `AsyncOpenAI` client (`agent.py:8`, used at `agent.py:148-176`) pointed at DeepSeek's OpenAI-compatible endpoint. DeepSeek's API natively supports `response_format={"type": "json_object"}`, so a direct client call is simpler and more transparent than routing through a LangChain wrapper — it also lets the code apply its own DeepSeek-specific quirk-handling (normalizing the reply field name when the model returns `"reply"` instead of `"message"`, `agent.py:169-173`), which is easier to reason about against a raw response dict than through an abstraction layer.
-- **Bedrock** (`Bedrock.py`) is a custom, course-provided gateway with its own non-standard REST shape (`/student/chat`, `model_id` + `messages` + `max_tokens` body, `output_text` response field) — not a provider LangChain ships an integration for. It's called directly via `httpx` (`Bedrock.py:6, 49-82`), with the JSON schema given as an explicit prompt instruction (`Bedrock.py:19-33`) and manual `json.loads` parsing plus a one-shot "that wasn't valid JSON, retry" loop (`Bedrock.py:85-98`), since there's no framework-level structured-output support available for a bespoke gateway like this.
+`_DEPT_ALIAS_MAP` normalizes natural variants (man → men, woman → women, male → men, etc.). Child/kids terms are intentionally absent — they are not silently mapped to an adult department.
 
-In short: LangChain is used where it buys real convenience (an existing, well-supported integration with structured-output parsing built in); it's skipped where the provider is either non-standard (Bedrock) or where a raw client is simpler and gives more direct control (DeepSeek).
-
----
-
-## 11. Live Demo Flow / Script
-
-This script outlines the standard user journey demonstrating the core capabilities of the Recommendation Service.
-
-### Step 1: General Discovery Chat
-* **Context:** The user lands on the homepage with a vague idea of what they want.
-* **User Input:** "I'm looking for an outfit for a formal wedding."
-* **System Action:**
-  - The AI parses the "formal/wedding" intent.
-  - The TF-IDF RAG pipeline scans the available catalog.
-  - **Output:** The AI asks for clarification based on available categories: "Are you looking for a blouse or a dress?"
-
-### Step 2: Visual Product Cards
-* **User Input:** "A blouse."
-* **System Action:**
-  - The LLM maps this to the exact `matched_category` string "blouses".
-  - It triggers the `fetch_products` action.
-  - **Output:** The widget renders visual product cards (images, names, prices) of relevant blouses, using its own already-cached product data.
-
-### Step 3: Deep-linking Auto-Open on Product Pages
-* **User Action:** The user clicks "View Item" on a specific blouse card.
-* **System Action:**
-  - The widget deep-links the user to the exact product page `/products/[id]`.
-  - The widget auto-opens on the product page and enters "Static Product Mode."
-  - **Output:** The AI prompts, "Please enter your height, weight, chest, and waist measurements below, and I'll calculate your exact size."
-
-### Step 4: Stated Size & Confidence Verification (Optional Branch)
-* **User Input:** "I usually wear a size Medium."
-* **System Action:**
-  - The AI detects a stated size label but lacks measurements.
-  - **Output:** "You mentioned Medium - how confident are you in that size, from 0-100%?"
-  - If the user says "90%", the AI trusts the label. If "50%", the AI forces the user to input raw measurements.
-
-### Step 5: Deterministic Euclidean Distance Size-Matching
-* **User Input:** (User fills in the visual sliders: Chest 90cm, Waist 75cm, Hips 98cm).
-* **System Action:**
-  - The AI bypasses LLM text generation entirely.
-  - It executes `compute_recommended_size()`, calculating the Euclidean distance against the product's specific JSON size chart.
-  - **Output:** "Based on your measurements, size M is your best match (85% confidence)."
-  - *Out of Range Fallback:* If the Euclidean distance exceeds 15cm, the AI honestly states: "I'm sorry, but based on your measurements, this item doesn't come in a size that would fit you well."
+A post-classifier guard broadens PROFILE detection: if the query contains profile-reference phrases ("about me", "know about me", etc.) and the intent was classified as CATALOG_META or PRODUCT_DISCOVERY, it is corrected to PROFILE before any further processing.
 
 ---
 
-## 12. End-to-End Request Flow (what actually happens, step by step)
+## 7. Catalog Validation & Eligibility
 
-1. **Browser** — `Navbar.tsx` mounts `<script src="/recommend-widget.js" data-widget-key={NEXT_PUBLIC_WIDGET_API_KEY}>`. The widget script reads that key once at load and sends it as `X-Manikan-Key` on every call it makes.
-2. **Widget → Next.js proxy** — `recommend-widget.js` `POST`s to `/api/widget/recommend` with the conversation state (`session_id`, `messages`, `betas`, `product_id`, `intent`, `catalog_products`, etc.) and the `X-Manikan-Key` header. It never talks to FastAPI directly, and never sends `size_chart` — that's server-resolved (see step 4).
-3. **`authorizeWidgetRequest`** (`widget-auth.ts:117-195`) gates the request: key present → Origin present (fail-closed) → key resolves to an active retailer's `ServiceApiKey` scoped to `RECOMMENDATION` → Origin is in that retailer's allowlist → active subscription with remaining quota → per-retailer rate limit. Any failure returns a generic 401/403/429 (never revealing which check failed).
-4. **Server-side size-chart resolution** (`route.ts:73-90`) — if `product_id` is present, the route first checks the product belongs to *this* retailer (404 otherwise — never leak another tenant's product), then calls `buildBodyFitChartCsv` (`size-chart.ts`) to build `size_chart` itself from `ProductVariant` rows, as a JSON array. The client can never supply its own `size_chart` — that would let a client fabricate the very data used to compute its own result.
-5. **Proxy → FastAPI** (`route.ts:96-115`) — the route forwards the request to `RECOMMENDATION_SERVICE_URL` (`:8000`) with `X-Manikan-Internal-Key: RECOMMENDATION_SERVICE_KEY` — the *internal* shared secret, distinct from the public widget key used in step 2.
-6. **`verify_internal_key`** (`main.py:66-78`) — FastAPI checks that internal key with `hmac.compare_digest` against `RECOMMEND_SERVICE_KEY` (its own `.env`). This is the only door into the service; there is no other authenticated path.
-7. **`recommendation_graph.ainvoke(...)`** (`main.py:148`) — runs the single-node LangGraph (§9) → `call_conversational_agent` (§4) → either the deterministic sizing branch (§5) or the LLM-fallback + RAG branch (§3, §6), producing a `RecommendationOutput`.
-8. **Response flows back** FastAPI → proxy → widget. On the way back through the proxy, quota is deducted (`consumeQuota`, fire-and-forget, step doesn't block the response) and the JSON payload is passed through unchanged to the browser.
+### 7.1 Category-Department Compatibility
 
-## 13. Key File Breakdown (quick reference)
+`_map_get_departments(mapping, category)` (`agent.py`) performs a **case-insensitive** lookup into `category_department_mapping`. The DB stores capitalized keys ("Skirt"); runtime uses lowercase names ("skirt"). All six lookup sites in the routing and eligibility logic use this helper so no category-department check can silently pass due to a case mismatch.
+
+When a user requests a category for a specific department, the mapping is consulted to determine compatibility. If the requested category has no entries for the requested department in the mapping, the response is CATALOG_UNAVAILABLE.
+
+### 7.2 Authoritative Eligibility Gate (`_is_eligible`, `retrieve_rag_context`)
+
+Every product that may be placed in `retrieved_products` passes through `_is_eligible` — a closure that enforces all active constraints:
+
+```
+department/gender match  (from active_search.department — authoritative, takes priority)
+category match           (from selected_category — case-insensitive string equality)
+brand match              (from parsed_classification.requested_brand — if a brand was requested)
+```
+
+`_is_eligible` is applied at three points:
+1. To the full `catalog_products` list before any TF-IDF scoring
+2. To every product returned by the store API
+3. In the structural fallback (when TF-IDF scores everything below threshold)
+
+A product cannot enter `retrieved_products` by any path if it fails eligibility. This is the **final safety gate**: the LLM does not grant eligibility, and RAG scores do not override it.
+
+### 7.3 CATALOG_META — Deterministic Catalog Facts
+
+CATALOG_META intents are answered entirely from authoritative state data without any RAG retrieval or LLM call:
+
+- **BRANDS**: from `state["available_brands"]` (populated by the Next.js proxy from the live DB)
+- **CATEGORIES**: from `state["catalog_products"]` or `category_department_mapping` keys
+- **DEPARTMENTS**: from `state["available_departments"]` or mapping values
+- **CATEGORIES_FOR_DEPARTMENT**: from `category_department_mapping` filtered by the requested department
+
+`requires_catalog` is forced to `False` for CATALOG_META regardless of the LLM's output. No vector search is performed.
+
+### 7.4 Hard Product Constraints
+
+Price and material constraints are resolved in `analyze_turn` and enforced in `retrieve_rag_context`:
+
+- `_extract_price_constraint` parses price ranges from the query ("under 500", "between 300 and 600")
+- `_filter_catalog_by_material_and_price` filters the constrained catalog by both material and price before TF-IDF scoring
+- Store API results receive the same material/price filter after retrieval
+
+---
+
+## 8. Deterministic Sizing — `compute_recommended_size`
+
+`compute_recommended_size(betas, size_chart_raw)` (`agent.py`) is a pure function. For each size row in the JSON `size_chart`, it computes:
+
+```
+distance = sqrt(
+    (chest_cm_row - chest_cm_user)²
+  + (waist_cm_row - waist_cm_user)²
+  [+ (hip_cm_row - hips_cm_user)² if hip data is in the row]
+)
+```
+
+The row with the smallest distance wins. If that distance exceeds `OUT_OF_RANGE_THRESHOLD_CM = 15.0`, the result is explicitly out-of-range — no size is recommended, and the agent responds honestly rather than forcing a poor match.
+
+`confidence = 1 − (distance / 15.0)`, decaying linearly from 1.0 at a perfect match to 0.0 at the 15 cm cutoff.
+
+The size chart is validated at parse time: non-JSON input and an empty JSON array both produce an explicit out-of-range result rather than a crash. Rows missing `waist_cm` are silently excluded from candidates.
+
+### 8.1 Size Chart Format Validation
+
+The size chart is a JSON array:
+
+```json
+[
+  {"size": "S",  "chest_cm": 86, "waist_cm": 68, "hip_cm": 90},
+  {"size": "M",  "chest_cm": 90, "waist_cm": 72, "hip_cm": 94},
+  {"size": "L",  "chest_cm": 94, "waist_cm": 76, "hip_cm": 98}
+]
+```
+
+`_build_chart_section` derives all field names dynamically from the actual chart data — there are no hardcoded field names. Any `_cm` or `_kg` suffix is stripped for display. This ensures products with non-standard chart schemas (e.g., additional measurement fields) are handled correctly.
+
+### 8.2 Dimension Alias Map
+
+`_DIMENSION_MAP` maps natural language aliases to the canonical JSON field names:
+
+```python
+{"chest": "chest_cm", "bust": "chest_cm", "waist": "waist_cm", "hip": "hip_cm", "hips": "hip_cm"}
+```
+
+`_resolve_chart_answer` consults this map before falling back to substring matching, so "bust" and "hips" resolve correctly to the corresponding chart columns.
+
+---
+
+## 9. RAG — `retrieve_rag_context`
+
+`retrieve_relevant_products` (`retrieval.py`) vectorizes the query and product descriptions (name + category + description) with scikit-learn's `TfidfVectorizer`, then ranks products by cosine similarity. Results with similarity ≤ 0.05 are dropped so an unrelated query returns nothing rather than forcing weak matches.
+
+**Known limitation — no stemming**: plain `TfidfVectorizer` tokenizes on exact word forms. A plural query term ("skirts") does not match catalog descriptions written in singular ("Skirt"). The structural fallback in `retrieve_rag_context` handles this by returning constrained-catalog products directly when TF-IDF scores all candidates below threshold.
+
+`retrieve_rag_context` supplements TF-IDF results with a store API search when the returned set is below `desired_page_size` (4 products). All API-returned products pass through `_is_eligible` before being added.
+
+**Why TF-IDF rather than dense embeddings**: The service is stateless — `catalog_products` arrives fresh each request. There is no persistent index to pre-build. TF-IDF over a small per-request catalog runs in-process with no network call, at negligible latency. When `HF_TOKEN` is configured, embedding-based retrieval via the Hugging Face Inference API becomes available as an alternative.
+
+---
+
+## 10. Confidence-Threshold Logic — Product Page vs. General Chat
+
+Two confidence policies exist, intentionally separate:
+
+**Product page** (`betas` + `size_chart` both present): the agent runs `compute_recommended_size` (§8). Separately, if the user states a size label (e.g., "I'm an XL"), the agent asks for a confidence percentage. ≥ 80% trusts the stated label; below 80%, the agent requests actual measurements. This branch always has real chart data to verify the claim against.
+
+**General chat** (no `size_chart`): the agent never asks for confidence, never accepts a size label for a recommendation, and redirects the shopper to a specific product page. There is no chart to validate any claim against in this context.
+
+---
+
+## 11. Product Chat — Current Product Validation
+
+When a `product_id` is present, `retrieve_rag_context` enforces retrieval scope:
+
+1. The current product's category is looked up from `catalog_products` and set as `selected_category`, overriding any stale state from a prior turn.
+2. If `active_search.selected_category` is unset, it is also set to the current product's category.
+
+This ensures that product discovery attempts from a product page (e.g., "show me similar alternatives") are constrained to that product's own category — a classify error or intent slip cannot retrieve a different category.
+
+`_answer_current_product_fact` handles product information questions deterministically, reading from the product's structured fields (fabric, brand, description). If a field is absent or empty, a deterministic "not provided" response is returned rather than delegating to the LLM.
+
+---
+
+## 12. Pending State Handling
+
+`_resolve_pending_state` (`analyze_turn`) checks whether an active `pending_state` is conclusively answered by the current turn. Recognized action types (`PendingAction`) are: CONFIRMATION, CORRECTION, REJECTION, UPDATE, UNKNOWN, INTERRUPTION.
+
+A pending task is preserved (not cleared) when the current intent is in `_PENDING_PRESERVING_INTENTS`:
+```
+SELF_AWARENESS, PROFILE, CURRENT_PRODUCT, GREETING,
+SIZING, OUT_OF_SCOPE, CONTINUATION, CLARIFICATION
+```
+
+Only PRODUCT_DISCOVERY, CATALOG_UNAVAILABLE, and explicit cross-department AWAITING_CATEGORY mismatches are allowed to clear a pending task. This ensures a sidebar question ("what brand is this?") does not lose the shopper's in-progress sizing flow.
+
+---
+
+## 13. Visual Product Cards — Response Validation
+
+`retrieved_product_ids` is attached to the response **only when both** of these hold:
+1. `retrieve_rag_context` placed at least one product in `retrieved_products`
+2. The LLM's decided `action` is `fetch_products`
+
+If the LLM returns a clarifying question (`provide_recommendation`) despite RAG finding products, `retrieved_product_ids` is not attached. Cards must never appear disconnected from what the reply text is presenting.
+
+A category guard is applied before committing the LLM's `matched_category`: if the value is not an exact (case-insensitive) match against `available_categories`, it is dropped and the action is downgraded from `fetch_products` to `provide_recommendation`. The LLM cannot cause the widget to search for a category that doesn't exist in the catalog.
+
+---
+
+## 14. Error & Fallback Behavior
+
+| Condition | Response |
+|---|---|
+| `DEEPSEEK_API_KEY` absent | `RuntimeError` → EMERGENCY-FALLBACK |
+| DeepSeek returns empty message for non-FETCH_PRODUCTS action | `ValueError("llm_empty_message")` → caller-specific fallback |
+| DeepSeek returns empty for `fetch_products` | Neutral caption, cards still rendered |
+| CATALOG_META or PROFILE LLM failure | Impossible — both are handled deterministically |
+| Workflow raises any unhandled exception | `success=false`, `EMERGENCY-FALLBACK` provider, generic "recalibrating" message |
+| `product_id` but no matching product in catalog | CURRENT_PRODUCT fallback: chart displayed if available, otherwise LLM |
+
+The emergency fallback path in `main.py` never exposes internal exception class names to the shopper; the `error_code` field carries the Python exception type name for internal debugging only.
+
+---
+
+## 15. End-to-End Request Flow
+
+1. **Browser** — `recommend-widget.js` POSTs to `/api/widget/recommend` with `X-Manikan-Key`.
+2. **`authorizeWidgetRequest`** (`widget-auth.ts`) gates the request: key → retailer → Origin → quota → rate limit.
+3. **Server-side size-chart resolution** (`route.ts`) — if `product_id` is present, the proxy verifies the product belongs to this retailer (404 otherwise), then builds `size_chart` as a JSON array from `ProductVariant` rows. The client never supplies its own `size_chart`.
+4. **Proxy → FastAPI** — the route forwards to `RECOMMENDATION_SERVICE_URL` with `X-Manikan-Internal-Key: RECOMMENDATION_SERVICE_KEY`.
+5. **`verify_internal_key`** (`main.py`) — constant-time comparison; 401 on mismatch.
+6. **`recommendation_graph.ainvoke(...)`** — runs the 5-node LangGraph (§5).
+7. **Response** — `ChatRecommendResponse` flows back: FastAPI → proxy → widget. Quota is deducted fire-and-forget after the response is sent.
+
+---
+
+## 16. Configuration Reference
+
+All settings are loaded once per process via `@lru_cache` in `config.py` (using `pydantic_settings`).
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `DEEPSEEK_API_KEY` | **Required** | LLM provider — service is non-functional without it |
+| `RECOMMEND_SERVICE_KEY` or `RECOMMENDATION_SERVICE_KEY` | **Required** | Internal shared secret for `verify_internal_key` |
+| `RECOMMEND_SERVICE_KEY_PREVIOUS` | Optional | Accepted during key rotation |
+| `ALLOWED_ORIGINS` | Optional | Comma-separated CORS origins; defaults to `http://localhost:3000,http://127.0.0.1:3000` |
+| `STORE_BASE_URL` | Optional | Base URL of the Next.js store for the store API RAG path; defaults to `http://localhost:3000` |
+| `STORE_SERVICE_BASE_URL` | Optional | Alternative base URL for internal store service calls |
+| `STORE_SERVICE_RAG_TIMEOUT_SECONDS` | Optional | Timeout for store API product search calls; defaults to `5.0` |
+| `HF_TOKEN` or `HUGGINGFACE_API_KEY` | Optional | Enables HuggingFace Inference API for embedding-based retrieval |
+
+---
+
+## 17. Testing
+
+Five test files, all pure-function or mock-based (no live LLM calls except `test_live_scenarios.py`):
+
+| File | Coverage |
+|---|---|
+| `test_agent.py` | `compute_recommended_size` — exact match, near match, out-of-range, malformed chart |
+| `test_core_invariants.py` | `_resolve_chart_answer` (including aliases), `_answer_current_product_fact`, `_find_stated_size_and_confidence`, `_normalize_category_text`, `_DEPT_ALIAS_MAP`, TF-IDF retrieval, `compute_recommended_size` boundary cases |
+| `test_e2e_semantic_invariants.py` | End-to-end semantic invariants: department/category compatibility, eligibility, CATALOG_META, PROFILE, CATALOG_UNAVAILABLE, catalog constraints |
+| `test_state_arbitration.py` | State arbitration: pending-state preservation, active_search priority, current-turn constraints vs. stale state |
+| `test_live_scenarios.py` | TF-IDF retrieval and routing exercised with real provider calls (non-deterministic) |
+
+Run: `python -m pytest tests/ -v`
+
+---
+
+## 18. Key File Breakdown
 
 | File | Role |
 |---|---|
-| `apps/store/components/Navbar.tsx` | Mounts the widget script tag on every storefront page, passing the public widget key as `data-widget-key`. |
-| `apps/store/public/recommend-widget.js` | The embeddable client widget — chat UI, product cards, measurement sliders. Only ever calls `/api/widget/recommend`, never FastAPI directly. |
-| `apps/store/app/api/widget/recommend/route.ts` | The Zero Trust proxy. Runs the security gate, resolves `size_chart` server-side, forwards to FastAPI with the internal key, deducts quota. |
-| `apps/store/app/lib/widget-auth.ts` | `authorizeWidgetRequest` — the actual security gate logic (key → retailer → origin → quota → rate limit) shared by all widget proxy routes. |
-| `apps/store/app/lib/size-chart.ts` | `buildBodyFitChartCsv` — builds the JSON `size_chart` array from `ProductVariant` rows server-side. (Function name is a holdover from a prior CSV format; see §0.) |
-| `services-python/recommendation-service/app/main.py` | FastAPI app. `verify_internal_key` gate, `/recommend` and `/health` endpoints, request/response schemas, the emergency-fallback catch-all. |
-| `services-python/recommendation-service/app/agent.py` | The core agent: `FitState`, `compute_recommended_size` (deterministic sizing), `call_llm_with_fallback` (4-tier LLM chain), `call_conversational_agent` (routing logic), the LangGraph definition. |
-| `services-python/recommendation-service/app/Bedrock.py` | Direct `httpx` client for the course-provided Bedrock gateway (2nd fallback tier) — manual JSON-schema prompting and parsing since it's not a LangChain-supported provider. |
-| `services-python/recommendation-service/app/retrieval.py` | TF-IDF + cosine-similarity RAG over catalog product descriptions (§6). |
-| `services-python/recommendation-service/app/config.py` | `pydantic_settings`-based `.env` loader — all API keys, the internal shared secret, allowed origins. |
-| `services-python/recommendation-service/app/schemas.py` | `ActionType` enum and the `RecommendationOutput`/`MeasurementInput` Pydantic models shared across the whole agent. |
-| `services-python/recommendation-service/tests/test_agent.py` | Git-tracked unit tests for `compute_recommended_size` — the authoritative source of truth that `size_chart` is JSON, not CSV (see §0 incident). |
-| `services-python/recommendation-service/tests/test_live_scenarios.py` | Higher-level tests exercising `call_conversational_agent` directly: general discovery, category fetch, deterministic sizing, TF-IDF retrieval. |
+| `apps/store/public/recommend-widget.js` | Embeddable client widget — chat UI, product cards, measurement sliders. Only ever calls `/api/widget/recommend`. |
+| `apps/store/app/api/widget/recommend/route.ts` | Zero Trust proxy: runs the security gate, builds `size_chart` server-side, forwards to FastAPI with internal key, deducts quota. |
+| `apps/store/app/lib/widget-auth.ts` | `authorizeWidgetRequest` — the security gate (key → retailer → origin → quota → rate limit). |
+| `apps/store/app/lib/size-chart.ts` | Builds the JSON `size_chart` array from `ProductVariant` rows server-side. |
+| `services-python/recommendation-service/app/main.py` | FastAPI app: `verify_internal_key`, `/recommend` and `/health` endpoints, rate limiting, `ChatRecommendRequest`/`ChatRecommendResponse` schemas. |
+| `services-python/recommendation-service/app/agent.py` | Core agent: `FitState`, `SemanticIntent`, all 5 graph nodes, deterministic handlers, LLM classifier, size computation, eligibility gate, catalog validation. |
+| `services-python/recommendation-service/app/retrieval.py` | TF-IDF + cosine-similarity RAG over catalog product descriptions. |
+| `services-python/recommendation-service/app/config.py` | `pydantic_settings`-based `.env` loader with `@lru_cache`. |
+| `services-python/recommendation-service/app/schemas.py` | `ActionType`, `RecommendationOutput`, `MeasurementInput`, `ActiveSearch`, `PendingState`, `SafeProfileContext` — shared Pydantic models. |
+| `services-python/recommendation-service/Dockerfile` | Python 3.11-slim image; build-time import test validates the full dependency set on build. |

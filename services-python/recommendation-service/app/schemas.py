@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -11,12 +12,61 @@ class ActionType(str, Enum):
     REQUEST_DATA = "request_data"
 
 
+class ActiveSearch(BaseModel):
+    query: str
+    department: Optional[str] = None
+    selected_category: Optional[str] = None
+    requested_material: Optional[str] = None
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    style_occasion: Optional[str] = None
+
+
+class PendingType(str, Enum):
+    CONFIRM_MEASUREMENTS = "confirm_measurements"
+    REQUEST_CONFIDENCE = "request_confidence"
+    AWAITING_DEPARTMENT = "awaiting_department"
+    AWAITING_CATEGORY = "awaiting_category"
+
+
+class PendingAction(str, Enum):
+    CONFIRMATION = "confirmation"
+    CORRECTION = "correction"
+    REJECTION = "rejection"
+    UPDATE = "update"
+    UNKNOWN = "unknown"
+    INTERRUPTION = "interruption"
+
+
+class PendingState(BaseModel):
+    type: PendingType
+    product_id: Optional[str] = None
+    product_name: Optional[str] = None
+    recommended_size: Optional[str] = None
+    size_provenance: Optional[str] = None
+
+
 class MeasurementInput(BaseModel):
     height_cm: float
     weight_kg: float
     chest_cm: float
     waist_cm: float
     hips_cm: float
+
+
+class ProfileHistoryItem(BaseModel):
+    product_id: str
+    product_name: Optional[str] = None
+    recommended_size: Optional[str] = None
+    confidence_score: Optional[float] = None
+    created_at: Optional[str] = None
+
+
+class SafeProfileContext(BaseModel):
+    first_name: Optional[str] = None
+    saved_measurements: Optional[MeasurementInput] = None
+    previous_product_size: Optional[str] = None
+    recent_fit_history: list[ProfileHistoryItem] = Field(default_factory=list)
 
 
 class RecommendationOutput(BaseModel):
@@ -36,3 +86,6 @@ class RecommendationOutput(BaseModel):
     # composed itself. Kept separate from matched_category's exact-lookup
     # flow.
     retrieved_product_ids: Optional[list[str]] = Field(None)
+    pending_state: Optional[PendingState] = Field(None)
+    active_search: Optional[ActiveSearch] = Field(None)
+    resolved_intent: Optional[str] = Field(None, description="The resolved semantic intent of this turn")
