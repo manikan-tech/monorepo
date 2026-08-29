@@ -47,6 +47,17 @@ export default async function AccountPage() {
     redirect("/login");
   }
 
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const usageCount = await prisma.botUsage.count({
+    where: {
+      customerId: customer.id,
+      createdAt: { gte: monthStart },
+    },
+  });
+  const monthlyQuota = parseInt(process.env.BOT_MONTHLY_QUOTA || "3", 10);
+  const freeCreditsRemaining = Math.max(0, monthlyQuota - usageCount);
+
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-12 md:py-20 w-full animate-fade-in-up">
       <h1 className="font-display text-4xl font-semibold text-forest-950 mb-10">
@@ -102,7 +113,11 @@ export default async function AccountPage() {
           </div>
 
           {/* Telegram Bot ID */}
-          <TelegramIdCard customerId={customer.id} />
+          <TelegramIdCard 
+            customerId={customer.id} 
+            freeCreditsRemaining={freeCreditsRemaining}
+            purchasedCredits={customer.purchasedBotCredits}
+          />
 
           {/* Quick Links */}
           <div className="bg-white rounded-3xl p-6 border border-forest-900/5 shadow-soft">

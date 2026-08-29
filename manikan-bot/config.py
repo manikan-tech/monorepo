@@ -28,7 +28,7 @@ STORE_API_URL: str = os.getenv("STORE_API_URL", "http://localhost:3000/api/bot/u
 BOT_API_SECRET: str = os.getenv("BOT_API_SECRET", "")
 
 # Monthly quota (free generations per calendar month)
-BOT_MONTHLY_QUOTA: int = int(os.getenv("BOT_MONTHLY_QUOTA", "5"))
+BOT_MONTHLY_QUOTA: int = int(os.getenv("BOT_MONTHLY_QUOTA", "3"))
 
 # URL to send users to when they exhaust their credits
-CHECKOUT_URL: str = os.getenv("CHECKOUT_URL", "https://manikan.store/checkout/bot-credits")
+CHECKOUT_URL: str = os.getenv("CHECKOUT_URL", "https://manikan.store/bot-plans")

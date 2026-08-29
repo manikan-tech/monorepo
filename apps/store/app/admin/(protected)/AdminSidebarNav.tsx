@@ -97,6 +97,32 @@ const NAV_ITEMS = [
     ),
   },
   {
+    href: "/admin/bot-plans",
+    label: "Bot Plans",
+    exact: false,
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+      />
+    ),
+  },
+  {
+    href: "/admin/bot-purchases",
+    label: "Bot Purchases",
+    exact: false,
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+      />
+    ),
+  },
+  {
     href: "/admin/audit-log",
     label: "Audit Log",
     exact: false,

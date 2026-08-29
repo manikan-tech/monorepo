@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const monthlyQuota = parseInt(process.env.BOT_MONTHLY_QUOTA || "5", 10);
+  const monthlyQuota = parseInt(process.env.BOT_MONTHLY_QUOTA || "3", 10);
 
   try {
     let customer;
@@ -61,11 +61,13 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    const totalCreditsRemaining = Math.max(0, monthlyQuota - usageCount) + customer.purchasedBotCredits;
+
     return NextResponse.json({
       found: true,
       customerId: customer.id,
       firstName: customer.firstName,
-      creditsRemaining: Math.max(0, monthlyQuota - usageCount),
+      creditsRemaining: totalCreditsRemaining,
       alreadyLinked: !!customer.telegramChatId,
     });
   } catch (error) {
@@ -146,11 +148,15 @@ export async function POST(request: NextRequest) {
 
     // ── Deduct a credit ─────────────────────────────────────────
     if (action === "use_credit") {
-      // Double-check quota before deducting
-      const monthlyQuota = parseInt(
-        process.env.BOT_MONTHLY_QUOTA || "5",
-        10,
-      );
+      const customer = await prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { purchasedBotCredits: true },
+      });
+      if (!customer) {
+        return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+      }
+
+      const monthlyQuota = parseInt(process.env.BOT_MONTHLY_QUOTA || "3", 10);
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const usageCount = await prisma.botUsage.count({
@@ -160,11 +166,22 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      if (usageCount >= monthlyQuota) {
+      const freeCreditsRemaining = Math.max(0, monthlyQuota - usageCount);
+      const totalCreditsRemaining = freeCreditsRemaining + customer.purchasedBotCredits;
+
+      if (totalCreditsRemaining <= 0) {
         return NextResponse.json({
           success: false,
           error: "QUOTA_EXCEEDED",
           message: "Monthly quota exceeded.",
+        });
+      }
+
+      // Deduct purchased credit if free quota is exhausted
+      if (freeCreditsRemaining === 0) {
+        await prisma.customer.update({
+          where: { id: customerId },
+          data: { purchasedBotCredits: { decrement: 1 } },
         });
       }
 
@@ -174,7 +191,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        creditsRemaining: Math.max(0, monthlyQuota - usageCount - 1),
+        creditsRemaining: totalCreditsRemaining - 1,
       });
     }
 
