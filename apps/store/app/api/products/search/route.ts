@@ -83,15 +83,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const categoryFilter = parsed.category
-      ? Prisma.sql`AND category ILIKE ${parsed.category}`
+      ? Prisma.sql`AND p.category ILIKE ${parsed.category}`
       : Prisma.empty;
       
     const genderFilter = parsed.gender
-      ? Prisma.sql`AND gender ILIKE ${parsed.gender}`
+      ? Prisma.sql`AND p.gender ILIKE ${parsed.gender}`
       : Prisma.empty;
 
     if (!parsed.queryText) {
-      const whereClause: any = { isActive: true };
+      const whereClause: any = { isActive: true, retailer: { isActivated: true } };
       if (parsed.category) whereClause.category = { equals: parsed.category, mode: "insensitive" };
       if (parsed.gender) whereClause.gender = { equals: parsed.gender, mode: "insensitive" };
       
@@ -105,14 +105,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const queryVector = vectorToPgLiteral(await createEmbedding(parsed.queryText));
     const products = await prisma.$queryRaw<SearchProductRow[]>(Prisma.sql`
-      SELECT id, "productCode", name, category, fabric, description, "fitNotes", gender,
-             1 - (embedding <=> ${queryVector}::vector) AS similarity
-      FROM "Product"
-      WHERE "isActive" = true
-        AND embedding IS NOT NULL
+      SELECT p.id, p."productCode", p.name, p.category, p.fabric, p.description, p."fitNotes", p.gender,
+             1 - (p.embedding <=> ${queryVector}::vector) AS similarity
+      FROM "Product" p
+      INNER JOIN "Retailer" r ON p."retailerId" = r.id
+      WHERE p."isActive" = true
+        AND r."isActivated" = true
+        AND p.embedding IS NOT NULL
         ${categoryFilter}
         ${genderFilter}
-      ORDER BY embedding <=> ${queryVector}::vector
+      ORDER BY p.embedding <=> ${queryVector}::vector
       LIMIT ${parsed.limit}
     `);
 
