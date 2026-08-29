@@ -30,7 +30,11 @@ export function vectorToPgLiteral(vector: readonly number[]): string {
 
 export async function createEmbedding(text: string): Promise<number[]> {
   const result = await createEmbeddings([text]);
-  return result[0];
+  const [embedding] = result;
+  if (!embedding) {
+    throw new Error("Embedding provider returned no vector for the requested text");
+  }
+  return embedding;
 }
 
 export async function createEmbeddings(texts: string[]): Promise<number[][]> {
@@ -55,12 +59,15 @@ export async function createEmbeddings(texts: string[]): Promise<number[][]> {
 
   const { client, model } = getEmbeddingClient(apiKey, baseURL);
 
-  const results: number[][] = new Array(inputs.length);
+  const results: Array<number[] | undefined> = new Array(inputs.length);
   const missingInputs: string[] = [];
   const missingIndices: number[] = [];
 
   for (let i = 0; i < inputs.length; i++) {
     const text = inputs[i];
+    if (text === undefined) {
+      throw new Error("Embedding input was unexpectedly missing");
+    }
     const cacheKey = `${model}:${text}`;
     const cached = embeddingCache.get(cacheKey);
     if (cached) {
@@ -92,12 +99,16 @@ export async function createEmbeddings(texts: string[]): Promise<number[][]> {
 
     for (let i = 0; i < newEmbeddings.length; i++) {
       const embedding = newEmbeddings[i];
+      const originalIndex = missingIndices[i];
+      const originalText = missingInputs[i];
+      if (!embedding || originalIndex === undefined || originalText === undefined) {
+        throw new Error("Embedding provider returned an incomplete result set");
+      }
       vectorToPgLiteral(embedding); // Validate
 
-      const originalIndex = missingIndices[i];
       results[originalIndex] = embedding;
 
-      const cacheKey = `${model}:${missingInputs[i]}`;
+      const cacheKey = `${model}:${originalText}`;
       if (embeddingCache.size >= MAX_CACHE_SIZE) {
         const firstKey = embeddingCache.keys().next().value;
         if (firstKey !== undefined) {
@@ -108,7 +119,12 @@ export async function createEmbeddings(texts: string[]): Promise<number[][]> {
     }
   }
 
-  return results;
+  return results.map((embedding) => {
+    if (!embedding) {
+      throw new Error("Embedding provider returned an incomplete result set");
+    }
+    return embedding;
+  });
 }
 
 export type EmbeddableProduct = {

@@ -50,7 +50,11 @@ async function processBatch(batch: ProductToIndex[]): Promise<void> {
       // Update one by one or via case statements (one by one is fine for small batches)
       for (let i = 0; i < batch.length; i++) {
         const product = batch[i];
-        const vectorString = vectorToPgLiteral(embeddings[i]);
+        const embedding = embeddings[i];
+        if (!product || !embedding) {
+          throw new Error("Embedding batch result was unexpectedly incomplete");
+        }
+        const vectorString = vectorToPgLiteral(embedding);
 
         await prisma.$executeRaw`
           UPDATE "Product"

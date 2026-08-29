@@ -26,6 +26,14 @@ const CORS_HEADERS: Record<string, string> = {
     "Access-Control-Allow-Headers": "Content-Type, X-Manikan-Key",
 };
 
+function isUserMessage(value: unknown): value is { role: string; content?: unknown } {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        (value as { role?: unknown }).role === "user"
+    );
+}
+
 export async function OPTIONS() {
     return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
 }
@@ -233,9 +241,7 @@ export async function POST(request: NextRequest) {
     // published chart. This prevents a generic "View items" fallback and
     // gives the shopper the relevant size, limit, and difference.
     if (sizeChart && !productDetailsContext) {
-        const lastUserMsg = Array.isArray(messages)
-            ? messages.slice().reverse().find((m: any) => m && m.role === "user")
-            : null;
+        const lastUserMsg = messages.slice().reverse().find(isUserMessage);
 
         const query = typeof lastUserMsg?.content === "string"
             ? lastUserMsg.content.toLowerCase().trim()
@@ -294,8 +300,9 @@ export async function POST(request: NextRequest) {
         const categoryDepartmentMapping: Record<string, string[]> = {};
         categoryGenders.forEach(p => {
             if (p.category && p.gender) {
-                if (!categoryDepartmentMapping[p.category]) categoryDepartmentMapping[p.category] = [];
-                categoryDepartmentMapping[p.category].push(p.gender);
+                const departments = categoryDepartmentMapping[p.category] ?? [];
+                departments.push(p.gender);
+                categoryDepartmentMapping[p.category] = departments;
             }
         });
         console.timeEnd("Prisma Mapping");
