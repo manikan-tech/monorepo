@@ -1,7 +1,13 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../lib/prisma";
 import { getCustomerFromCookies } from "../../lib/auth";
-import { authorizeWidgetRequest } from "../../lib/widget-auth";
+import {
+    authorizeWidgetRequest,
+    commitQuotaReservation,
+    releaseQuotaReservation,
+    reserveQuota,
+} from "../../lib/widget-auth";
 import { isProductTryOnEnabled, garmentFieldsFor } from "../../lib/tryon-status";
 
 // ─── POST /api/tryon ───
@@ -217,6 +223,14 @@ export async function POST(request: NextRequest) {
 
     // ── 4. Proxy to the Body Service ──
 
+    const reservation = await reserveQuota(
+        auth.subscription.id,
+        "BODY_MODELING",
+        request.headers.get("x-request-id") || randomUUID(),
+        CORS_HEADERS,
+    );
+    if (!reservation.ok) return reservation.response;
+
     let glb: ArrayBuffer;
     try {
         const upstream = await fetch(`${BODY_SERVICE_URL}/generate-dressed-avatar`, {
@@ -257,6 +271,7 @@ export async function POST(request: NextRequest) {
 
         if (!upstream.ok) {
             const detail = await upstream.json().catch(() => ({}));
+            await releaseQuotaReservation(reservation.reservation.id);
             return NextResponse.json(
                 { error: detail.detail || "Body service error" },
                 { status: upstream.status, headers: CORS_HEADERS }
@@ -265,6 +280,7 @@ export async function POST(request: NextRequest) {
 
         glb = await upstream.arrayBuffer();
     } catch (error) {
+        await releaseQuotaReservation(reservation.reservation.id);
         console.error("Body service unreachable:", error);
         return NextResponse.json(
             { error: "Body service unreachable" },
@@ -307,11 +323,7 @@ export async function POST(request: NextRequest) {
         console.error("Failed to save MeasurementSession:", error);
     }
 
-    // ── 5.5 Deduct Quota ──
-    if (auth.subscription) {
-        const { consumeQuota } = await import("../../lib/widget-auth");
-        await consumeQuota(auth.subscription.id, "BODY_MODELING");
-    }
+    await commitQuotaReservation(reservation.reservation.id);
 
     // ── 6. Stream the .glb back ──
     return new NextResponse(glb, {

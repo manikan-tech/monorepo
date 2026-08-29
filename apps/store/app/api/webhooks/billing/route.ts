@@ -37,7 +37,10 @@ function metadataValue(value: unknown, key: string): string | undefined {
 function getSubscriptionIdForEvent(event: Stripe.Event): string | undefined {
   const payload = event.data.object as unknown as StripeRecord;
 
-  if (event.type === "customer.subscription.deleted") {
+  if (
+    event.type === "customer.subscription.deleted" ||
+    event.type === "customer.subscription.updated"
+  ) {
     return typeof payload.id === "string" ? payload.id : undefined;
   }
 
@@ -54,6 +57,29 @@ function getSubscriptionIdForEvent(event: Stripe.Event): string | undefined {
     return stripeId(payload.subscription) ?? stripeId(details?.subscription);
   }
 
+  return undefined;
+}
+
+function unixTimestampToDate(value: unknown): Date | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+  return new Date(value * 1000);
+}
+
+/**
+ * Stripe invoices carry the completed period end; subscription updates carry
+ * the new current period end. Checkout completion does not reliably expand
+ * the Subscription, so its period is set by the following invoice event.
+ */
+function getPeriodEndForEvent(event: Stripe.Event): Date | undefined {
+  const payload = event.data.object as unknown as StripeRecord;
+  if (event.type === "invoice.payment_succeeded" || event.type === "invoice.payment_failed") {
+    return unixTimestampToDate(payload.period_end);
+  }
+  if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
+    return unixTimestampToDate(payload.current_period_end);
+  }
   return undefined;
 }
 
@@ -130,6 +156,7 @@ async function activateCheckoutSubscription(
       service: true,
       stripeCustomerId: true,
       lastStripeEventAt: true,
+      currentPeriodEnd: true,
     },
   });
 
@@ -147,9 +174,26 @@ async function activateCheckoutSubscription(
       return "stale";
     }
 
+    const currentPeriodEnd = getPeriodEndForEvent(event);
+    const startsNewPeriod = Boolean(
+      currentPeriodEnd &&
+        (!existing.currentPeriodEnd || currentPeriodEnd.getTime() > existing.currentPeriodEnd.getTime()),
+    );
+    if (startsNewPeriod) {
+      await tx.serviceUsageReservation.updateMany({
+        where: { subscriptionId: subscriptionId, status: "PENDING" },
+        data: { status: "EXPIRED", releasedAt: new Date() },
+      });
+    }
     await tx.subscription.update({
       where: { stripeSubscriptionId: subscriptionId },
-      data: { status: "ACTIVE", planId: checkout.planId, lastStripeEventAt: event.created },
+      data: {
+        status: "ACTIVE",
+        planId: checkout.planId,
+        lastStripeEventAt: event.created,
+        ...(currentPeriodEnd ? { currentPeriodEnd } : {}),
+        ...(startsNewPeriod ? { currentPeriodUsage: 0, currentPeriodReserved: 0 } : {}),
+      },
     });
     return "processed";
   }
@@ -162,6 +206,7 @@ async function activateCheckoutSubscription(
       stripeCustomerId: customerId,
       stripeSubscriptionId: subscriptionId,
       status: "ACTIVE",
+      currentPeriodEnd: getPeriodEndForEvent(event) ?? null,
       lastStripeEventAt: event.created,
     },
   });
@@ -182,7 +227,7 @@ async function updateSubscriptionStatus(
 
   const subscription = await tx.subscription.findUnique({
     where: { stripeSubscriptionId: subscriptionId },
-    select: { stripeCustomerId: true, lastStripeEventAt: true },
+    select: { stripeCustomerId: true, lastStripeEventAt: true, currentPeriodEnd: true },
   });
   if (!subscription || subscription.stripeCustomerId !== customerId) {
     throw new Error(
@@ -193,9 +238,25 @@ async function updateSubscriptionStatus(
     return "stale";
   }
 
+  const currentPeriodEnd = getPeriodEndForEvent(event);
+  const startsNewPeriod = status === "ACTIVE" && Boolean(
+    currentPeriodEnd &&
+      (!subscription.currentPeriodEnd || currentPeriodEnd.getTime() > subscription.currentPeriodEnd.getTime()),
+  );
+  if (startsNewPeriod) {
+    await tx.serviceUsageReservation.updateMany({
+      where: { subscriptionId, status: "PENDING" },
+      data: { status: "EXPIRED", releasedAt: new Date() },
+    });
+  }
   await tx.subscription.update({
     where: { stripeSubscriptionId: subscriptionId },
-    data: { status, lastStripeEventAt: event.created },
+    data: {
+      status,
+      lastStripeEventAt: event.created,
+      ...(currentPeriodEnd ? { currentPeriodEnd } : {}),
+      ...(startsNewPeriod ? { currentPeriodUsage: 0, currentPeriodReserved: 0 } : {}),
+    },
   });
   return "processed";
 }
@@ -211,6 +272,8 @@ async function processEvent(event: Stripe.Event): Promise<ProcessingResult> {
         return updateSubscriptionStatus(tx, event, "ACTIVE");
       case "invoice.payment_failed":
         return updateSubscriptionStatus(tx, event, "PAST_DUE");
+      case "customer.subscription.updated":
+        return updateSubscriptionStatus(tx, event, "ACTIVE");
       case "customer.subscription.deleted":
         return updateSubscriptionStatus(tx, event, "CANCELLED");
       default:

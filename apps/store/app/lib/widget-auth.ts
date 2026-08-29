@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Retailer } from "@prisma/client";
+import { Prisma, UsageReservationStatus, type Retailer } from "@prisma/client";
 import { prisma } from "./prisma";
 import { checkRateLimit } from "./rate-limit";
 import { Service } from "./service-keys";
@@ -30,7 +30,7 @@ import { Service } from "./service-keys";
 // (no key-enumeration / origin-probing oracle).
 
 export type WidgetAuthResult =
-    | { ok: true; retailer: Retailer; subscription?: { id: string } }
+    | { ok: true; retailer: Retailer; subscription: { id: string } }
     | { ok: false; response: NextResponse };
 
 function forbidden(cors: Record<string, string>): NextResponse {
@@ -61,6 +61,83 @@ function normalizeOrigin(origin: string): string {
 export type QuotaCheckResult =
     | { ok: true; subscription: { id: string } }
     | { ok: false; response: NextResponse };
+
+export type QuotaReservationResult =
+    | { ok: true; reservation: { id: string; subscriptionId: string; requestId: string } }
+    | { ok: false; response: NextResponse };
+
+// The only measured end-to-end service p95 is Body Modeling at 973.3ms.
+// VTON is explicitly allowed to run for 150s (120s polling + 30s buffer), so
+// reservations must safely outlive that route. 180s leaves a bounded 30s
+// commit/release window without holding capacity indefinitely after a crash.
+export const QUOTA_RESERVATION_TTL_MS = 180_000;
+const SERIALIZATION_RETRIES = 3;
+
+function quotaExceededResponse(
+    scope: Service,
+    usage: number,
+    limit: number,
+    cors: Record<string, string>,
+): NextResponse {
+    return NextResponse.json(
+        {
+            error: "Quota exceeded. Upgrade your plan to continue using this service.",
+            code: "QUOTA_EXCEEDED",
+            usage,
+            limit,
+            scope,
+        },
+        { status: 429, headers: cors },
+    );
+}
+
+function isSerializationFailure(error: unknown): boolean {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
+}
+
+async function serializableTransaction<T>(
+    operation: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < SERIALIZATION_RETRIES; attempt++) {
+        try {
+            return await prisma.$transaction(operation, {
+                isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+                maxWait: 5_000,
+                timeout: 10_000,
+            });
+        } catch (error) {
+            lastError = error;
+            if (!isSerializationFailure(error) || attempt === SERIALIZATION_RETRIES - 1) throw error;
+        }
+    }
+    throw lastError;
+}
+
+async function expireStaleReservations(
+    tx: Prisma.TransactionClient,
+    subscriptionId: string,
+    now: Date,
+): Promise<void> {
+    const stale = await tx.serviceUsageReservation.findMany({
+        where: {
+            subscriptionId,
+            status: UsageReservationStatus.PENDING,
+            expiresAt: { lt: now },
+        },
+        select: { id: true },
+    });
+    if (stale.length === 0) return;
+
+    await tx.serviceUsageReservation.updateMany({
+        where: { id: { in: stale.map(({ id }) => id) }, status: UsageReservationStatus.PENDING },
+        data: { status: UsageReservationStatus.EXPIRED, releasedAt: now },
+    });
+    await tx.subscription.update({
+        where: { id: subscriptionId },
+        data: { currentPeriodReserved: { decrement: stale.length } },
+    });
+}
 
 /**
  * The monthly billing quota check for one retailer + one service: is there
@@ -96,23 +173,175 @@ export async function checkServiceQuota(
         };
     }
 
+    // This is an inexpensive early rejection only. `reserveQuota()` below is
+    // the authoritative concurrent admission point and also reclaims expired
+    // reservations; counting reserved units here could permanently block a
+    // retailer before that cleanup gets a chance to run.
     if (subscription.currentPeriodUsage >= subscription.plan.quota) {
         return {
             ok: false,
-            response: NextResponse.json(
-                {
-                    error: "Quota exceeded. Upgrade your plan to continue using this service.",
-                    code: "QUOTA_EXCEEDED",
-                    usage: subscription.currentPeriodUsage,
-                    limit: subscription.plan.quota,
-                    scope,
-                },
-                { status: 429, headers: cors }
-            ),
+            response: quotaExceededResponse(scope, subscription.currentPeriodUsage, subscription.plan.quota, cors),
         };
     }
 
     return { ok: true, subscription: { id: subscription.id } };
+}
+
+/**
+ * Atomically holds one quota unit before Store invokes an AI service. The
+ * reservation is committed only after a successful response, so failed calls
+ * are not billed. A request id is idempotent within one subscription.
+ */
+export async function reserveQuota(
+    subscriptionId: string,
+    scope: Service,
+    requestId: string,
+    cors: Record<string, string> = {},
+): Promise<QuotaReservationResult> {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + QUOTA_RESERVATION_TTL_MS);
+
+    try {
+        const result = await serializableTransaction(async (tx) => {
+            const existing = await tx.serviceUsageReservation.findUnique({
+                where: { subscriptionId_requestId: { subscriptionId, requestId } },
+                select: { id: true, status: true },
+            });
+            if (existing) {
+                if (existing.status === UsageReservationStatus.PENDING) {
+                    return { kind: "in-progress" as const };
+                }
+                return { kind: "already-finished" as const };
+            }
+
+            await expireStaleReservations(tx, subscriptionId, now);
+            const subscription = await tx.subscription.findUnique({
+                where: { id: subscriptionId },
+                include: { plan: true },
+            });
+            if (!subscription || subscription.status !== "ACTIVE" || subscription.service !== scope || !subscription.plan) {
+                return { kind: "no-subscription" as const };
+            }
+            if (subscription.currentPeriodUsage + subscription.currentPeriodReserved >= subscription.plan.quota) {
+                return {
+                    kind: "exhausted" as const,
+                    usage: subscription.currentPeriodUsage,
+                    limit: subscription.plan.quota,
+                };
+            }
+
+            const reservation = await tx.serviceUsageReservation.create({
+                data: { subscriptionId, service: scope, requestId, expiresAt },
+                select: { id: true },
+            });
+            await tx.subscription.update({
+                where: { id: subscriptionId },
+                data: { currentPeriodReserved: { increment: 1 } },
+            });
+            return { kind: "reserved" as const, id: reservation.id };
+        });
+
+        if (result.kind === "reserved") {
+            return { ok: true, reservation: { id: result.id, subscriptionId, requestId } };
+        }
+        if (result.kind === "exhausted") {
+            return { ok: false, response: quotaExceededResponse(scope, result.usage, result.limit, cors) };
+        }
+        const isDuplicateRequest = result.kind === "already-finished" || result.kind === "in-progress";
+        const message = result.kind === "in-progress"
+            ? "This request is already being processed."
+            : result.kind === "already-finished"
+                ? "This request was already completed. Start a new request to generate another result."
+                : `No active subscription for ${scope}. Please subscribe to a plan.`;
+        return {
+            ok: false,
+            response: NextResponse.json(
+                {
+                    error: message,
+                    code: result.kind === "in-progress"
+                        ? "REQUEST_IN_PROGRESS"
+                        : result.kind === "already-finished"
+                            ? "REQUEST_ALREADY_COMPLETED"
+                            : "NO_SUBSCRIPTION",
+                    scope,
+                },
+                { status: isDuplicateRequest ? 409 : 429, headers: cors },
+            ),
+        };
+    } catch (error) {
+        console.error("Failed to reserve service quota:", error);
+        return {
+            ok: false,
+            response: NextResponse.json(
+                { error: "Unable to reserve service quota. Please try again.", code: "QUOTA_UNAVAILABLE", scope },
+                { status: 503, headers: cors },
+            ),
+        };
+    }
+}
+
+/** Commit a pending reservation and its reporting rollup before responding. */
+export async function commitQuotaReservation(reservationId: string): Promise<void> {
+    await serializableTransaction(async (tx) => {
+        const reservation = await tx.serviceUsageReservation.findUnique({
+            where: { id: reservationId },
+            include: { subscription: { select: { retailerId: true } } },
+        });
+        if (!reservation || reservation.status === UsageReservationStatus.COMMITTED) return;
+        if (reservation.status !== UsageReservationStatus.PENDING) {
+            throw new Error(`Cannot commit quota reservation in ${reservation.status} state`);
+        }
+
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+        await tx.serviceUsageReservation.update({
+            where: { id: reservation.id },
+            data: { status: UsageReservationStatus.COMMITTED, committedAt: new Date() },
+        });
+        await tx.subscription.update({
+            where: { id: reservation.subscriptionId },
+            data: {
+                currentPeriodReserved: { decrement: 1 },
+                currentPeriodUsage: { increment: 1 },
+            },
+        });
+        await tx.serviceUsageDailyRollup.upsert({
+            where: {
+                retailerId_service_date: {
+                    retailerId: reservation.subscription.retailerId,
+                    service: reservation.service,
+                    date: today,
+                },
+            },
+            update: { count: { increment: 1 } },
+            create: {
+                retailerId: reservation.subscription.retailerId,
+                service: reservation.service,
+                date: today,
+                count: 1,
+            },
+        });
+    });
+}
+
+/** Release a pending reservation after validation/upstream failure. */
+export async function releaseQuotaReservation(reservationId: string): Promise<void> {
+    await serializableTransaction(async (tx) => {
+        const reservation = await tx.serviceUsageReservation.findUnique({
+            where: { id: reservationId },
+            select: { id: true, subscriptionId: true, status: true },
+        });
+        if (!reservation || reservation.status !== UsageReservationStatus.PENDING) return;
+
+        await tx.serviceUsageReservation.update({
+            where: { id: reservation.id },
+            data: { status: UsageReservationStatus.RELEASED, releasedAt: new Date() },
+        });
+        await tx.subscription.update({
+            where: { id: reservation.subscriptionId },
+            data: { currentPeriodReserved: { decrement: 1 } },
+        });
+    });
 }
 
 /**
@@ -174,7 +403,13 @@ export async function authorizeWidgetRequest(
             .filter((o): o is string => typeof o === "string")
             .map(normalizeOrigin)
         : [];
-    if (!allowed.includes(normalizeOrigin(originHeader))) {
+    const callerOrigin = normalizeOrigin(originHeader);
+    // The hosted Manikan Store is a first-party channel. It must be able to
+    // use the owning retailer's public key without asking every retailer to
+    // manually add Manikan's own domain to their external-site allowlist.
+    // Third-party embeds still require an explicit retailer allowlist entry.
+    const isFirstPartyStorefront = callerOrigin === normalizeOrigin(request.nextUrl.origin);
+    if (!isFirstPartyStorefront && !allowed.includes(callerOrigin)) {
         return { ok: false, response: forbidden(cors) };
     }
 
@@ -204,53 +439,4 @@ export async function authorizeWidgetRequest(
     }
 
     return { ok: true, retailer, subscription: activeSubscription };
-}
-
-/**
- * Safely increments currentPeriodUsage on the (already single-service) active
- * subscription, and upserts a daily rollup log.
- * This is executed asynchronously (best-effort) so it NEVER blocks the upstream API response.
- */
-export function consumeQuota(subscriptionId: string, scope: Service) {
-    if (!subscriptionId || !scope) return;
-
-    // Fire and forget
-    Promise.resolve().then(async () => {
-        try {
-            const sub = await prisma.subscription.findUnique({
-                where: { id: subscriptionId },
-                select: { retailerId: true }
-            });
-
-            if (!sub) return;
-
-            const today = new Date();
-            today.setUTCHours(0, 0, 0, 0);
-
-            await Promise.all([
-                prisma.subscription.update({
-                    where: { id: subscriptionId },
-                    data: { currentPeriodUsage: { increment: 1 } }
-                }),
-                prisma.serviceUsageDailyRollup.upsert({
-                    where: {
-                        retailerId_service_date: {
-                            retailerId: sub.retailerId,
-                            service: scope,
-                            date: today
-                        }
-                    },
-                    update: { count: { increment: 1 } },
-                    create: {
-                        retailerId: sub.retailerId,
-                        service: scope,
-                        date: today,
-                        count: 1
-                    }
-                })
-            ]);
-        } catch (error) {
-            console.error("Failed to meter service usage:", error);
-        }
-    });
 }

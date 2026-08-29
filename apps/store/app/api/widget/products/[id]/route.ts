@@ -88,12 +88,6 @@ export async function GET(
                   };
     }
 
-    // ── Deduct Quota ──
-    if (auth.subscription) {
-        const { consumeQuota } = await import("../../../../lib/widget-auth");
-        await consumeQuota(auth.subscription.id, "BODY_MODELING");
-    }
-
     return NextResponse.json(
         {
             id: product.id,

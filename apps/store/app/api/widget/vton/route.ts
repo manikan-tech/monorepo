@@ -1,7 +1,12 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
-import { authorizeWidgetRequest, consumeQuota } from "../../../lib/widget-auth";
+import {
+  authorizeWidgetRequest,
+  commitQuotaReservation,
+  releaseQuotaReservation,
+  reserveQuota,
+} from "../../../lib/widget-auth";
 
 const MAX_HUMAN_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 const CORS_HEADERS: Record<string, string> = {
@@ -19,6 +24,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await authorizeWidgetRequest(request, CORS_HEADERS, "VTON_2D");
   if (!auth.ok) return auth.response;
 
+  let reservationId: string | null = null;
   try {
     const formData = await request.formData();
     const humanImage = formData.get("human_image");
@@ -47,6 +53,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Virtual try-on is temporarily unavailable." }, { status: 503, headers: CORS_HEADERS });
     }
 
+    const reservation = await reserveQuota(
+      auth.subscription.id,
+      "VTON_2D",
+      request.headers.get("x-request-id") || randomUUID(),
+      CORS_HEADERS,
+    );
+    if (!reservation.ok) return reservation.response;
+    reservationId = reservation.reservation.id;
+
     const upstreamForm = new FormData();
     upstreamForm.append("human_image", humanImage);
     upstreamForm.append("product_id", product.id);
@@ -59,9 +74,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     if (!upstream.ok) {
       const error = await upstream.json().catch(() => ({}));
+      await releaseQuotaReservation(reservationId);
       return NextResponse.json({ error: error.error ?? "Virtual try-on failed." }, { status: upstream.status, headers: CORS_HEADERS });
     }
-    if (auth.subscription) await consumeQuota(auth.subscription.id, "VTON_2D");
+    await commitQuotaReservation(reservationId);
+    reservationId = null;
 
     return new NextResponse(upstream.body, {
       status: 200,
@@ -73,6 +90,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error: unknown) {
+    if (reservationId) await releaseQuotaReservation(reservationId);
     console.error("Widget VTON gateway failed:", error);
     return NextResponse.json({ error: "Virtual try-on service unreachable." }, { status: 502, headers: CORS_HEADERS });
   }

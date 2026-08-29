@@ -1,7 +1,12 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
-import { authorizeWidgetRequest, consumeQuota } from "../../../lib/widget-auth";
+import {
+  authorizeWidgetRequest,
+  commitQuotaReservation,
+  releaseQuotaReservation,
+  reserveQuota,
+} from "../../../lib/widget-auth";
 
 export const runtime = "nodejs";
 
@@ -102,6 +107,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Product not found" }, { status: 404, headers: CORS_HEADERS });
   }
 
+  const reservation = await reserveQuota(
+    auth.subscription.id,
+    "RECOMMENDATION",
+    request.headers.get("x-request-id") || randomUUID(),
+    CORS_HEADERS,
+  );
+  if (!reservation.ok) return reservation.response;
+
   const { measurements } = body;
   const sizeChart = product.variants.map((variant) => ({
     size: variant.sizeLabel,
@@ -149,12 +162,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
     recommendation = (await upstream.json().catch(() => ({}))) as RecommendationPayload;
     if (!upstream.ok || recommendation.success === false) {
+      await releaseQuotaReservation(reservation.reservation.id);
       return NextResponse.json(
         { error: recommendation.error_code ?? "Recommendation service error" },
         { status: upstream.ok ? 502 : upstream.status, headers: CORS_HEADERS },
       );
     }
   } catch (error: unknown) {
+    await releaseQuotaReservation(reservation.reservation.id);
     console.error("Widget process recommendation service failed:", error);
     return NextResponse.json(
       { error: "Recommendation service unavailable" },
@@ -192,9 +207,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     console.warn("Widget process body service unavailable:", error);
   }
 
-  if (auth.subscription) {
-    await consumeQuota(auth.subscription.id, "RECOMMENDATION");
-  }
+  await commitQuotaReservation(reservation.reservation.id);
 
   return NextResponse.json(
     {

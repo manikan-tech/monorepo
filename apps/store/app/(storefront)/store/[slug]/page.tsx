@@ -9,6 +9,7 @@ import { useCart } from "../../../../components/CartContext";
 import { useWishlist } from "../../../../components/WishlistContext";
 import Modal from "../../../../components/Modal";
 import Manikan3DTryOn from "../../../../components/product/Manikan3DTryOn";
+import ManikanRecommendWidget from "../../../../components/product/ManikanRecommendWidget";
 import FitToolsOnboarding from "../../../../components/product/FitToolsOnboarding";
 import ColorSwatches from "../../../../components/product/ColorSwatches";
 
@@ -85,6 +86,7 @@ export default function ProductDetailPage() {
     (window as any).currentProductContext = {
       id: product.id,
       name: product.name,
+      recommendationKey: product.hostedServiceKeys?.RECOMMENDATION ?? null,
     };
 
     return () => {
@@ -398,6 +400,10 @@ export default function ProductDetailPage() {
                 </Link>
 
                 <Manikan3DTryOn product={product} />
+                <ManikanRecommendWidget
+                  productId={product.id}
+                  retailerKey={product.hostedServiceKeys?.RECOMMENDATION}
+                />
               </div>
             </div>
             <FitToolsOnboarding productName={product.name} manualTrigger={manualGuideTrigger} />

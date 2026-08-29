@@ -53,6 +53,34 @@ export async function GET(
             );
         }
 
+        // Hosted Store pages must use the selected product owner's public,
+        // service-scoped keys. Never fall back to a demo retailer key: that
+        // would bill the wrong tenant (or deny a legitimate retailer).
+        const [activeSubscriptions, serviceKeys] = await Promise.all([
+            prisma.subscription.findMany({
+                where: {
+                    retailerId: product.retailerId,
+                    status: "ACTIVE",
+                    service: { in: ["BODY_MODELING", "RECOMMENDATION"] },
+                },
+                select: { service: true },
+            }),
+            prisma.serviceApiKey.findMany({
+                where: {
+                    retailerId: product.retailerId,
+                    isActive: true,
+                    service: { in: ["BODY_MODELING", "RECOMMENDATION"] },
+                },
+                select: { service: true, apiKey: true },
+            }),
+        ]);
+        const activeServices = new Set(activeSubscriptions.map(({ service }) => service));
+        const hostedServiceKeys = Object.fromEntries(
+            serviceKeys
+                .filter(({ service }) => activeServices.has(service))
+                .map(({ service, apiKey }) => [service, apiKey]),
+        );
+
         // ── Color siblings: other active products with the same styleCode.
         const colorSiblings = await prisma.product.findMany({
             where: {
@@ -75,7 +103,10 @@ export async function GET(
             orderBy: { createdAt: "asc" },
         });
 
-        return NextResponse.json({ product, colorSiblings }, { status: 200 });
+        return NextResponse.json(
+            { product: { ...product, hostedServiceKeys }, colorSiblings },
+            { status: 200 },
+        );
     } catch (error) {
         console.error("Failed to fetch product:", error);
         return NextResponse.json(

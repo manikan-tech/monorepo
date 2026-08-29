@@ -12,7 +12,9 @@ Every route below was verified directly against the current source code — not 
 
 **Base URL**: `http://localhost:3000` · **Purpose**: the single entry point for the embeddable widget. The widget calls only these routes; the Store proxies to the internal services, persists what needs persisting, and never exposes an internal service URL to the browser. CORS is open (`*`) on the widget-facing routes so they can run embedded on any retailer's own site.
 
-🔐 **Auth**: every widget request must send `X-Manikan-Key: <retailer public key>` and originate from an allowed `Origin`. Failure responses are deliberately generic (no leak of *which* check failed): `401` missing key, `403` missing/disallowed origin or unknown/inactive key, `429` rate limit (30 req/60s per retailer, `Retry-After` header), `404` product not owned by the authenticated retailer.
+🔐 **Auth**: every widget request must send `X-Manikan-Key: <retailer public key>` and originate from an allowed `Origin`. Failure responses are deliberately generic (no leak of *which* check failed): `401` missing key, `403` missing/disallowed origin or unknown/inactive key, `429` rate limit or exhausted service quota (`Retry-After` on rate-limit responses), `404` product not owned by the authenticated retailer.
+
+**Metered request idempotency**: callers may send an `X-Request-Id` on any metered widget request. Reusing it while the original request is still running returns `409` with `code: "REQUEST_IN_PROGRESS"`; reusing it after the original completes returns `409` with `code: "REQUEST_ALREADY_COMPLETED"`. Generate a new request ID only for a deliberate new generation. Callers that omit the header retain the existing behavior: Store generates a fresh request ID per request.
 
 ---
 
@@ -974,4 +976,3 @@ Content-Type: multipart/form-data
 | `session_id` | String, optional | Accepted for compatibility, not used by the worker |
 
 **Response**: `200` with `image/png` binary, `Content-Disposition: attachment`. `400`/`422` on validation failure, `502 FASHN_API_FAILURE` on provider failure, `500 TEMPORARY_IMAGE_PROCESSING_FAILED` on local processing failure. Full error table and live-verified examples on the [VTON page](/docs/services/vton#4-security-verified-live-this-session).
-

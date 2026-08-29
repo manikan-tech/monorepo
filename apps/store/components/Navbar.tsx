@@ -1,5 +1,4 @@
 "use client";
-import Script from "next/script";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -129,18 +128,6 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-manikan-border/50 shadow-[0_4px_30px_rgba(18,52,59,0.03)] backdrop-blur-xl transition-all duration-300">
-      {/* تم تغيير المسار هنا إلى recommend-widget.js الصحيح */}
-      <Script
-        src="/recommend-widget.js"
-        strategy="afterInteractive"
-        data-retailer-id="haneen"
-        data-recommend-api={process.env.NEXT_PUBLIC_RECOMMEND_API_URL}
-        data-widget-key={
-          process.env.NEXT_PUBLIC_MANIKAN_RECOMMEND_KEY ||
-          "pk_live_632dba109f17b0a768f77addefa42f81a86c9f3653a3b40c"
-        }
-        data-store-api={process.env.NEXT_PUBLIC_SITE_URL}
-      />
       <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] w-full bg-transparent overflow-hidden">
         <div className="w-full h-full bg-[linear-gradient(90deg,transparent,rgba(200,150,102,0.8),transparent)] bg-[length:200%_100%] animate-shimmer-slow pointer-events-none" />
       </div>

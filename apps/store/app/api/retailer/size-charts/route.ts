@@ -22,7 +22,7 @@ import {
 // productCode), so a CSV naming another tenant's product simply does not
 // resolve.
 //
-// No quota is consumed. Every consumeQuota call site is shopper-facing; this
+// No quota is consumed. Every quota-reservation call site is shopper-facing; this
 // is catalog management, like the product routes beside it.
 
 const BUCKET = process.env.SIZE_CHART_BUCKET || "size-charts";

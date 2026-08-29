@@ -23,14 +23,6 @@ import { useEffect } from "react";
 
 const WIDGET_SRC = "/recommend-widget.js";
 
-// Public by design — same model as Manikan3DTryOn's RETAILER_KEY. Falls back
-// to the local demo retailer's RECOMMENDATION ServiceApiKey so dev works out
-// of the box; set NEXT_PUBLIC_MANIKAN_RECOMMEND_KEY for anything past local
-// dev (and if that key is ever rotated from the dashboard, update this too).
-const RETAILER_KEY =
-  process.env.NEXT_PUBLIC_MANIKAN_RECOMMEND_KEY ||
-  "pk_live_632dba109f17b0a768f77addefa42f81a86c9f3653a3b40c";
-
 function teardownExistingWidget() {
   document.querySelector(".ai-widget-container")?.remove();
   delete (window as unknown as { ManikanWidget?: unknown }).ManikanWidget;
@@ -39,8 +31,16 @@ function teardownExistingWidget() {
     .forEach((s) => s.remove());
 }
 
-export default function ManikanRecommendWidget({ productId }: { productId: string }) {
+export default function ManikanRecommendWidget({
+  productId,
+  retailerKey,
+}: {
+  productId: string;
+  retailerKey?: string;
+}) {
   useEffect(() => {
+    if (!retailerKey) return;
+
     // Deferred by a tick so React Strict Mode's dev-only synchronous
     // mount -> cleanup -> mount cancels the first pass's pending injection
     // instead of racing two copies of a script that mounts itself once,
@@ -56,7 +56,7 @@ export default function ManikanRecommendWidget({ productId }: { productId: strin
       const script = document.createElement("script");
       script.src = WIDGET_SRC;
       script.async = true;
-      script.dataset.widgetKey = RETAILER_KEY;
+      if (retailerKey) script.dataset.widgetKey = retailerKey;
       script.dataset.productId = productId;
       script.dataset.manikanRecommend = "1";
       document.body.appendChild(script);
@@ -66,7 +66,7 @@ export default function ManikanRecommendWidget({ productId }: { productId: strin
       clearTimeout(timer);
       teardownExistingWidget();
     };
-  }, [productId]);
+  }, [productId, retailerKey]);
 
   return null;
 }

@@ -3,7 +3,12 @@ import { randomUUID } from "crypto";
 import { getCustomerFromCookies } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
 import { checkRateLimit } from "../../../../lib/rate-limit";
-import { checkServiceQuota, consumeQuota } from "../../../../lib/widget-auth";
+import {
+    checkServiceQuota,
+    commitQuotaReservation,
+    releaseQuotaReservation,
+    reserveQuota,
+} from "../../../../lib/widget-auth";
 
 const MAX_HUMAN_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 const CUSTOMER_RATE_LIMIT_MAX = 5;
@@ -55,6 +60,7 @@ export async function POST(request: NextRequest) {
         );
     }
 
+    let reservationId: string | null = null;
     try {
         const formData = await request.formData();
         const humanImage = formData.get("human_image");
@@ -101,6 +107,10 @@ export async function POST(request: NextRequest) {
             return jsonError(requestId, 503, "Virtual try-on is temporarily unavailable.");
         }
 
+        const reservation = await reserveQuota(subscription.id, "VTON_2D", requestId);
+        if (!reservation.ok) return reservation.response;
+        reservationId = reservation.reservation.id;
+
         const upstreamFormData = new FormData();
         upstreamFormData.append("human_image", humanImage);
         upstreamFormData.append("product_id", product.id);
@@ -117,8 +127,11 @@ export async function POST(request: NextRequest) {
         });
 
         if (upstream.ok) {
-            // Deduct quota on success
-            await consumeQuota(subscription.id, "VTON_2D");
+            await commitQuotaReservation(reservationId);
+            reservationId = null;
+        } else {
+            await releaseQuotaReservation(reservationId);
+            reservationId = null;
         }
 
         const headers = new Headers({
@@ -128,6 +141,7 @@ export async function POST(request: NextRequest) {
         });
         return new NextResponse(upstream.body, { status: upstream.status, headers });
     } catch (error) {
+        if (reservationId) await releaseQuotaReservation(reservationId);
         console.error("VTON storefront proxy error [%s]:", requestId, error);
         return jsonError(requestId, 502, "Virtual try-on service unreachable.");
     }

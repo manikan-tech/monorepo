@@ -1,5 +1,11 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { authorizeWidgetRequest, consumeQuota } from "../../lib/widget-auth";
+import {
+    authorizeWidgetRequest,
+    commitQuotaReservation,
+    releaseQuotaReservation,
+    reserveQuota,
+} from "../../lib/widget-auth";
 
 // ─── POST /api/avatar ───
 // Thin proxy for the bare 3D body avatar (no garment). Enforces the
@@ -60,6 +66,14 @@ export async function POST(request: NextRequest) {
         }
     }
 
+    const reservation = await reserveQuota(
+        auth.subscription.id,
+        "BODY_MODELING",
+        request.headers.get("x-request-id") || randomUUID(),
+        CORS_HEADERS,
+    );
+    if (!reservation.ok) return reservation.response;
+
     // ── Proxy to the Body Service ──
     try {
         const upstream = await fetch(`${BODY_SERVICE_URL}/generate-avatar`, {
@@ -73,6 +87,7 @@ export async function POST(request: NextRequest) {
 
         if (!upstream.ok) {
             const detail = await upstream.json().catch(() => ({}));
+            await releaseQuotaReservation(reservation.reservation.id);
             return NextResponse.json(
                 { error: detail.detail || "Body service error" },
                 { status: upstream.status, headers: CORS_HEADERS }
@@ -81,16 +96,14 @@ export async function POST(request: NextRequest) {
 
         const glb = await upstream.arrayBuffer();
 
-        // ── Deduct Quota ──
-        if (auth.subscription) {
-            await consumeQuota(auth.subscription.id, "BODY_MODELING");
-        }
+        await commitQuotaReservation(reservation.reservation.id);
 
         return new NextResponse(glb, {
             status: 200,
             headers: { ...CORS_HEADERS, "Content-Type": "model/gltf-binary" },
         });
     } catch (error) {
+        await releaseQuotaReservation(reservation.reservation.id);
         console.error("Body service unreachable:", error);
         return NextResponse.json(
             { error: "Body service unreachable" },

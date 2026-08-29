@@ -1,5 +1,11 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { authorizeWidgetRequest, consumeQuota } from "../../../lib/widget-auth";
+import {
+    authorizeWidgetRequest,
+    commitQuotaReservation,
+    releaseQuotaReservation,
+    reserveQuota,
+} from "../../../lib/widget-auth";
 import { assessFitRange, buildFitRangeResponse } from "../../../lib/fit-range";
 import { asksForProductDetails, buildProductDetailsContext } from "../../../lib/product-details";
 import { buildBodyFitChartCsv } from "../../../lib/size-chart";
@@ -67,7 +73,7 @@ export async function POST(request: NextRequest) {
     // size_chart used to come straight from the client, which handed the
     // server the exact data it then used to compute a recommendation for that
     // same client — nothing stopped a fabricated chart from manipulating its
-    // own result, and a success here also bills consumeQuota. Never accept it
+    // own result, and a successful upstream result is metered. Never accept it
     // from the client now; product_id gets the same ownership check applied
     // to every other product/variant lookup in this codebase (404, not 403,
     // on a mismatch — never reveal another tenant's product id).
@@ -124,6 +130,14 @@ export async function POST(request: NextRequest) {
         }
     }
 
+    const reservation = await reserveQuota(
+        auth.subscription.id,
+        "RECOMMENDATION",
+        request.headers.get("x-request-id") || randomUUID(),
+        CORS_HEADERS,
+    );
+    if (!reservation.ok) return reservation.response;
+
     // ── Proxy to the Recommendation Service ──
     // retailer_id and size_chart both come from server-side lookups, never
     // the client — same "server resolves identity, never trusts the caller"
@@ -157,19 +171,18 @@ export async function POST(request: NextRequest) {
 
         const payload = await upstream.json().catch(() => ({}));
         if (!upstream.ok) {
+            await releaseQuotaReservation(reservation.reservation.id);
             return NextResponse.json(
                 { error: payload.detail || "Recommendation service error" },
                 { status: upstream.status, headers: CORS_HEADERS }
             );
         }
 
-        // ── Deduct Quota ──
-        if (auth.subscription) {
-            await consumeQuota(auth.subscription.id, "RECOMMENDATION");
-        }
+        await commitQuotaReservation(reservation.reservation.id);
 
         return NextResponse.json(payload, { status: 200, headers: CORS_HEADERS });
     } catch (error) {
+        await releaseQuotaReservation(reservation.reservation.id);
         console.error("Recommendation service unreachable:", error);
         return NextResponse.json(
             { error: "Recommendation service unreachable" },

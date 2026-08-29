@@ -24,6 +24,7 @@
                 productId: null,
                 productName: null,
                 sizeChart: "",
+                widgetKey: null,
             };
         }
         const ctx = (typeof window !== 'undefined' && window.currentProductContext) || {};
@@ -31,6 +32,10 @@
             productId: ctx.id || null,
             productName: ctx.name || null,
             sizeChart: ctx.size_chart_json || "",
+            // First-party Store pages inject the selected product owner's
+            // service-scoped public key. External embeds keep using the key
+            // supplied by their script tag.
+            widgetKey: ctx.recommendationKey || null,
         };
     }
 
@@ -265,7 +270,8 @@
         input.value = '';
         sendBtn.disabled = true;
 
-        const { productId, sizeChart: productSizeChart } = getCurrentProductContext();
+        const { productId, sizeChart: productSizeChart, widgetKey: productWidgetKey } = getCurrentProductContext();
+        const requestWidgetKey = productWidgetKey || WIDGET_API_KEY;
         let sizeChart = productSizeChart;
 
         let intent = productId ? "general" : "search";
@@ -279,7 +285,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(WIDGET_API_KEY ? { 'X-Manikan-Key': WIDGET_API_KEY } : {}),
+                    ...(requestWidgetKey ? { 'X-Manikan-Key': requestWidgetKey } : {}),
                 },
                 signal: controller.signal,
                 body: JSON.stringify({

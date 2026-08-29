@@ -36,15 +36,6 @@ import { garmentFieldsFor, isProductTryOnEnabled } from "../../app/lib/tryon-sta
 const WIDGET_SRC = "/manikan-widget.js";
 const INTERACTIVE_GUIDE_SEEN_KEY = "manikan_3d_interactive_tour_seen_v1";
 
-// Public by design — it lives in retailer page HTML and is paired with an
-// Origin allowlist server-side. Configurable per deployment; falls back to the
-// local demo retailer's BODY_MODELING ServiceApiKey so dev works out of the
-// box. NOTE: this fallback goes stale if that key is ever rotated from the
-// dashboard (Services > Body Modeling > Regenerate Key) -- for anything past
-// local dev, set NEXT_PUBLIC_MANIKAN_WIDGET_KEY instead of relying on this.
-const RETAILER_KEY =
-  process.env.NEXT_PUBLIC_MANIKAN_WIDGET_KEY || "pk_live_618be0c3849d6587048cc81bb490c4d10aaf2c72e9e04330";
-
 type MountResult = { unmount: () => void } | null;
 type WidgetProduct = {
   id: string;
@@ -84,6 +75,7 @@ type StoreProduct = {
   category?: string | null;
   garmentColorHex?: string | null;
   variants?: StoreVariant[];
+  hostedServiceKeys?: Partial<Record<"BODY_MODELING" | "RECOMMENDATION", string>>;
 };
 
 /** Store product -> the shape /api/widget/products/[id] would have returned.
@@ -189,7 +181,7 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
 
       instanceRef.current = window.Manikan.mount(host, {
         productId: product.id,
-        retailerKey: RETAILER_KEY,
+        retailerKey: product.hostedServiceKeys?.BODY_MODELING,
         product: toWidgetProduct(product),
         autoOpen: true,
         onClose: teardown,
@@ -217,6 +209,7 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
     garmentColorHex: product.garmentColorHex ?? null,
     variants: product.variants ?? [],
   });
+  const isAvailable = enabled && Boolean(product.hostedServiceKeys?.BODY_MODELING);
 
   return (
     <>
@@ -224,7 +217,7 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
         id="product-3d-tryon"
         type="button"
         onClick={open}
-        disabled={status === "loading"}
+        disabled={status === "loading" || !isAvailable}
         aria-busy={status === "loading"}
         className="w-full group relative flex items-center justify-center gap-3 py-3 px-6 rounded-2xl font-medium text-sm text-white bg-forest-900 hover:bg-forest-800 shadow-soft hover:shadow-card transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait overflow-hidden"
       >
@@ -248,7 +241,7 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
           </svg>
         )}
         <span className="relative">
-          {status === "loading" ? "Preparing 3D fit…" : "3D Fit Preview"}
+          {status === "loading" ? "Preparing 3D fit…" : !isAvailable ? "3D Fit Preview unavailable" : "3D Fit Preview"}
         </span>
         <span className="relative text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-gold-400/20 text-gold-300 border border-gold-400/30">
           Beta
@@ -260,10 +253,11 @@ export default function Manikan3DTryOn({ product }: { product: StoreProduct }) {
           Couldn&apos;t load the 3D preview — check the body service is running.
         </p>
       )}
-      {!enabled && status === "idle" && (
+      {!isAvailable && status === "idle" && (
         <p className="mt-2 text-xs text-center text-forest-700/60">
-          3D preview needs {garmentFieldsFor(product.category ?? "tshirt").length} garment
-          measurements on every size, plus a garment colour.
+          {!enabled
+            ? `3D preview needs ${garmentFieldsFor(product.category ?? "tshirt").length} garment measurements on every size, plus a garment colour.`
+            : "3D preview is not available for this retailer right now."}
         </p>
       )}
     </>

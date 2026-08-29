@@ -39,6 +39,16 @@ enum SubscriptionStatus {
   CANCELLED
 }
 
+// A Store request reserves capacity before invoking an AI service, then either
+// commits it after a successful result or releases it on failure. This keeps
+// quota admission correct under concurrent requests without charging failures.
+enum UsageReservationStatus {
+  PENDING
+  COMMITTED
+  RELEASED
+  EXPIRED
+}
+
 enum AuditAction {
   ACTIVATED
   SUSPENDED
@@ -203,16 +213,41 @@ model Subscription {
   // Usage count for THIS service in the current billing period (a
   // subscription is already single-service, so no per-scope keying needed).
   currentPeriodUsage   Int                @default(0)
+  // Capacity held by in-flight Store requests. It is never customer-visible
+  // usage; a successful request moves one unit from this field to usage.
+  currentPeriodReserved Int               @default(0)
   lastStripeEventAt    Int                @default(0)
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
   retailer Retailer @relation(fields: [retailerId], references: [id], onDelete: Cascade)
   plan     Plan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
+  usageReservations ServiceUsageReservation[]
 
   @@index([retailerId, status])
   @@index([retailerId, service, status])
   @@index([stripeCustomerId])
+}
+
+// Durable idempotency + recovery record for a metered Store request. A
+// requestId is unique only inside its subscription, which keeps independently
+// generated client request IDs isolated between retailers/services.
+model ServiceUsageReservation {
+  id             String                 @id @default(cuid())
+  subscriptionId String
+  service        String
+  requestId      String
+  status         UsageReservationStatus @default(PENDING)
+  expiresAt      DateTime
+  committedAt    DateTime?
+  releasedAt     DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, requestId])
+  @@index([subscriptionId, status, expiresAt])
 }
 
 // ─── Service Usage Rollup (Metering) ───────────────────────────
