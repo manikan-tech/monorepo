@@ -21,6 +21,9 @@ export async function GET(
             },
             include: {
                 variants: true,
+                retailer: {
+                    select: { isActivated: true }
+                },
                 categoryRef: {
                     select: {
                         id: true,
@@ -46,7 +49,7 @@ export async function GET(
             },
         });
 
-        if (!product || !product.isActive) {
+        if (!product || !product.isActive || !product.retailer?.isActivated) {
             return NextResponse.json(
                 { error: "Product not found" },
                 { status: 404 }

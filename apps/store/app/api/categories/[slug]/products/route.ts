@@ -45,6 +45,7 @@ export async function GET(
         // Build query filters
         const where: Prisma.ProductWhereInput = {
             isActive: true,
+            retailer: { isActivated: true },
             categoryId: { in: categoryIds },
         };
 

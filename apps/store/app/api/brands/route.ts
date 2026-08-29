@@ -6,7 +6,11 @@ export async function GET(request: NextRequest) {
         const distinctProducts = await prisma.product.findMany({
             select: { brand: true },
             distinct: ['brand'],
-            where: { isActive: true }
+            where: { 
+                isActive: true,
+                retailer: { isActivated: true },
+                brand: { not: null } 
+            }
         });
 
         const brands = distinctProducts

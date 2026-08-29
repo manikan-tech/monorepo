@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
         // Build query filters
         const where: Prisma.ProductWhereInput = {
             isActive: true,
+            retailer: { isActivated: true },
         };
 
         if (gender) {
