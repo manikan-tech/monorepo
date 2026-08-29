@@ -13,8 +13,6 @@ class Settings(BaseSettings):
 
     allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
-    # Keep the Store and service on the same canonical name. The shorter
-    # aliases preserve compatibility with existing local service .env files.
     recommend_service_key: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("RECOMMENDATION_SERVICE_KEY", "RECOMMEND_SERVICE_KEY"),
@@ -22,6 +20,12 @@ class Settings(BaseSettings):
     recommend_service_key_previous: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("RECOMMENDATION_SERVICE_KEY_PREVIOUS", "RECOMMEND_SERVICE_KEY_PREVIOUS"),
+    )
+
+    # Declared but currently unused — not referenced by any active code path.
+    hf_token: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("HF_TOKEN", "HUGGINGFACE_API_KEY"),
     )
 
     model_config = SettingsConfigDict(

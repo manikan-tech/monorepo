@@ -90,6 +90,12 @@ export const nav: NavCategory[] = [
         order: 2,
         description: "The SMPL shape-optimisation engine: retailer key + embed flow, the Store's proxy role, live-run renders across real bodies, and two bugs found and fixed this session.",
       },
+      {
+        title: "Recommendation Service",
+        slug: "services/recommendation-service",
+        order: 3,
+        description: "DeepSeek semantic classification, LangGraph 5-node workflow, TF-IDF + pgvector RAG, deterministic sizing, ActiveSearch state arbitration, and internal gateway auth.",
+      },
     ],
   },
   {
