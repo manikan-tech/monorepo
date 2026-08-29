@@ -2972,14 +2972,22 @@ async def retrieve_rag_context(
 
     settings = get_settings()
 
+    # In Compose, RAG should use Store's private service DNS. Keep the
+    # existing STORE_BASE_URL behavior when no explicit service override is
+    # configured so local development remains unchanged.
+    store_rag_base_url = (
+        settings.store_service_base_url
+        or settings.store_base_url
+    )
+
     if (
         intent != SemanticIntent.CATALOG_META
-        and settings.store_base_url
+        and store_rag_base_url
         and retrieval_query
     ):
         try:
             url = (
-                f"{settings.store_base_url}"
+                f"{store_rag_base_url}"
                 "/api/products/search"
             )
 
