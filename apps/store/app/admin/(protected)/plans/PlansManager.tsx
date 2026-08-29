@@ -10,6 +10,7 @@ type Plan = {
   service: string;
   priceEgpMonthly: number;
   quota: number;
+  concurrentRequestLimit: number | null;
   _count?: {
     subscriptions: number;
   };
@@ -31,10 +32,12 @@ export default function PlansManager({
   const [newService, setNewService] = useState<string>(SERVICES[0]);
   const [newPrice, setNewPrice] = useState("");
   const [newQuota, setNewQuota] = useState("");
+  const [newConcurrentRequestLimit, setNewConcurrentRequestLimit] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [editQuota, setEditQuota] = useState("");
+  const [editConcurrentRequestLimit, setEditConcurrentRequestLimit] = useState("");
 
   const canEdit = adminRole === "SUPER_ADMIN";
 
@@ -52,6 +55,7 @@ export default function PlansManager({
           service: newService,
           priceEgpMonthly: parseFloat(newPrice),
           quota: parseInt(newQuota, 10),
+          concurrentRequestLimit: newConcurrentRequestLimit ? parseInt(newConcurrentRequestLimit, 10) : null,
         }),
       });
 
@@ -67,6 +71,7 @@ export default function PlansManager({
       setNewName("");
       setNewPrice("");
       setNewQuota("");
+      setNewConcurrentRequestLimit("");
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -79,6 +84,7 @@ export default function PlansManager({
     setEditName(plan.name);
     setEditPrice(plan.priceEgpMonthly.toString());
     setEditQuota(plan.quota.toString());
+    setEditConcurrentRequestLimit(plan.concurrentRequestLimit?.toString() ?? "");
   }
 
   async function handleSaveEdit(id: string) {
@@ -91,6 +97,7 @@ export default function PlansManager({
           name: editName,
           priceEgpMonthly: parseFloat(editPrice),
           quota: parseInt(editQuota, 10),
+          concurrentRequestLimit: editConcurrentRequestLimit ? parseInt(editConcurrentRequestLimit, 10) : null,
         }),
       });
 
@@ -138,7 +145,7 @@ export default function PlansManager({
       )}
 
       {isCreating && (
-        <form onSubmit={handleCreate} className="bg-white p-6 rounded-2xl shadow-card border border-manikan-border grid grid-cols-1 md:grid-cols-5 gap-4 animate-fade-up">
+        <form onSubmit={handleCreate} className="bg-white p-6 rounded-2xl shadow-card border border-manikan-border grid grid-cols-1 md:grid-cols-6 gap-4 animate-fade-up">
           <div>
             <label className="block text-xs font-semibold text-forest-700 uppercase tracking-wider mb-1">Service</label>
             <select
@@ -184,6 +191,17 @@ export default function PlansManager({
               className="w-full px-3 py-2 bg-cream-50/50 border border-manikan-border rounded-lg text-sm focus:outline-none focus:border-gold-500 transition-colors"
             />
           </div>
+          <div>
+            <label className="block text-xs font-semibold text-forest-700 uppercase tracking-wider mb-1">Concurrent requests</label>
+            <input
+              type="number"
+              value={newConcurrentRequestLimit}
+              onChange={e => setNewConcurrentRequestLimit(e.target.value)}
+              min="1"
+              placeholder="Unlimited"
+              className="w-full px-3 py-2 bg-cream-50/50 border border-manikan-border rounded-lg text-sm focus:outline-none focus:border-gold-500 transition-colors"
+            />
+          </div>
           <div className="flex items-end">
             <button
               type="submit"
@@ -204,6 +222,7 @@ export default function PlansManager({
               <th className="px-6 py-4">Plan Name</th>
               <th className="px-6 py-4">Price (EGP/mo)</th>
               <th className="px-6 py-4">Quota</th>
+              <th className="px-6 py-4">Concurrent</th>
               <th className="px-6 py-4 text-center">Subscribers</th>
               {canEdit && <th className="px-6 py-4 text-right">Actions</th>}
             </tr>
@@ -236,6 +255,18 @@ export default function PlansManager({
                       className="w-24 px-2 py-1 border border-gold-300 rounded focus:outline-none text-sm"
                     />
                   ) : `${plan.priceEgpMonthly.toFixed(2)}`}
+                </td>
+                <td className="px-6 py-4 font-mono text-forest-900 text-sm">
+                  {editingId === plan.id ? (
+                    <input
+                      type="number"
+                      value={editConcurrentRequestLimit}
+                      onChange={e => setEditConcurrentRequestLimit(e.target.value)}
+                      min="1"
+                      placeholder="Unlimited"
+                      className="w-24 px-2 py-1 border border-gold-300 rounded focus:outline-none text-sm"
+                    />
+                  ) : plan.concurrentRequestLimit ?? "Unlimited"}
                 </td>
                 <td className="px-6 py-4 font-mono text-forest-900 text-sm">
                   {editingId === plan.id ? (
@@ -302,7 +333,7 @@ export default function PlansManager({
             ))}
             {plans.length === 0 && (
               <tr>
-                <td colSpan={canEdit ? 5 : 4} className="px-6 py-12 text-center text-forest-700/50">
+                <td colSpan={canEdit ? 7 : 6} className="px-6 py-12 text-center text-forest-700/50">
                   No plans configured yet.
                 </td>
               </tr>

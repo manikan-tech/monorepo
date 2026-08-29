@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSession } from "../../../../lib/admin-auth";
 import { prisma } from "../../../../lib/prisma";
+import { provisionDefaultFreeSubscriptions } from "../../../../lib/free-tier";
 
 // isActivated flag. Admin-only.
 export async function PATCH(
@@ -44,6 +45,13 @@ export async function PATCH(
         data: { isActivated: body.isActivated },
         select: { id: true, storeName: true, email: true, isActivated: true },
       });
+
+      // A retailer receives the approved Free allowance at first activation.
+      // Existing service subscriptions are preserved by the helper, so an
+      // admin reactivation cannot silently downgrade a paid retailer.
+      if (body.isActivated && !existing.isActivated) {
+        await provisionDefaultFreeSubscriptions(tx, id);
+      }
 
       await tx.retailerAuditLog.create({
         data: {

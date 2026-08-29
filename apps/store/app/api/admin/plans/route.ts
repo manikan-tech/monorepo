@@ -15,14 +15,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden: SUPER_ADMIN role required" }, { status: 403 });
     }
 
-    let body: { name?: string; service?: string; priceEgpMonthly?: number; quota?: number };
+    let body: { name?: string; service?: string; priceEgpMonthly?: number; quota?: number; concurrentRequestLimit?: number | null };
     try {
       body = await request.json();
     } catch {
       return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
-    const { name, service, priceEgpMonthly, quota } = body;
+    const { name, service, priceEgpMonthly, quota, concurrentRequestLimit } = body;
 
     if (!name || typeof name !== "string") {
       return NextResponse.json({ error: "name is required and must be a string" }, { status: 400 });
@@ -36,6 +36,10 @@ export async function POST(request: NextRequest) {
     if (typeof quota !== "number" || quota < 0) {
       return NextResponse.json({ error: "quota is required and must be a non-negative number" }, { status: 400 });
     }
+    if (concurrentRequestLimit !== undefined && concurrentRequestLimit !== null &&
+      (!Number.isInteger(concurrentRequestLimit) || concurrentRequestLimit < 1)) {
+      return NextResponse.json({ error: "concurrentRequestLimit must be a positive integer or null" }, { status: 400 });
+    }
 
     const plan = await prisma.plan.create({
       data: {
@@ -43,6 +47,7 @@ export async function POST(request: NextRequest) {
         service,
         priceEgpMonthly,
         quota,
+        concurrentRequestLimit: concurrentRequestLimit ?? null,
       },
     });
 

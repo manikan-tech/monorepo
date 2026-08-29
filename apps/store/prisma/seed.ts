@@ -69,8 +69,10 @@ async function main() {
     console.log("🌱 Starting database seeding from CSV...");
 
     // ── Seed Plan Tiers ──────────────────────────────────────────────────
-    // ⚠️  PRODUCT OWNER: these quotas/prices are placeholders. Confirm
-    //     actual go-to-market pricing before deploying to production.
+    // Free is deliberately a small, usable evaluation allowance per service
+    // per billing period. VTON is bounded by its measured 7.56 EGP external
+    // generation cost; Body and Recommendation are bounded by the shared
+    // instance's capacity and their respective plan concurrency limits.
     //
     // Each service is subscribed to, billed, and keyed independently -- a
     // retailer may subscribe to just one, some, or all three -- so each tier
@@ -79,17 +81,20 @@ async function main() {
         {
             name: "Free",
             priceEgpMonthly: 0,
-            quotas: { BODY_MODELING: 100, VTON_2D: 50, RECOMMENDATION: 500 },
+            quotas: { BODY_MODELING: 10, VTON_2D: 3, RECOMMENDATION: 50 },
+            concurrentRequestLimits: { BODY_MODELING: 1, VTON_2D: 1, RECOMMENDATION: 1 },
         },
         {
             name: "Starter",
             priceEgpMonthly: 999,
             quotas: { BODY_MODELING: 1000, VTON_2D: 200, RECOMMENDATION: 5000 },
+            concurrentRequestLimits: { BODY_MODELING: null, VTON_2D: null, RECOMMENDATION: null },
         },
         {
             name: "Growth",
             priceEgpMonthly: 2499,
             quotas: { BODY_MODELING: 5000, VTON_2D: 1000, RECOMMENDATION: 20000 },
+            concurrentRequestLimits: { BODY_MODELING: null, VTON_2D: null, RECOMMENDATION: null },
         },
     ] as const;
     const services = ["BODY_MODELING", "VTON_2D", "RECOMMENDATION"] as const;
@@ -99,12 +104,17 @@ async function main() {
         for (const service of services) {
             await prisma.plan.upsert({
                 where: { name_service: { name: tier.name, service } },
-                update: { priceEgpMonthly: tier.priceEgpMonthly, quota: tier.quotas[service] },
+                update: {
+                    priceEgpMonthly: tier.priceEgpMonthly,
+                    quota: tier.quotas[service],
+                    concurrentRequestLimit: tier.concurrentRequestLimits[service],
+                },
                 create: {
                     name: tier.name,
                     service,
                     priceEgpMonthly: tier.priceEgpMonthly,
                     quota: tier.quotas[service],
+                    concurrentRequestLimit: tier.concurrentRequestLimits[service],
                 },
             });
             planCount++;

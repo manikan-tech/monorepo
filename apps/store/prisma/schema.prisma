@@ -177,13 +177,18 @@ model ServiceApiKey {
 // for subscribing to all three is a future checkout-flow/pricing decision on
 // top of this, not a schema concern.
 model Plan {
-  id              String   @id @default(cuid())
-  name            String
-  service         String // "BODY_MODELING" | "VTON_2D" | "RECOMMENDATION"
-  priceEgpMonthly Float
-  quota           Int
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                      String   @id @default(cuid())
+  name                    String
+  service                 String // "BODY_MODELING" | "VTON_2D" | "RECOMMENDATION"
+  priceEgpMonthly         Float
+  quota                   Int
+  // Per-retailer admission limit. `null` means the plan does not impose an
+  // additional concurrency cap; the Free plans use this with the durable
+  // reservation records to prevent one retailer's burst from monopolizing a
+  // shared worker.
+  concurrentRequestLimit  Int?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   subscriptions    Subscription[]
   billingCheckouts BillingCheckout[]

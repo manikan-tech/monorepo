@@ -3,6 +3,7 @@ import { Prisma, UsageReservationStatus, type Retailer } from "@prisma/client";
 import { prisma } from "./prisma";
 import { checkRateLimit } from "./rate-limit";
 import { Service } from "./service-keys";
+import { FREE_TIER_GLOBAL_CONCURRENCY_LIMITS } from "./free-tier";
 
 // ─── Widget security gate (Phase 3b) ────────────────────────────────────
 // Runs before any product/engine logic on the widget proxy routes. Enforces,
@@ -88,6 +89,20 @@ function quotaExceededResponse(
             scope,
         },
         { status: 429, headers: cors },
+    );
+}
+
+function freeTierCapacityResponse(
+    scope: Service,
+    cors: Record<string, string>,
+): NextResponse {
+    return NextResponse.json(
+        {
+            error: "The Free tier is temporarily at capacity. Please try again shortly or upgrade for priority access.",
+            code: "FREE_TIER_AT_CAPACITY",
+            scope,
+        },
+        { status: 429, headers: { ...cors, "Retry-After": "5" } },
     );
 }
 
@@ -230,6 +245,30 @@ export async function reserveQuota(
                 };
             }
 
+            const isFreePlan = subscription.plan.priceEgpMonthly === 0;
+            const perRetailerLimit = subscription.plan.concurrentRequestLimit;
+            if (isFreePlan && perRetailerLimit !== null && subscription.currentPeriodReserved >= perRetailerLimit) {
+                return { kind: "at-capacity" as const };
+            }
+
+            if (isFreePlan) {
+                // Count only live reservations. A stale reservation is safe to
+                // ignore here because it cannot consume the shared Free lane
+                // after its TTL; the owning subscription clears it before its
+                // next admission attempt.
+                const liveFreeReservations = await tx.serviceUsageReservation.count({
+                    where: {
+                        service: scope,
+                        status: UsageReservationStatus.PENDING,
+                        expiresAt: { gte: now },
+                        subscription: { plan: { priceEgpMonthly: 0 } },
+                    },
+                });
+                if (liveFreeReservations >= FREE_TIER_GLOBAL_CONCURRENCY_LIMITS[scope]) {
+                    return { kind: "at-capacity" as const };
+                }
+            }
+
             const reservation = await tx.serviceUsageReservation.create({
                 data: { subscriptionId, service: scope, requestId, expiresAt },
                 select: { id: true },
@@ -246,6 +285,9 @@ export async function reserveQuota(
         }
         if (result.kind === "exhausted") {
             return { ok: false, response: quotaExceededResponse(scope, result.usage, result.limit, cors) };
+        }
+        if (result.kind === "at-capacity") {
+            return { ok: false, response: freeTierCapacityResponse(scope, cors) };
         }
         const isDuplicateRequest = result.kind === "already-finished" || result.kind === "in-progress";
         const message = result.kind === "in-progress"

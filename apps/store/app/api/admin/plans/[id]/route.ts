@@ -18,7 +18,7 @@ export async function PATCH(
 
     const { id } = await params;
 
-    let body: { name?: string; priceEgpMonthly?: number; quota?: number };
+    let body: { name?: string; priceEgpMonthly?: number; quota?: number; concurrentRequestLimit?: number | null };
     try {
       body = await request.json();
     } catch {
@@ -29,6 +29,14 @@ export async function PATCH(
     if (typeof body.name === "string") dataToUpdate.name = body.name;
     if (typeof body.priceEgpMonthly === "number" && body.priceEgpMonthly >= 0) dataToUpdate.priceEgpMonthly = body.priceEgpMonthly;
     if (typeof body.quota === "number" && body.quota >= 0) dataToUpdate.quota = body.quota;
+    if (body.concurrentRequestLimit === null) {
+      dataToUpdate.concurrentRequestLimit = null;
+    } else if (body.concurrentRequestLimit !== undefined) {
+      if (!Number.isInteger(body.concurrentRequestLimit) || body.concurrentRequestLimit < 1) {
+        return NextResponse.json({ error: "concurrentRequestLimit must be a positive integer or null" }, { status: 400 });
+      }
+      dataToUpdate.concurrentRequestLimit = body.concurrentRequestLimit;
+    }
 
     if (Object.keys(dataToUpdate).length === 0) {
        return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
