@@ -1,0 +1,54 @@
+meta {
+  name: Create Size Chart
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/retailer/size-charts
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Men's Shirts Spring 2025",
+    "category": "shirt",
+    "rows": [
+      { "sizeLabel": "S",  "chestCm": 88,  "waistCm": 74,  "hipCm": 90,  "lengthCm": 70 },
+      { "sizeLabel": "M",  "chestCm": 94,  "waistCm": 80,  "hipCm": 96,  "lengthCm": 72 },
+      { "sizeLabel": "L",  "chestCm": 100, "waistCm": 86,  "hipCm": 102, "lengthCm": 74 },
+      { "sizeLabel": "XL", "chestCm": 106, "waistCm": 92,  "hipCm": 108, "lengthCm": 76 }
+    ]
+  }
+}
+
+docs {
+  ## POST /api/retailer/size-charts
+
+  Creates a new body-fit size chart for the authenticated retailer.
+  Each row maps a size label to body measurements (in centimeters).
+  The chart is used by the AI recommendation engine to match customer
+  measurements to the best-fitting size.
+
+  ### Body
+  | Field    | Type   | Required | Description                         |
+  |----------|--------|----------|-------------------------------------|
+  | name     | string | ✅       | Friendly name for the chart         |
+  | category | string | ✅       | Product category this chart applies to |
+  | rows     | array  | ✅       | Size rows (see below)               |
+
+  ### Row fields
+  | Field     | Type  | Required | Description                     |
+  |-----------|-------|----------|---------------------------------|
+  | sizeLabel | str   | ✅       | Size label (S, M, L, XL, 32…)   |
+  | chestCm   | float | ✅       | Max chest for this size (cm)    |
+  | waistCm   | float | ✅       | Max waist (cm)                  |
+  | hipCm     | float | ❌       | Max hip (cm)                    |
+  | lengthCm  | float | ❌       | Garment length (cm)             |
+  | inseamCm  | float | ❌       | Inseam (cm, trousers only)      |
+}

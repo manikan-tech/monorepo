@@ -1,0 +1,36 @@
+meta {
+  name: Verify OTP
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/auth/verify-otp
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "newuser@example.com",
+    "token": "123456",
+    "type": "email"
+  }
+}
+
+docs {
+  ## POST /api/auth/verify-otp
+
+  Verifies the 6-digit OTP sent to the user's email after signup.
+
+  ### Body
+  | Field | Type   | Required | Description                     |
+  |-------|--------|----------|---------------------------------|
+  | email | string | ✅       | The email that received the OTP |
+  | token | string | ✅       | 6-digit code from the email     |
+  | type  | string | ✅       | Always `"email"`                |
+}

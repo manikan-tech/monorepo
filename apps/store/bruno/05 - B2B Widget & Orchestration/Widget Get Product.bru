@@ -1,0 +1,40 @@
+meta {
+  name: Widget Get Product
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/widget/products/{{productId}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-Manikan-Key: {{apiKey}}
+  Origin: http://localhost:3000
+}
+
+docs {
+  ## GET /api/widget/products/:id
+
+  Widget-scoped product detail fetcher.
+  Returns product data scoped to the authenticated retailer.
+  Used by the embeddable widget to load product information client-side.
+
+  ### Success (200)
+  ```json
+  {
+    "product": {
+      "id": "...",
+      "name": "Classic Cotton Shirt",
+      "category": "shirt",
+      "priceEgp": 450,
+      "imageUrl": "https://...",
+      "variants": [
+        { "id": "...", "sizeLabel": "M", "stock": 5 }
+      ]
+    }
+  }
+  ```
+}

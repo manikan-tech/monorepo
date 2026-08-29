@@ -1,0 +1,38 @@
+meta {
+  name: Update Business Inquiry (Admin)
+  type: http
+  seq: 15
+}
+
+patch {
+  url: {{baseUrl}}/api/admin/inquiries/{{inquiryId}}
+  body: json
+  auth: none
+}
+
+vars {
+  inquiryId: clxxxxxxxxxxxxxxxxxxxxxxxx
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "status": "CONTACTED",
+    "adminNotes": "Called the contact on Aug 29. Scheduled a demo for Sep 5."
+  }
+}
+
+docs {
+  ## PATCH /api/admin/inquiries/:id
+
+  Updates the status and notes for a B2B business inquiry.
+
+  ### Body
+  | Field      | Type   | Description                                     |
+  |------------|--------|-------------------------------------------------|
+  | status     | string | `"NEW"`, `"CONTACTED"`, `"CONVERTED"`, `"LOST"` |
+  | adminNotes | string | Internal admin follow-up notes                  |
+}

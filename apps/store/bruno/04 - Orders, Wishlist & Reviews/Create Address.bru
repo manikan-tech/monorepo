@@ -1,0 +1,44 @@
+meta {
+  name: Create Address
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/addresses
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "label": "Home",
+    "street": "123 Tahrir Square, Apt 4B",
+    "city": "Cairo",
+    "governorate": "Cairo",
+    "postalCode": "11511",
+    "phone": "+20 100 123 4567",
+    "isDefault": true
+  }
+}
+
+docs {
+  ## POST /api/addresses
+
+  Saves a new delivery address for the authenticated customer.
+
+  ### Body
+  | Field       | Type    | Required | Description                         |
+  |-------------|---------|----------|-------------------------------------|
+  | label       | string  | ❌       | Friendly name (e.g. "Home", "Work") |
+  | street      | string  | ✅       | Street address                      |
+  | city        | string  | ✅       | City name                           |
+  | governorate | string  | ✅       | Egyptian governorate                |
+  | postalCode  | string  | ❌       | Postal code                         |
+  | phone       | string  | ❌       | Contact phone for delivery          |
+  | isDefault   | boolean | ❌       | Mark as default address             |
+}

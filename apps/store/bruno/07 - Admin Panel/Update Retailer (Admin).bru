@@ -1,0 +1,39 @@
+meta {
+  name: Update Retailer (Admin)
+  type: http
+  seq: 8
+}
+
+patch {
+  url: {{baseUrl}}/api/admin/retailers/{{retailerId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "isActivated": true,
+    "companyName": "Fashion House Ltd."
+  }
+}
+
+docs {
+  ## PATCH /api/admin/retailers/:id
+
+  Platform admin endpoint to update a retailer's account.
+  Primary use: **activating** (`isActivated: true`) or suspending a retailer.
+
+  ### Body
+  | Field       | Type    | Description                                         |
+  |-------------|---------|-----------------------------------------------------|
+  | isActivated | boolean | Grant or revoke access to the widget services       |
+  | companyName | string  | Update company display name                         |
+
+  ### Effect of Activation
+  - `isActivated: true` → retailer can rotate keys, embed widgets, subscribe to plans
+  - `isActivated: false` → all widget API key checks return `403`
+}

@@ -1,0 +1,42 @@
+meta {
+  name: Create Review
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/reviews
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "rating": 5,
+    "comment": "Excellent quality and true to size. The AI size recommendation was spot-on!"
+  }
+}
+
+docs {
+  ## POST /api/reviews
+
+  Submits a product review from the authenticated customer.
+  Only customers who have purchased the product can review it.
+
+  ### Body
+  | Field     | Type    | Required | Description                   |
+  |-----------|---------|----------|-------------------------------|
+  | productId | string  | ✅       | Prisma Product ID             |
+  | rating    | integer | ✅       | 1–5 star rating               |
+  | comment   | string  | ❌       | Review text (max 1000 chars)  |
+
+  ### Success (201)
+  ```json
+  { "review": { "id": "...", "rating": 5, "comment": "...", "createdAt": "..." } }
+  ```
+}

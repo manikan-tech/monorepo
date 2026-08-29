@@ -1,0 +1,33 @@
+meta {
+  name: Upload Avatar
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/avatar
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  file: @file(/path/to/avatar.jpg)
+}
+
+docs {
+  ## POST /api/avatar
+
+  Uploads a profile picture for the currently authenticated user.
+  Accepts `multipart/form-data` with a single `file` field (JPEG/PNG, max 2MB).
+  The image is stored in Supabase Storage and the URL is saved in the user's profile.
+
+  ### Form Fields
+  | Field | Type | Description                          |
+  |-------|------|--------------------------------------|
+  | file  | File | Image file (JPEG or PNG, max 2MB)    |
+
+  ### Success (200)
+  ```json
+  { "avatarUrl": "https://..." }
+  ```
+}

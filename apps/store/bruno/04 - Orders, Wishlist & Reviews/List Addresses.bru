@@ -1,0 +1,34 @@
+meta {
+  name: List Addresses
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/addresses
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/addresses
+
+  Returns all saved delivery addresses for the authenticated customer.
+
+  ### Success (200)
+  ```json
+  {
+    "addresses": [
+      {
+        "id": "...",
+        "label": "Home",
+        "street": "123 Tahrir Square",
+        "city": "Cairo",
+        "governorate": "Cairo",
+        "postalCode": "11511",
+        "isDefault": true
+      }
+    ]
+  }
+  ```
+}

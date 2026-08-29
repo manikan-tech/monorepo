@@ -1,0 +1,21 @@
+meta {
+  name: Get Size Chart by ID
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/retailer/size-charts/{{sizeChartId}}
+  body: none
+  auth: none
+}
+
+vars {
+  sizeChartId: clxxxxxxxxxxxxxxxxxxxxxxxx
+}
+
+docs {
+  ## GET /api/retailer/size-charts/:id
+
+  Returns a specific size chart with all its rows.
+}

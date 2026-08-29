@@ -1,0 +1,50 @@
+meta {
+  name: Update Widget Allowed Origins
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{baseUrl}}/api/retailer/widget-key/RECOMMENDATION
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "allowedOrigins": [
+      "https://myshop.com",
+      "https://staging.myshop.com",
+      "http://localhost:3001"
+    ]
+  }
+}
+
+docs {
+  ## PATCH /api/retailer/widget-key/:service
+
+  Updates the **allowed origins** for the widget embed.
+  Origins are account-wide (shared across all services for the retailer).
+
+  Requests whose `Origin` header is not in this list are rejected with `403`
+  before any key check — this is the primary CORS security gate.
+
+  ### Body
+  | Field          | Type     | Required | Description                                         |
+  |----------------|----------|----------|-----------------------------------------------------|
+  | allowedOrigins | string[] | ✅       | Full origin URLs (e.g. `https://store.com:8080`)    |
+
+  Origins are normalized: protocol + hostname + port (no trailing slash, lowercase).
+
+  ### Success (200)
+  ```json
+  {
+    "isActivated": true,
+    "allowedOrigins": ["https://myshop.com", "https://staging.myshop.com"]
+  }
+  ```
+}

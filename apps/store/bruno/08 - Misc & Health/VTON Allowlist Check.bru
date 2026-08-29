@@ -1,0 +1,41 @@
+meta {
+  name: VTON Allowlist Check
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/vton/allowlist?productId={{productId}}
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/vton/allowlist
+
+  Checks whether a product's image URL is on the VTON allowed image hosts list.
+  Used by the dashboard product detail page to show VTON eligibility before
+  a retailer tries to enable virtual try-on for a product.
+
+  ### Query Parameters
+  | Param     | Type   | Required | Description        |
+  |-----------|--------|----------|--------------------|
+  | productId | string | ✅       | Prisma Product ID  |
+
+  ### Success (200)
+  ```json
+  {
+    "eligible": true,
+    "reason": null,
+    "category": "shirt",
+    "imageHost": "cdn.myshop.com"
+  }
+  ```
+  ```json
+  {
+    "eligible": false,
+    "reason": "IMAGE_HOST_NOT_ALLOWED",
+    "imageHost": "some-cdn.io"
+  }
+  ```
+}

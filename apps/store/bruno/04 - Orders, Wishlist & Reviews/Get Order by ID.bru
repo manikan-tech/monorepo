@@ -1,0 +1,39 @@
+meta {
+  name: Get Order by ID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/orders/{{orderId}}
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/orders/:id
+
+  Returns detailed information for a single order.
+  Only accessible by the customer who placed it.
+
+  ### Path Params
+  | Param | Type   | Description     |
+  |-------|--------|-----------------|
+  | id    | string | Order Prisma ID |
+
+  ### Success (200)
+  ```json
+  {
+    "order": {
+      "id": "...",
+      "status": "PENDING",
+      "subtotalEgp": 810,
+      "shippingEgp": 50,
+      "totalEgp": 860,
+      "paymentMethod": "cash_on_delivery",
+      "address": { "street": "123 Tahrir St", "city": "Cairo" },
+      "items": [...]
+    }
+  }
+  ```
+}

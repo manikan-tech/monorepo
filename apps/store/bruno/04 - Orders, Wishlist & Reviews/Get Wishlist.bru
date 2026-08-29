@@ -1,0 +1,29 @@
+meta {
+  name: Get Wishlist
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/wishlist
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/wishlist
+
+  Returns the authenticated customer's saved wishlist items.
+
+  ### Success (200)
+  ```json
+  {
+    "wishlistItems": [
+      {
+        "id": "...",
+        "product": { "name": "Linen Shirt", "priceEgp": 350, "slug": "...", "imageUrl": "..." }
+      }
+    ]
+  }
+  ```
+}

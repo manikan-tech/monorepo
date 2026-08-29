@@ -1,0 +1,34 @@
+meta {
+  name: List Retailers
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/admin/retailers
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/admin/retailers
+
+  Lists all retailer accounts on the platform with their activation and
+  subscription status. Requires platform admin session.
+
+  ### Success (200)
+  ```json
+  {
+    "retailers": [
+      {
+        "id": "...",
+        "email": "shop@example.com",
+        "companyName": "Fashion House",
+        "isActivated": true,
+        "createdAt": "2025-01-01T00:00:00Z",
+        "subscriptions": [{ "service": "RECOMMENDATION", "status": "ACTIVE" }]
+      }
+    ]
+  }
+  ```
+}

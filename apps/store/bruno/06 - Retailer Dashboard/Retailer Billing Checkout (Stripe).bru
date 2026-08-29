@@ -1,0 +1,48 @@
+meta {
+  name: Retailer Billing Checkout (Stripe)
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/api/retailer/billing/checkout
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "planId": "clxxxxxxxxxxxxxxxxxxxxxxxx",
+    "service": "RECOMMENDATION",
+    "successUrl": "http://localhost:3000/dashboard/billing?success=true",
+    "cancelUrl": "http://localhost:3000/dashboard/billing?canceled=true"
+  }
+}
+
+docs {
+  ## POST /api/retailer/billing/checkout
+
+  Creates a Stripe Checkout session for subscribing to a Manikan service plan.
+  Returns a Stripe-hosted checkout URL the frontend should redirect to.
+
+  ### Body
+  | Field      | Type   | Required | Description                                |
+  |------------|--------|----------|--------------------------------------------|
+  | planId     | string | ✅       | Prisma Plan ID to subscribe to             |
+  | service    | string | ✅       | `"RECOMMENDATION"`, `"VTON_2D"`, `"BODY_MODELING"` |
+  | successUrl | string | ✅       | Redirect URL after successful payment      |
+  | cancelUrl  | string | ✅       | Redirect URL if checkout is abandoned      |
+
+  ### Success (200)
+  ```json
+  { "checkoutUrl": "https://checkout.stripe.com/pay/cs_test_..." }
+  ```
+
+  ### Notes
+  - Webhook at `/api/webhooks/billing` listens for `checkout.session.completed`
+    to activate the subscription in the DB (never trust the redirect URL alone).
+}

@@ -1,0 +1,37 @@
+meta {
+  name: List Products
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/products?page=1&limit=12&category=shirt&gender=male&sortBy=priceEgp&order=asc
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/products
+
+  Lists all **active** products with optional pagination and filtering.
+
+  ### Query Parameters
+  | Param    | Type    | Description                                          |
+  |----------|---------|------------------------------------------------------|
+  | page     | integer | Page number, defaults to `1`                         |
+  | limit    | integer | Items per page, defaults to `12`, max `100`          |
+  | category | string  | Filter by category slug (e.g. `shirt`, `pants`)      |
+  | gender   | string  | Filter by gender (`male`, `female`, `unisex`)        |
+  | sortBy   | string  | Sort field: `priceEgp`, `createdAt`, `name`          |
+  | order    | string  | Sort direction: `asc` or `desc`                      |
+
+  ### Success (200)
+  ```json
+  {
+    "products": [...],
+    "total": 42,
+    "page": 1,
+    "totalPages": 4
+  }
+  ```
+}

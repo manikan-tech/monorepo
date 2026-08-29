@@ -1,0 +1,27 @@
+meta {
+  name: VTON Capabilities
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/vton/capabilities
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/vton/capabilities
+
+  Returns the current VTON service capability manifest:
+  supported categories, max image size, and available features.
+
+  ### Success (200)
+  ```json
+  {
+    "supportedCategories": ["blouse", "shirt", "jacket", "pants", "skirt", "dress"],
+    "maxImageSizeBytes": 5242880,
+    "features": ["2d_vton"]
+  }
+  ```
+}

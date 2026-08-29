@@ -1,0 +1,22 @@
+meta {
+  name: Clear Cart
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/api/cart
+  body: none
+  auth: none
+}
+
+docs {
+  ## DELETE /api/cart
+
+  Removes **all** items from the authenticated customer's cart.
+
+  ### Success (200)
+  ```json
+  { "message": "Cart cleared successfully" }
+  ```
+}

@@ -1,0 +1,49 @@
+meta {
+  name: Update Retailer Product
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{baseUrl}}/api/retailer/products/{{productId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Classic Cotton Shirt (Updated)",
+    "priceEgp": 480,
+    "discountPct": 5,
+    "isActive": true,
+    "fitNotes": "Slim fit. Runs a half-size small in the shoulders.",
+    "fabric": "100% Egyptian Cotton"
+  }
+}
+
+docs {
+  ## PATCH /api/retailer/products/:id
+
+  Partially updates a product owned by the authenticated retailer.
+  Only fields provided in the body are updated (PATCH semantics).
+
+  ### Path Params
+  | Param | Type   | Description      |
+  |-------|--------|------------------|
+  | id    | string | Product Prisma ID |
+
+  ### Updatable Fields
+  | Field       | Type    | Description                               |
+  |-------------|---------|-------------------------------------------|
+  | name        | string  | Product display name                      |
+  | priceEgp    | float   | Price in Egyptian Pounds                  |
+  | discountPct | float   | Discount percentage (0–100)               |
+  | isActive    | boolean | Publish/unpublish toggle                  |
+  | fitNotes    | string  | AI sizing hint text                       |
+  | fabric      | string  | Fabric description                        |
+  | imageUrl    | string  | Product image HTTPS URL                   |
+}

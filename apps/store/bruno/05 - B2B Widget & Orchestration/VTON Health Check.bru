@@ -1,0 +1,28 @@
+meta {
+  name: VTON Health Check
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/vton/health
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/vton/health
+
+  Checks whether the connected VTON service (`VTON_SERVICE_URL`) is reachable.
+  Used by monitoring, dashboards, and the retailer panel to show service status.
+
+  ### Success (200)
+  ```json
+  { "status": "ok", "vtonService": "reachable" }
+  ```
+
+  ### Degraded (200)
+  ```json
+  { "status": "degraded", "vtonService": "unreachable" }
+  ```
+}

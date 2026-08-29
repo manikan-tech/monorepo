@@ -1,0 +1,38 @@
+meta {
+  name: VTON Cache Status
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/vton/cache?sessionId=sess_abc123xyz789
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/vton/cache
+
+  Checks whether a cached VTON result exists for a given session ID.
+  Returns the cached image URL if available, enabling fast re-renders
+  without re-running the diffusion model.
+
+  ### Query Parameters
+  | Param     | Type   | Required | Description                          |
+  |-----------|--------|----------|--------------------------------------|
+  | sessionId | string | ✅       | Session ID previously used in VTON   |
+
+  ### Cache Hit (200)
+  ```json
+  {
+    "cached": true,
+    "imageUrl": "https://cdn.manikan.io/vton/sess_abc123.jpg",
+    "expiresAt": "2026-08-30T00:00:00Z"
+  }
+  ```
+
+  ### Cache Miss (200)
+  ```json
+  { "cached": false }
+  ```
+}

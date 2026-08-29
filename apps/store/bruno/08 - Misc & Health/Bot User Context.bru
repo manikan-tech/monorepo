@@ -1,0 +1,41 @@
+meta {
+  name: Bot User Context
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/bot/user
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/bot/user
+
+  Returns lightweight user context for the embedded recommendation bot widget.
+  If authenticated, returns first name and latest saved measurements so the
+  bot can greet the shopper by name and pre-fill sizing data.
+
+  ### Authenticated (200)
+  ```json
+  {
+    "user": {
+      "firstName": "Ahmed",
+      "isLoggedIn": true,
+      "latestMeasurements": {
+        "heightCm": 178,
+        "weightKg": 75,
+        "chestCm": 96,
+        "waistCm": 82,
+        "hipsCm": 98
+      }
+    }
+  }
+  ```
+
+  ### Anonymous (200)
+  ```json
+  { "user": { "isLoggedIn": false } }
+  ```
+}

@@ -1,0 +1,41 @@
+meta {
+  name: Update Order Status (Admin)
+  type: http
+  seq: 13
+}
+
+patch {
+  url: {{baseUrl}}/api/admin/orders/{{orderId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "status": "SHIPPED",
+    "trackingNumber": "EG1234567890"
+  }
+}
+
+docs {
+  ## PATCH /api/admin/orders/:id
+
+  Updates the status of an order. Admin only.
+
+  ### Valid Status Transitions
+  ```
+  PENDING → CONFIRMED → PROCESSING → SHIPPED → DELIVERED
+                                   ↘ CANCELLED
+                       DELIVERED   → RETURN_REQUESTED → REFUNDED
+  ```
+
+  ### Body
+  | Field          | Type   | Description                                              |
+  |----------------|--------|----------------------------------------------------------|
+  | status         | string | New order status                                         |
+  | trackingNumber | string | Carrier tracking number (set alongside `SHIPPED` status) |
+}

@@ -1,0 +1,32 @@
+meta {
+  name: List Orders
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/orders
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/orders
+
+  Returns all orders for the authenticated customer, newest first.
+
+  ### Success (200)
+  ```json
+  {
+    "orders": [
+      {
+        "id": "...",
+        "status": "DELIVERED",
+        "totalEgp": 860,
+        "createdAt": "2025-06-01T12:00:00Z",
+        "items": [...]
+      }
+    ]
+  }
+  ```
+}

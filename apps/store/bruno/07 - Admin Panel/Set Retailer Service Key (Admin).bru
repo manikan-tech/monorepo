@@ -1,0 +1,34 @@
+meta {
+  name: Set Retailer Service Key (Admin)
+  type: http
+  seq: 9
+}
+
+put {
+  url: {{baseUrl}}/api/admin/retailers/{{retailerId}}/keys/RECOMMENDATION
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "apiKey": "mk_pub_manually_provisioned_key"
+  }
+}
+
+docs {
+  ## PUT /api/admin/retailers/:id/keys/:service
+
+  Manually provisions or overrides a service API key for a retailer.
+  Used for support tickets, migrations, or test account setup.
+
+  ### Path Params
+  | Param   | Type   | Description                                       |
+  |---------|--------|---------------------------------------------------|
+  | id      | string | Retailer Prisma ID                                |
+  | service | string | `RECOMMENDATION`, `VTON_2D`, or `BODY_MODELING`  |
+}

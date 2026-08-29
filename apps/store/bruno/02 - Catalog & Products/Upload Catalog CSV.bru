@@ -1,0 +1,59 @@
+meta {
+  name: Upload Catalog CSV
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/products/upload-csv
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  file: @file(/path/to/catalog.csv)
+}
+
+docs {
+  ## POST /api/products/upload-csv
+
+  **Retailer only.** Bulk-imports products and variants from a CSV file.
+  Also ingests body-fit measurements (`chest_cm`, `waist_cm`, `hip_cm`,
+  `length_cm`, `inseam_cm`) for pgvector embedding generation when present.
+
+  ### Authentication
+  Requires a logged-in retailer **session cookie** (dashboard auth).
+
+  ### CSV Column Reference
+  | Column       | Required | Description                            |
+  |--------------|----------|----------------------------------------|
+  | product_id   | ✅       | Stable retailer-side SKU/code          |
+  | product_name | ✅       | Display name                           |
+  | category     | ✅       | Category slug (`shirt`, `pants`, etc.) |
+  | gender       | ✅       | `male`, `female`, or `unisex`          |
+  | brand        | ✅       | Brand name                             |
+  | fabric       | ❌       | Fabric description                     |
+  | price_egp    | ✅       | Price in Egyptian Pounds               |
+  | image_url    | ✅       | HTTPS URL to the product image         |
+  | size_label   | ✅       | Size label (S, M, L, XL, etc.)         |
+  | chest_cm     | ❌       | Chest measurement for this size        |
+  | waist_cm     | ❌       | Waist measurement for this size        |
+  | hip_cm       | ❌       | Hip measurement for this size          |
+  | length_cm    | ❌       | Length measurement for this size       |
+  | inseam_cm    | ❌       | Inseam measurement for this size       |
+
+  ### Success (200)
+  ```json
+  {
+    "success": true,
+    "count": 25,
+    "measurementErrors": [],
+    "noMeasurementData": ["PROD-007"]
+  }
+  ```
+
+  > **Note:** Products are **upserted** via `retailerId_productCode` composite key.
+  > A `201` count means 25 product groups were processed; individual variants are
+  > upserted independently. `measurementErrors` are non-blocking — the catalog write
+  > succeeds even if measurement validation fails for a size row.
+}

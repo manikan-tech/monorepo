@@ -1,0 +1,22 @@
+meta {
+  name: Remove from Wishlist
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/wishlist/{{wishlistItemId}}
+  body: none
+  auth: none
+}
+
+docs {
+  ## DELETE /api/wishlist/:id
+
+  Removes a product from the customer's wishlist by wishlist item ID.
+
+  ### Success (200)
+  ```json
+  { "message": "Removed from wishlist" }
+  ```
+}

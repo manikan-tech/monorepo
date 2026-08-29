@@ -1,0 +1,43 @@
+meta {
+  name: Get Widget Key (Service)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/retailer/widget-key/RECOMMENDATION
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/retailer/widget-key/:service
+
+  Retrieves (or lazily provisions) the public widget API key for a specific service.
+  Also returns the current subscription status and allowed origins.
+
+  ### Path Params — Valid Services
+  | Value           | Description                          |
+  |-----------------|--------------------------------------|
+  | RECOMMENDATION  | AI size recommendation widget        |
+  | VTON_2D         | 2D Virtual try-on widget             |
+  | BODY_MODELING   | 3D body modelling service            |
+
+  ### Success (200)
+  ```json
+  {
+    "service": "RECOMMENDATION",
+    "apiKey": "mk_pub_xxxxxxxxxxxxxxxxxx",
+    "isActivated": true,
+    "allowedOrigins": ["https://myshop.com"],
+    "subscription": {
+      "planName": "Growth",
+      "quota": 5000,
+      "usage": 123
+    }
+  }
+  ```
+
+  > **Tip:** Paste `apiKey` into your Bruno environment's `apiKey` variable
+  > to test all widget/orchestration endpoints.
+}

@@ -1,0 +1,52 @@
+meta {
+  name: Create Measurement Session
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/measurement-sessions
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "heightCm": 178,
+    "weightKg": 75,
+    "chestCm": 96,
+    "waistCm": 82,
+    "hipsCm": 98,
+    "recommendedSize": "L",
+    "confidenceScore": 0.92
+  }
+}
+
+docs {
+  ## POST /api/measurement-sessions
+
+  Records a measurement + sizing outcome session for analytics and history.
+  Called by the widget after a successful recommendation to persist measurements.
+
+  ### Body
+  | Field           | Type   | Required | Description                             |
+  |-----------------|--------|----------|-----------------------------------------|
+  | productId       | string | ✅       | Product that was sized                  |
+  | heightCm        | float  | ✅       | Customer height (cm)                    |
+  | weightKg        | float  | ✅       | Customer weight (kg)                    |
+  | chestCm         | float  | ✅       | Customer chest (cm)                     |
+  | waistCm         | float  | ✅       | Customer waist (cm)                     |
+  | hipsCm          | float  | ✅       | Customer hips (cm)                      |
+  | recommendedSize | string | ❌       | The size that was recommended           |
+  | confidenceScore | float  | ❌       | Recommendation confidence (0.0–1.0)     |
+
+  ### Success (201)
+  ```json
+  { "session": { "id": "...", "createdAt": "..." } }
+  ```
+}

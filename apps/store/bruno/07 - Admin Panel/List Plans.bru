@@ -1,0 +1,41 @@
+meta {
+  name: List Plans
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/admin/plans
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/admin/plans
+
+  Lists all subscription plans available on the platform.
+
+  ### Success (200)
+  ```json
+  {
+    "plans": [
+      {
+        "id": "...",
+        "name": "Starter",
+        "service": "RECOMMENDATION",
+        "quota": 500,
+        "priceEgp": 299,
+        "isActive": true
+      },
+      {
+        "id": "...",
+        "name": "Growth",
+        "service": "RECOMMENDATION",
+        "quota": 5000,
+        "priceEgp": 999,
+        "isActive": true
+      }
+    ]
+  }
+  ```
+}

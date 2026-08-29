@@ -1,0 +1,40 @@
+meta {
+  name: Get Latest Measurement Session
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/measurement-sessions/latest
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/measurement-sessions/latest
+
+  Returns the most recent measurement session for the authenticated customer.
+  Used by the widget to pre-populate measurement inputs from saved history.
+
+  ### Success (200)
+  ```json
+  {
+    "session": {
+      "id": "...",
+      "heightCm": 178,
+      "weightKg": 75,
+      "chestCm": 96,
+      "waistCm": 82,
+      "hipsCm": 98,
+      "recommendedSize": "L",
+      "confidenceScore": 0.92,
+      "createdAt": "2026-08-01T10:00:00Z"
+    }
+  }
+  ```
+
+  ### Not Found (200 with null)
+  ```json
+  { "session": null }
+  ```
+}

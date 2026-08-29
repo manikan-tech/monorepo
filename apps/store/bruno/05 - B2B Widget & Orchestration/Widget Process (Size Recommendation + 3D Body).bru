@@ -1,0 +1,87 @@
+meta {
+  name: Widget Process (Size Recommendation + 3D Body)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/widget/process
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Manikan-Key: {{apiKey}}
+  Origin: http://localhost:3000
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "measurements": {
+      "heightCm": 178,
+      "weightKg": 75,
+      "chestCm": 96,
+      "waistCm": 82,
+      "hipsCm": 98
+    }
+  }
+}
+
+docs {
+  ## POST /api/widget/process
+
+  **Main B2B Orchestrator.** The embeddable widget's primary endpoint.
+  Validates the retailer API key, authorizes the request, then fans out to:
+
+  1. **Recommendation Service** (FastAPI @ `RECOMMENDATION_SERVICE_URL`)  
+     → Returns `recommended_size`, `confidence_score`, `explanation`
+  2. **Body Modeling Service** (FastAPI @ `BODY_SERVICE_URL`)  
+     → Returns a 3D mesh/avatar `meshData` (best-effort; failure is non-fatal)
+
+  ### Authentication
+  Requires `X-Manikan-Key` header with a **public widget API key**.
+  The key must be activated and have the `RECOMMENDATION` subscription.
+
+  ### CORS
+  This endpoint is CORS-enabled (`Access-Control-Allow-Origin: *`) to support
+  cross-origin calls from retailer storefronts. A preflight `OPTIONS` is handled.
+
+  ### Body
+  | Field                       | Type    | Required | Description                                     |
+  |-----------------------------|---------|----------|-------------------------------------------------|
+  | productId                   | string  | ✅       | Prisma Product ID (must belong to this retailer)|
+  | measurements.heightCm       | float   | ✅       | Height in centimeters                           |
+  | measurements.weightKg       | float   | ✅       | Weight in kilograms                             |
+  | measurements.chestCm        | float   | ✅       | Chest circumference in centimeters              |
+  | measurements.waistCm        | float   | ✅       | Waist circumference in centimeters              |
+  | measurements.hipsCm         | float   | ✅       | Hips circumference in centimeters               |
+
+  ### Success (200)
+  ```json
+  {
+    "success": true,
+    "recommendation": {
+      "recommendedSize": "L",
+      "confidence": 0.92,
+      "explanation": "Your chest (96cm) fits best in size L (94–100cm range).",
+      "reasoning": "Based on your measurements and the product's size chart...",
+      "provider": "STATIC-CALC"
+    },
+    "body3d": {
+      "meshData": { "vertices": [...], "faces": [...] }
+    }
+  }
+  ```
+
+  ### Error Responses
+  | Status | Description                                           |
+  |--------|-------------------------------------------------------|
+  | 400    | Missing/invalid productId or measurements             |
+  | 401    | Missing or invalid `X-Manikan-Key`                    |
+  | 403    | Key not activated, or Origin not in allowlist         |
+  | 404    | Product not found or not owned by this retailer       |
+  | 429    | Quota exhausted for RECOMMENDATION subscription      |
+  | 502    | Upstream recommendation or body service unreachable  |
+}

@@ -1,0 +1,68 @@
+meta {
+  name: Checkout
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/checkout
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "addressId": "{{addressId}}",
+    "paymentMethod": "cash_on_delivery",
+    "notes": "Please ring the doorbell"
+  }
+}
+
+docs {
+  ## POST /api/checkout
+
+  Converts the authenticated customer's cart into a confirmed Order.
+
+  ### Processing Pipeline
+  1. **Validates** cart is non-empty
+  2. **Validates** all products are still active
+  3. **Pre-flight stock check** against current DB values
+  4. Creates `Order` + `OrderItems` in a **database transaction**
+  5. **Atomically decrements stock** using `updateMany WHERE stock >= quantity`  
+     → if two checkouts race on the last unit, only one wins; the other gets a `409`
+  6. **Marks** measurement sessions as `isPurchased: true`
+  7. **Clears** the cart
+
+  ### Body
+  | Field         | Type   | Required | Description                                |
+  |---------------|--------|----------|--------------------------------------------|
+  | addressId     | string | ❌       | Delivery address (must belong to customer) |
+  | paymentMethod | string | ❌       | `"cash_on_delivery"` or `"stripe"`         |
+  | notes         | string | ❌       | Delivery instructions                      |
+
+  ### Success (201)
+  ```json
+  {
+    "order": {
+      "id": "...",
+      "status": "PENDING",
+      "subtotalEgp": 810,
+      "shippingEgp": 50,
+      "totalEgp": 860,
+      "items": [...]
+    }
+  }
+  ```
+
+  ### Error Responses
+  | Status | Description                                             |
+  |--------|---------------------------------------------------------|
+  | 400    | Empty cart or invalid body                              |
+  | 401    | Not authenticated                                       |
+  | 404    | Address not found or not owned by customer              |
+  | 409    | Stock conflict (pre-flight or race condition mid-write) |
+}

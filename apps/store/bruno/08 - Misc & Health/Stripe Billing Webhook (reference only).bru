@@ -1,0 +1,57 @@
+meta {
+  name: Stripe Billing Webhook (reference only)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/webhooks/billing
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  stripe-signature: t=1234567890,v1=xxxxxxxxxxxxxxxxxxxxxxxx
+}
+
+body:text {
+  {
+    "id": "evt_test_xxxxxxxxxx",
+    "type": "checkout.session.completed",
+    "data": {
+      "object": {
+        "id": "cs_test_xxxxxxxxxx",
+        "customer_email": "shop@example.com",
+        "metadata": {
+          "retailerId": "clxxxxxxxxxxxxxxxxxxxxxxxx",
+          "planId": "clxxxxxxxxxxxxxxxxxxxxxxxx",
+          "service": "RECOMMENDATION"
+        }
+      }
+    }
+  }
+}
+
+docs {
+  ## POST /api/webhooks/billing  ⚠️ Do NOT call manually
+
+  Stripe webhook endpoint. Receives and verifies signed events from Stripe.
+  The `stripe-signature` header is **mandatory** — Stripe signs every request
+  with your `STRIPE_WEBHOOK_SECRET` and this route verifies it before processing.
+
+  ### Handled Events
+  | Event                         | Action                                              |
+  |-------------------------------|-----------------------------------------------------|
+  | `checkout.session.completed`  | Activates subscription in DB                        |
+  | `invoice.paid`                | Resets `currentPeriodUsage` to 0 for new period     |
+  | `customer.subscription.deleted` | Marks subscription as `EXPIRED`                  |
+
+  > **Testing locally:** Use `stripe listen --forward-to localhost:3000/api/webhooks/billing`
+  > with the Stripe CLI to receive real test events.
+
+  ### Success (200)
+  ```json
+  { "received": true }
+  ```
+}

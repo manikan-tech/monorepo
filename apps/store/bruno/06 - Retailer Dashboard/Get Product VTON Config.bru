@@ -1,0 +1,38 @@
+meta {
+  name: Get Product VTON Config
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/retailer/products/{{productId}}/tryon-config
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /api/retailer/products/:id/tryon-config
+
+  Returns the virtual try-on configuration for a specific product.
+  Includes which garment category alias is used and whether the product's
+  image URL is on the VTON allowlist.
+
+  ### Success (200)
+  ```json
+  {
+    "productId": "...",
+    "category": "shirt",
+    "garmentImageUrl": "https://cdn.example.com/shirt.jpg",
+    "isEligibleForVton": true,
+    "reason": null
+  }
+  ```
+
+  ### Ineligible Product (200)
+  ```json
+  {
+    "isEligibleForVton": false,
+    "reason": "UNSUPPORTED_CATEGORY"
+  }
+  ```
+}
