@@ -15,6 +15,11 @@ export default async function AdminPlansPage() {
   }
 
   const plans = await prisma.plan.findMany({
+    include: {
+      _count: {
+        select: { subscriptions: { where: { status: "ACTIVE" } } },
+      },
+    },
     orderBy: [
       { service: "asc" },
       { priceEgpMonthly: "asc" },

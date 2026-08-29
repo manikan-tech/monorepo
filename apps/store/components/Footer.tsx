@@ -28,20 +28,38 @@ export default function Footer() {
 
           {/* Links Col 1 */}
           <div className="flex flex-col gap-4">
-            <h4 className="font-display text-lg font-semibold text-gold-400">Platform</h4>
+            <h4 className="font-display text-lg font-semibold text-gold-400">Storefront</h4>
             <Link href="/store" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Demo Store</Link>
-            <Link href="/size" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Size Recommendation</Link>
             <Link href="/visualize" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Virtual Try-On</Link>
-            <Link href="/wardrobe" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">My Wardrobe</Link>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                if (typeof window !== "undefined" && (window as any).ManikanWidget) {
+                  (window as any).ManikanWidget.open();
+                }
+              }}
+              className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex cursor-pointer"
+            >
+              Size Assistant
+            </a>
+            <a
+              href="https://t.me/ManikanBot"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex"
+            >
+              Telegram Bot
+            </a>
+            <Link href="/account" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">My Account</Link>
           </div>
 
           {/* Links Col 2 */}
           <div className="flex flex-col gap-4">
             <h4 className="font-display text-lg font-semibold text-gold-400">Business</h4>
             <Link href="/business" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">B2B Integration</Link>
-            <Link href="/pricing" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Pricing Plans</Link>
-            <Link href="/engine" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Widget Engine</Link>
             <Link href="/contact" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Contact Sales</Link>
+            <Link href="/login" className="font-sans text-sm text-cream-200 hover:text-gold-400 transition-colors duration-300 hover:translate-x-1 inline-flex">Retailer Login</Link>
           </div>
 
           {/* Links Col 3 */}

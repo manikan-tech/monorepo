@@ -1,6 +1,4 @@
-import { getAdminSession } from "../../../lib/admin-auth";
 import { prisma } from "../../../lib/prisma";
-import { redirect } from "next/navigation";
 import AdminPageHeader from "../components/AdminPageHeader";
 import AdminOrdersTable from "./AdminOrdersTable";
 
@@ -9,10 +7,6 @@ export const metadata = {
 };
 
 export default async function AdminOrdersPage() {
-  const session = await getAdminSession();
-  if (!session) {
-    redirect("/admin/login");
-  }
 
   const orders = await prisma.order.findMany({
     orderBy: { createdAt: "desc" },

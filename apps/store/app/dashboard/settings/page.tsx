@@ -16,7 +16,6 @@ export default async function SettingsPage() {
         where: { status: "ACTIVE" },
         include: { plan: true },
         orderBy: { createdAt: "desc" },
-        take: 1,
       },
     },
   });
@@ -25,7 +24,20 @@ export default async function SettingsPage() {
     redirect("/login");
   }
 
-  const planName = retailer.subscriptions[0]?.plan?.name ?? "No Plan";
+  // Build a per-service map so SettingsClient can display each independently
+  const SERVICE_LABELS: Record<string, string> = {
+    BODY_MODELING: "Body Modeling",
+    VTON_2D: "2D Try-On",
+    RECOMMENDATION: "Size Recommendations",
+  };
+  const serviceSubscriptions = ["BODY_MODELING", "VTON_2D", "RECOMMENDATION"].map((svc) => {
+    const sub = retailer.subscriptions.find((s) => s.service === svc);
+    return {
+      service: svc,
+      label: SERVICE_LABELS[svc] ?? svc,
+      planName: sub?.plan?.name ?? null,
+    };
+  });
 
   return (
     <div className="space-y-8 max-w-4xl">
@@ -58,7 +70,7 @@ export default async function SettingsPage() {
         </div>
       </div>
 
-      <SettingsClient retailer={retailer} planName={planName} />
+      <SettingsClient retailer={retailer} serviceSubscriptions={serviceSubscriptions} />
     </div>
   );
 }

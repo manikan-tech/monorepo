@@ -10,6 +10,9 @@ type Plan = {
   service: string;
   priceEgpMonthly: number;
   quota: number;
+  _count?: {
+    subscriptions: number;
+  };
 };
 
 export default function PlansManager({ 
@@ -201,6 +204,7 @@ export default function PlansManager({
               <th className="px-6 py-4">Plan Name</th>
               <th className="px-6 py-4">Price (EGP/mo)</th>
               <th className="px-6 py-4">Quota</th>
+              <th className="px-6 py-4 text-center">Subscribers</th>
               {canEdit && <th className="px-6 py-4 text-right">Actions</th>}
             </tr>
           </thead>
@@ -242,6 +246,11 @@ export default function PlansManager({
                       className="w-24 px-2 py-1 border border-gold-300 rounded focus:outline-none text-sm"
                     />
                   ) : plan.quota.toLocaleString()}
+                </td>
+                <td className="px-6 py-4 font-mono text-forest-900 text-sm text-center">
+                  <span className="bg-forest-50 border border-forest-100 text-forest-700 px-2.5 py-1 rounded-full text-xs font-semibold">
+                    {plan._count?.subscriptions ?? 0}
+                  </span>
                 </td>
                 {canEdit && (
                   <td className="px-6 py-4 text-right">
