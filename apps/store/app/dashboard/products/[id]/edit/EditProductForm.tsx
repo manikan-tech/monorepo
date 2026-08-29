@@ -57,7 +57,7 @@ export default function EditProductForm({ product }: { product: any }) {
 
         <div className="space-y-1">
           <label className="text-sm font-medium text-forest-900">Category *</label>
-          <select required name="category" defaultValue={product.category} className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400">
+          <select required name="category" defaultValue={product.category?.toLowerCase()} className="w-full px-4 py-2.5 bg-manikan-input-bg border border-manikan-border rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-400">
             <option value="tshirt">T-Shirt (3D try-on)</option>
             <option value="pants">Pants (3D try-on)</option>
             <option value="shirt">Shirt</option>
